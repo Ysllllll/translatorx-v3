@@ -2,7 +2,7 @@
 
 import pytest
 
-from text_ops.splitter._paragraph import split_paragraphs
+from lang_ops.splitter._paragraph import split_paragraphs
 
 
 class TestSplitParagraphs:

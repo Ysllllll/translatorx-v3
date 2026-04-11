@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-from text_ops.splitter._lang_config import (
-    ABBREVIATIONS,
-    get_sentence_terminators,
-)
 
-
-def _is_abbreviation(text: str, dot_pos: int) -> bool:
+def _is_abbreviation(text: str, dot_pos: int, abbreviations: frozenset[str]) -> bool:
     """Check if the period at dot_pos follows an abbreviation."""
     i = dot_pos - 1
     while i >= 0 and text[i].isalnum():
@@ -16,7 +11,7 @@ def _is_abbreviation(text: str, dot_pos: int) -> bool:
     word = text[i + 1 : dot_pos]
     if len(word) <= 1:
         return True
-    return word in ABBREVIATIONS
+    return word in abbreviations
 
 
 def _is_number_dot(text: str, dot_pos: int) -> bool:
@@ -45,13 +40,16 @@ def _is_cjk_ellipsis(text: str, pos: int) -> bool:
     return False
 
 
-def split_sentences(text: str, language: str) -> list[str]:
+def split_sentences(
+    text: str,
+    terminators: frozenset[str],
+    abbreviations: frozenset[str],
+    *,
+    is_cjk: bool,
+) -> list[str]:
     """Split text into sentences at terminal punctuation."""
     if not text:
         return []
-
-    terminators = get_sentence_terminators(language)
-    is_cjk = language in ("zh", "ja", "ko")
 
     result: list[str] = []
     current_start = 0
@@ -71,7 +69,7 @@ def split_sentences(text: str, language: str) -> list[str]:
                     continue
 
             if not is_cjk and ch == ".":
-                if _is_abbreviation(text, i):
+                if _is_abbreviation(text, i, abbreviations):
                     i += 1
                     continue
                 if _is_number_dot(text, i):

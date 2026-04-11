@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from lang_ops import TextOps
 
-from text_ops.splitter._lang_config import get_clause_separators
-from text_ops.splitter._paragraph import split_paragraphs
-from text_ops.splitter._sentence import split_sentences
-from text_ops.splitter._clause import split_clauses
-from text_ops.splitter._length import split_by_length
+from lang_ops.splitter._paragraph import split_paragraphs
+from lang_ops.splitter._sentence import split_sentences
+from lang_ops.splitter._clause import split_clauses
+from lang_ops.splitter._length import split_by_length
 
 
 class ChunkPipeline:
@@ -16,9 +15,14 @@ class ChunkPipeline:
 
     __slots__ = ("_pieces", "_ops", "_language")
 
-    def __init__(self, text: str, *, language: str) -> None:
-        self._ops = TextOps.for_language(language)
-        self._language = language
+    def __init__(self, text: str, *, language: str | None = None, ops: object | None = None) -> None:
+        if ops is not None:
+            self._ops = ops
+        elif language is not None:
+            self._ops = TextOps.for_language(language)
+        else:
+            raise TypeError("ChunkPipeline requires either language or ops")
+        self._language = getattr(self._ops, '_language', language or '')
         self._pieces: list[str] = [text] if text else []
 
     def _with_pieces(self, pieces: list[str]) -> ChunkPipeline:
@@ -40,12 +44,17 @@ class ChunkPipeline:
         """Split each piece into sentences."""
         result: list[str] = []
         for piece in self._pieces:
-            result.extend(split_sentences(piece, self._language))
+            result.extend(split_sentences(
+                piece,
+                self._ops.sentence_terminators,
+                self._ops.abbreviations,
+                is_cjk=self._ops.is_cjk,
+            ))
         return self._with_pieces(result)
 
     def clauses(self) -> ChunkPipeline:
         """Split each piece into clauses."""
-        seps = get_clause_separators(self._language)
+        seps = self._ops.clause_separators
         result: list[str] = []
         for piece in self._pieces:
             result.extend(split_clauses(piece, seps))

@@ -4,7 +4,7 @@ import pytest
 
 from lang_ops import TextOps, jieba_is_available
 
-from text_ops.splitter._length import split_by_length
+from lang_ops.splitter._length import split_by_length
 
 
 class TestSplitByLength:

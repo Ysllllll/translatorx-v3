@@ -17,6 +17,14 @@ _SPACE_MARKER = " "
 
 class KoreanOps(_BaseCjkOps):
 
+    @property
+    def sentence_terminators(self) -> frozenset[str]:
+        return frozenset({".", "。", "!", "?"})
+
+    @property
+    def clause_separators(self) -> frozenset[str]:
+        return frozenset({",", "；"})
+
     def _word_tokenize(self, text: str) -> list[str]:
         eojeols = text.split(_SPACE_MARKER)
         tokens: list[str] = []

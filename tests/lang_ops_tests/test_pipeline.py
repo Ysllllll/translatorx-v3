@@ -2,7 +2,7 @@
 
 import pytest
 
-from text_ops.splitter import ChunkPipeline
+from lang_ops import ChunkPipeline
 
 
 class TestPipelineBasic:
