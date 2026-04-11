@@ -2,8 +2,8 @@
 
 import pytest
 
-from text_chunker._lang_config import get_clause_separators
-from text_chunker._splitters._clause import split_clauses
+from text_ops.splitter._lang_config import get_clause_separators
+from text_ops.splitter._clause import split_clauses
 
 
 class TestSplitClauses:

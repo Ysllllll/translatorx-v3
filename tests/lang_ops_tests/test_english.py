@@ -1,6 +1,6 @@
-from text_ops import TextOps
+from lang_ops import TextOps
 
-from tests.text_ops_tests._base import TextOpsTestCase
+from tests.lang_ops_tests._base import TextOpsTestCase
 
 
 class EnglishTextTest(TextOpsTestCase):

@@ -2,9 +2,9 @@
 
 import pytest
 
-from text_ops import TextOps, jieba_is_available
+from lang_ops import TextOps, jieba_is_available
 
-from text_chunker._splitters._length import split_by_length
+from text_ops.splitter._length import split_by_length
 
 
 class TestSplitByLength:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from text_chunker._splitters._sentence import split_sentences
+from text_ops.splitter._sentence import split_sentences
 
 
 class TestSplitSentencesEnglish:

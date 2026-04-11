@@ -6,7 +6,7 @@ from typing import Protocol
 
 
 class _HasSplitJoin(Protocol):
-    """Protocol for the text_ops methods we need."""
+    """Protocol for the lang_ops methods we need."""
 
     def split(self, text: str, mode: str = "word", attach_punctuation: bool = True) -> list[str]: ...
     def join(self, tokens: list[str]) -> str: ...

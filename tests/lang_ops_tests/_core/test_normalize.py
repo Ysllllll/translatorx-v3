@@ -1,6 +1,6 @@
 import unittest
 
-from text_ops import normalize_language
+from lang_ops import normalize_language
 
 from .._base import TextOpsTestCase
 

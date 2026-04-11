@@ -1,14 +1,14 @@
-"""ChunkPipeline — immutable, chainable text chunking."""
+"""ChunkPipeline — immutable, chainable text splitting."""
 
 from __future__ import annotations
 
-from text_ops import TextOps
+from lang_ops import TextOps
 
-from text_chunker._lang_config import get_clause_separators
-from text_chunker._splitters._paragraph import split_paragraphs
-from text_chunker._splitters._sentence import split_sentences
-from text_chunker._splitters._clause import split_clauses
-from text_chunker._splitters._length import split_by_length
+from text_ops.splitter._lang_config import get_clause_separators
+from text_ops.splitter._paragraph import split_paragraphs
+from text_ops.splitter._sentence import split_sentences
+from text_ops.splitter._clause import split_clauses
+from text_ops.splitter._length import split_by_length
 
 
 class ChunkPipeline:

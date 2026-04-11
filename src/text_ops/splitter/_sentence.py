@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from text_chunker._lang_config import (
+from text_ops.splitter._lang_config import (
     ABBREVIATIONS,
     get_sentence_terminators,
 )

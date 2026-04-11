@@ -1,4 +1,4 @@
-"""Per-language punctuation configuration for text chunking."""
+"""Per-language punctuation configuration for text splitting."""
 
 from __future__ import annotations
 
