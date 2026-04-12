@@ -1,9 +1,11 @@
 from ._types import Word, Segment, SentenceRecord
-from .time_map import TimeMap
+from .words import fill_words, find_words, distribute_words
 
 __all__ = [
     "Word",
     "Segment",
     "SentenceRecord",
-    "TimeMap",
+    "fill_words",
+    "find_words",
+    "distribute_words",
 ]
