@@ -57,6 +57,10 @@ class TestEnglishSplitter(SplitterTestBase):
     def test_split_sentences_number_dot(self) -> None:
         assert _s("The value is 3.14 approx.") == ["The value is 3.14 approx."]
 
+    def test_split_sentences_consecutive_terminators(self) -> None:
+        assert _s("Wait!! Really???") == ["Wait!!", " Really???"]
+        assert _s("What?! Yes.") == ["What?!", " Yes."]
+
     def test_split_sentences_closing_quote(self) -> None:
         assert _s('He said "hello." Then he left.') == ['He said "hello."', " Then he left."]
 
@@ -95,6 +99,10 @@ class TestEnglishSplitter(SplitterTestBase):
         assert _c("No commas here") == ["No commas here"]
         assert _c("Hello,") == ["Hello,"]
         assert _c(",Hello") == [",Hello"]
+
+    def test_split_clauses_consecutive_separators(self) -> None:
+        assert _c(",,,") == [",,,"]
+        assert _c("Hello,,, world") == ["Hello,,,", " world"]
 
     def test_split_clauses_edge(self) -> None:
         assert _c("") == []

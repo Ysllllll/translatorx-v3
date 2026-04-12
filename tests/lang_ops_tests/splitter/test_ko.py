@@ -29,6 +29,13 @@ class TestKoreanSplitter(SplitterTestBase):
     def test_split_sentences(self) -> None:
         assert _s("안녕하세요. 반갑습니다!") == ["안녕하세요.", " 반갑습니다!"]
 
+    def test_split_sentences_consecutive_terminators(self) -> None:
+        assert _ops.split_sentences("대단해!! 정말???") == ["대단해!!", " 정말???"]
+
+    def test_split_sentences_spaces_preserved(self) -> None:
+        # Korean uses spaces between words — they must be preserved, not stripped
+        assert _ops.split_sentences("안녕하세요. 반갑습니다!") == ["안녕하세요.", " 반갑습니다!"]
+
     def test_split_sentences_ops_shortcut(self) -> None:
         assert _ops.split_sentences("안녕하세요. 반갑습니다!") == ["안녕하세요.", " 반갑습니다!"]
 

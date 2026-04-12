@@ -17,6 +17,7 @@ _ops = TextOps.for_language("ja")
 def _s(text: str) -> list[str]:
     return Span.to_texts(split_sentences(
         text, _ops.sentence_terminators, _ops.abbreviations, is_cjk=True,
+        strip_spaces=True,
     ))
 
 
@@ -33,6 +34,16 @@ class TestJapaneseSplitter(SplitterTestBase):
 
     def test_split_sentences(self) -> None:
         assert _s("今日は。いい天気！") == ["今日は。", "いい天気！"]
+
+    def test_split_sentences_consecutive_terminators(self) -> None:
+        assert _s("すごい！！！本当？？？") == ["すごい！！！", "本当？？？"]
+        assert _s("何！？どうして？！") == ["何！？", "どうして？！"]
+
+    def test_split_sentences_halfwidth_terminators(self) -> None:
+        assert _ops.split_sentences("Hello! テスト? はい。") == ["Hello!", "テスト?", "はい。"]
+
+    def test_split_sentences_whitespace_stripping(self) -> None:
+        assert _ops.split_sentences("  第一文。 第二文！ ") == ["第一文。", "第二文！"]
 
     def test_split_sentences_ops_shortcut(self) -> None:
         assert _ops.split_sentences("今日は。いい天気！") == ["今日は。", "いい天気！"]
@@ -58,6 +69,13 @@ class TestJapaneseSplitter(SplitterTestBase):
 
     def test_split_clauses(self) -> None:
         assert _c("今日は、いい天気ですね") == ["今日は、", "いい天気ですね"]
+
+    def test_split_clauses_consecutive_separators(self) -> None:
+        assert _c("、、、") == ["、、、"]
+        assert _c("テスト、、次") == ["テスト、、", "次"]
+
+    def test_split_clauses_halfwidth_comma(self) -> None:
+        assert _ops.split_clauses("Hello, テスト, はい。") == ["Hello,", "テスト,", "はい。"]
 
     def test_split_clauses_ops_shortcut(self) -> None:
         assert _ops.split_clauses("今日は、いい天気ですね") == ["今日は、", "いい天気ですね"]

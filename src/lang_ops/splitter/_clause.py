@@ -23,11 +23,20 @@ def split_clauses(text: str, separators: frozenset[str]) -> list[Span]:
     result: list[Span] = []
     current_start = 0
 
-    for i, ch in enumerate(text):
-        if ch in separators and i > current_start:
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch in separators:
+            # Absorb consecutive separators
             end = i + 1
-            result.append(Span(text[current_start:end], current_start, end))
-            current_start = end
+            while end < len(text) and text[end] in separators:
+                end += 1
+            if i > current_start:
+                result.append(Span(text[current_start:end], current_start, end))
+                current_start = end
+            i = end
+        else:
+            i += 1
 
     if current_start < len(text):
         result.append(Span(text[current_start:], current_start, len(text)))
@@ -42,6 +51,7 @@ def split_clauses_full(
     abbreviations: frozenset[str],
     *,
     is_cjk: bool,
+    strip_spaces: bool = False,
 ) -> list[Span]:
     """Split text at both clause separators and sentence terminators in one pass.
 
@@ -55,16 +65,29 @@ def split_clauses_full(
     result: list[Span] = []
     current_start = 0
 
-    i = 0
+    # Skip leading spaces
+    if strip_spaces:
+        while current_start < len(text) and text[current_start] == ' ':
+            current_start += 1
+
+    i = current_start
     while i < len(text):
         ch = text[i]
 
-        if ch in separators and i > current_start:
-            # Clause separator — unconditional split
+        if ch in separators:
+            # Clause separator — absorb consecutive
             end = i + 1
-            result.append(Span(text[current_start:end], current_start, end))
-            current_start = end
-            i = end
+            while end < len(text) and text[end] in separators:
+                end += 1
+            if i > current_start:
+                result.append(Span(text[current_start:end], current_start, end))
+                current_start = end
+                if strip_spaces:
+                    while current_start < len(text) and text[current_start] == ' ':
+                        current_start += 1
+            i = max(end, i + 1)
+            if strip_spaces and current_start > end:
+                i = current_start
 
         elif ch in terminators:
             # Sentence terminator — apply guards
@@ -81,12 +104,20 @@ def split_clauses_full(
                     continue
 
             end = i + 1
+            # Absorb consecutive terminators
+            while end < len(text) and text[end] in terminators:
+                if _is_ellipsis(text, end):
+                    break
+                end += 1
             if end < len(text) and text[end] in _CLOSING_QUOTES:
                 end += 1
 
             result.append(Span(text[current_start:end], current_start, end))
             current_start = end
-            i = end
+            if strip_spaces:
+                while current_start < len(text) and text[current_start] == ' ':
+                    current_start += 1
+            i = current_start
 
         else:
             i += 1

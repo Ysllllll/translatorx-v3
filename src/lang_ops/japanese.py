@@ -9,7 +9,7 @@ class JapaneseOps(_BaseCjkOps):
 
     @property
     def clause_separators(self) -> frozenset[str]:
-        return frozenset({"、", "；"})
+        return frozenset({"、", "；", ","})
 
     def _word_tokenize(self, text: str) -> list[str]:
         import MeCab

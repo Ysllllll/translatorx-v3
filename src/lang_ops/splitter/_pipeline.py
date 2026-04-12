@@ -51,6 +51,7 @@ class ChunkPipeline:
                 self._ops.sentence_terminators,
                 self._ops.abbreviations,
                 is_cjk=self._ops.is_cjk,
+                strip_spaces=self._ops.strip_spaces,
             )
             result.extend(span.child(c) for c in children)
         return self._with_spans(result)
@@ -65,6 +66,7 @@ class ChunkPipeline:
                 self._ops.sentence_terminators,
                 self._ops.abbreviations,
                 is_cjk=self._ops.is_cjk,
+                strip_spaces=self._ops.strip_spaces,
             )
             result.extend(span.child(c) for c in children)
         return self._with_spans(result)

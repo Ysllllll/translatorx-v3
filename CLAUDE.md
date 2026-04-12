@@ -8,180 +8,156 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Run all tests
 pytest tests/ -v
 
-# Run lang_ops token-level tests for a specific language
+# Run a single test file
 pytest tests/lang_ops_tests/test_chinese.py -v
-pytest tests/lang_ops_tests/test_english.py -v
-
-# Run splitter tests (all languages)
-pytest tests/lang_ops_tests/splitter/ -v
-
-# Run splitter tests for a specific language
 pytest tests/lang_ops_tests/splitter/test_en.py -v
-pytest tests/lang_ops_tests/splitter/test_zh.py -v
 
-# Run reader tests
-pytest tests/subtitle/readers/test_srt.py -v
-
-# Run via the venv explicitly
+# Run via the venv explicitly (if pytest not on PATH)
 /home/ysl/workspace/.venv/bin/pytest tests/ -v
+
+# Run with coverage
+/home/ysl/workspace/.venv/bin/pytest tests/ -v --cov=src --cov-report=term-missing
 ```
+
+`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops` and `subtitle` from `src/`.
 
 ## Architecture
 
 A subtitle processing toolkit with two top-level packages under `src/`.
 
-### Module layout
+### Package overview
 
 ```
 src/
-├── lang_ops/                        # Language-adapted text operations (token + segment)
-│   ├── __init__.py                  # Public API: TextOps, ChunkPipeline, normalize_language
+├── lang_ops/                        # Language-adapted text operations
+│   ├── __init__.py                  # Public API: TextOps, ChunkPipeline, Span, normalize_language
 │   ├── en_type.py                   # EnTypeOps (shared by 7 space-delimited languages)
-│   ├── chinese.py                   # ChineseOps (jieba)
-│   ├── japanese.py                  # JapaneseOps (MeCab)
-│   ├── korean.py                    # KoreanOps (Kiwi)
+│   ├── chinese.py / japanese.py / korean.py  # CJK language ops
 │   ├── _core/
-│   │   ├── _mechanism.py            # TextOps factory
-│   │   ├── _cjk_common.py           # _BaseCjkOps, token parsing, attachment, join logic
-│   │   ├── _chars.py                # Unicode character classification (CJK, hangul, kana, punctuation)
-│   │   ├── _mode.py                 # Mode normalization ("c"→"character", "w"→"word")
-│   │   ├── _normalize.py            # Language code normalization (aliases → ISO codes)
-│   │   ├── _availability.py         # Optional dependency checks (jieba, mecab, kiwi)
-│   │   └── _types.py                # AnalysisUnit, Span dataclasses
-│   └── splitter/                    # Text splitting pipeline
-│       ├── __init__.py              # Exports ChunkPipeline
-│       ├── _pipeline.py             # ChunkPipeline class (immutable, chainable)
-│       ├── _paragraph.py            # Paragraph splitter
+│   │   ├── _base_ops.py             # _BaseOps ABC — abstract interface + shared concrete methods
+│   │   ├── _mechanism.py            # TextOps factory (cached via lru_cache)
+│   │   ├── _cjk_common.py           # _BaseCjkOps + token parsing/attachment/join helpers
+│   │   ├── _chars.py                # Unicode classification + punctuation frozensets
+│   │   ├── _normalize.py            # Language code normalization
+│   │   ├── _availability.py         # Optional dependency guards
+│   │   └── _types.py                # Span dataclass
+│   └── splitter/
+│       ├── _pipeline.py             # ChunkPipeline (immutable, chainable)
 │       ├── _sentence.py             # Sentence splitter (abbreviation/ellipsis guards)
-│       ├── _clause.py               # Clause splitter
-│       └── _length.py               # Length-based splitter
-└── subtitle/                        # Subtitle data structures and file I/O
-    ├── __init__.py                  # Exports Word, Segment, SentenceRecord
-    ├── _types.py                    # Core dataclasses
+│       ├── _clause.py               # split_clauses + split_clauses_full (sentence-aware)
+│       ├── _paragraph.py            # Paragraph splitter
+│       └── _length.py               # Length-based splitter (uses Protocol for decoupling)
+└── subtitle/                        # Subtitle data structures + word timing
+    ├── __init__.py                  # Exports Word, Segment, SentenceRecord, fill_words, find_words, distribute_words, align_segments
+    ├── _types.py                    # Frozen dataclasses (Word, Segment, SentenceRecord)
+    ├── words.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
     └── readers/
-        ├── __init__.py              # Exports parse_srt, read_srt
-        └── srt.py                   # SRT file parser → list[Segment]
+        └── srt.py                   # SRT file parser
 ```
 
-### Test structure
+### Key design decisions
 
-```
-tests/
-├── __init__.py
-├── lang_ops_tests/              # All lang_ops tests (token + segment)
-│   ├── __init__.py
-│   ├── _base.py                 # TextOpsTestCase base class with shared assertion helpers
-│   ├── conftest.py              # Font path resolution, pixel length calculation
-│   ├── test_english.py          # Token-level tests per language (10 total)
-│   ├── test_chinese.py
-│   ├── ...
-│   ├── splitter/                # Per-language splitter tests (unit + long-text)
-│   │   ├── _base.py            # SplitterTestBase: reconstruction assertions, helpers
-│   │   ├── test_en.py          # EN: sentence/clause/paragraph/pipeline/length + long text
-│   │   ├── test_zh.py          # ZH: sentence/clause/pipeline/length + long text
-│   │   ├── test_ja.py          # JA: sentence/clause + long text
-│   │   ├── test_ko.py          # KO: sentence + long text
-│   │   ├── test_ru.py          # RU: long text
-│   │   ├── test_es.py          # ES: long text
-│   │   ├── test_fr.py          # FR: long text
-│   │   ├── test_de.py          # DE: long text
-│   │   ├── test_pt.py          # PT: long text
-│   │   └── test_vi.py          # VI: long text
-│   └── _core/
-│       ├── test_mechanism.py    # Factory-level tests (unsupported language)
-│       └── test_normalize.py    # Language code normalization tests
-└── subtitle/
-    └── readers/
-        └── test_srt.py          # SRT reader integration tests
-```
+**Factory pattern:** `TextOps.for_language(code)` returns a cached `_BaseOps` subclass. Uses `functools.lru_cache` — thread-safe, no manual cache management.
 
-**Import note:** All tests import `from lang_ops import ...`. The test directory is named `lang_ops_tests` to prevent Python from finding it instead of the `src/` package.
+**Two language families:**
+- **EnType** (`en_type.py`): Space-delimited languages (en, ru, es, fr, de, pt, vi). `split()` uses `str.split()`. Per-language abbreviation sets. French `normalize()` has special spacing rules.
+- **CJK** (`_cjk_common.py` base): Character-based. `split()` uses external tokenizers (jieba/MeCab/Kiwi). Korean overrides `split()`/`join()` to preserve eojeol boundaries.
+
+**Immutability:** `ChunkPipeline` returns new instances per step. All `subtitle` dataclasses use `frozen=True`. `words.py` uses `dataclasses.replace()` instead of mutation.
+
+**Protocol decoupling:** `_length.py` defines `_HasSplitJoin` Protocol instead of importing `_BaseOps`, keeping the splitter independent from the ops layer.
+
+**Sentence-aware clause splitting:** `split_clauses_full()` splits at both clause separators and sentence terminators in one pass. `split_clauses()` (lower-level) only uses clause separators. The pipeline and shortcuts use the full version.
 
 ### Layer relationship
 
 ```
 lang_ops                              ←  subtitle
-  token: split/join/length/normalize       readers
-  segment: sentences/clauses/paragraphs
-  pipeline: ChunkPipeline
+  token: split/join/length/normalize       _types (frozen dataclasses)
+  segment: sentences/clauses/paragraphs    words (fill/find/distribute/align)
+  pipeline: ChunkPipeline                  readers (SRT)
   shortcuts: ops.split_sentences() etc.
 ```
 
-`subtitle` is independent of `lang_ops`.
+`subtitle` is independent of `lang_ops` except `ChunkPipeline.segments()` which does a deferred import of `subtitle.words.align_segments`.
 
-### Language families
-
-Two fundamentally different token-level processing strategies:
-
-- **EnType** (`en_type.py`): Space-delimited languages (en, ru, es, fr, de, pt, vi). `split()` uses `str.split()`. `normalize()` fixes punctuation spacing (French has special rules: adds space before `!?;:`). Per-language abbreviation sets for sentence splitting.
-- **CJK** (`_core/_cjk_common.py` base + `chinese.py`/`japanese.py`/`korean.py`): Character-based languages. `split()` uses external tokenizers (jieba/MeCab/Kiwi). `normalize()` is currently identity (no-op). Korean overrides `split()` and `join()` to preserve eojeol (space-separated word group) boundaries. Each language has its own `sentence_terminators` and `clause_separators`.
-
-### Factory pattern
+### Test structure
 
 ```
-TextOps.for_language(code)  → returns EnTypeOps | ChineseOps | JapaneseOps | KoreanOps
+tests/
+├── lang_ops_tests/              # Token + splitter tests
+│   ├── _base.py                 # TextOpsTestCase — shared assertion helpers
+│   ├── conftest.py              # Font path resolution, pixel length fixture
+│   ├── test_{language}.py       # Per-language token-level tests (10 files)
+│   ├── splitter/
+│   │   ├── _base.py             # SplitterTestBase — reconstruction assertions
+│   │   └── test_{lang}.py       # Per-language splitter tests
+│   └── _core/
+│       ├── test_mechanism.py    # Factory tests
+│       └── test_normalize.py    # Language code normalization
+└── subtitle/
+    ├── test_words.py            # fill_words, find_words, distribute_words, align_segments
+    └── readers/
+        └── test_srt.py          # SRT parser tests
 ```
 
-`_core/_mechanism.py` defines `TextOps` (factory). Results are cached by normalized language code.
+Test directory is `lang_ops_tests` (not `lang_ops`) to prevent Python from importing it instead of `src/lang_ops`.
 
 ## Dependencies
 
-- **Python 3.10+** (uses `list[list]`, `str | None`, `slots=True`)
+- **Python 3.10+** (`list[list]`, `str | None`, `slots=True`, `frozen=True`)
 - **Pillow** — pixel length via `plength()`
-- **jieba** — Chinese segmentation (conditional)
-- **MeCab** — Japanese morphological analysis (conditional)
-- **kiwipiepy** — Korean morphological analysis (conditional)
+- **jieba** / **MeCab** / **kiwipiepy** — CJK tokenizers (conditional, tests skip if missing)
 
-CJK tests guard on availability and skip gracefully if the tokenizer is not installed.
+## API quick reference
 
-## API
+### Language operations
 
-### Data types (`subtitle._types`)
+```
+ops = TextOps.for_language("en")     # Factory — cached, returns _BaseOps subclass
 
-- `Word(word, start, end, speaker=None, extra={})` — single word with timing
-- `Segment(start, end, text, speaker=None, words=[], extra={})` — subtitle segment
-- `SentenceRecord(src_text, start, end, segments=[], chunk_cache={}, translations={}, alignment={}, extra={})` — sentence with translations
+# Token-level
+ops.split(text, mode="word")         # "word" | "character" ("w" | "c")
+ops.join(tokens)
+ops.length(text, cjk_width=1)
+ops.normalize(text)
+ops.restore_punc(text_a, text_b)
 
-### Language operations (`lang_ops`)
+# Segment-level shortcuts
+ops.split_sentences(text) → list[str]
+ops.split_clauses(text)   → list[str]   # sentence-aware (splits at sentence boundaries too)
+ops.split_paragraphs(text) → list[str]
+ops.chunk(text) → ChunkPipeline
+```
 
-- `TextOps.for_language(code)` — factory, returns language-specific mechanism
-- `Span(text, start, end)` — positional text fragment; `start`/`end` are character offsets (`-1` = unknown)
-- `Span.to_texts(spans)` — convenience: `list[Span]` → `list[str]`
+### Pipeline (chainable, immutable)
 
-**Token-level:**
-- `mechanism.split(text, mode, attach_punctuation)` — tokenize; modes: `"word"`, `"character"` (shorthands: `"w"`, `"c"`)
-- `mechanism.join(tokens)` — rejoin tokens to string
-- `mechanism.length(text, cjk_width)` — character/token count; `cjk_width=2` normalizes CJK width
-- `mechanism.plength(text, font_path, font_size)` — pixel width via Pillow
-- `mechanism.normalize(text)` — fix punctuation spacing drift
-- `mechanism.strip/lstrip/rstrip(text, chars)` — thin wrappers around Python `str` methods
-- `mechanism.strip_punc/lstrip_punc/rstrip_punc(text)` — strip punctuation characters
-- `mechanism.restore_punc(text_a, text_b)` — apply punctuation from text_b onto text_a's content by token alignment
+```
+ops.chunk(text)
+  .paragraphs()
+  .sentences()
+  .clauses()            # sentence-aware
+  .by_length(50, unit="character")
+  .result()             → list[str]
+  .spans()              → list[Span]
+  .segments(words)      → list[Segment]   # deferred import from subtitle.words
+```
 
-**Segment-level shortcuts:**
-- `mechanism.split_sentences(text)` → `list[str]` — split by terminal punctuation
-- `mechanism.split_clauses(text)` → `list[str]` — split by comma/pause punctuation and sentence terminators
-- `mechanism.split_paragraphs(text)` → `list[str]` — split by blank lines
-- `mechanism.chunk(text)` → `ChunkPipeline` — create a chainable pipeline
+### Subtitle word timing
 
-**Pipeline (chainable):**
-- `ChunkPipeline(text, language="en")` or `ops.chunk(text)` — immutable, chainable pipeline
-- `.paragraphs()` — split by blank lines
-- `.sentences()` — split by terminal punctuation (abbreviation/ellipsis aware)
-- `.clauses()` — split by comma/pause punctuation and sentence terminators (superset of `.sentences()`)
-- `.by_length(max_length, unit="character")` — split at token boundaries by length
-- `.result()` → `list[str]`
-- `.spans()` → `list[Span]` — when you need character offsets
+```
+fill_words(segment, split_fn=None) → Segment    # populate segment.words from text
+find_words(words, sub_text, start=0) → (start_idx, end_idx)
+distribute_words(words, texts) → list[list[Word]]
+align_segments(chunks, words) → list[Segment]    # text chunks + timed words → Segments
+```
 
-Each pipeline method returns a **new** `ChunkPipeline` instance (immutable). `by_length()` produces Spans with `start=-1, end=-1` since tokenize+join can alter whitespace.
+### Data types (all frozen)
 
-**Other:**
-- `normalize_language(value)` — normalize aliases ("中文" → "zh", "english" → "en")
-
-### Readers (`subtitle.readers`)
-
-- `parse_srt(content: str)` — parse SRT content string → `list[Segment]`
-- `read_srt(path)` — read SRT file → `list[Segment]`
+- `Word(word, start, end, speaker=None, extra={})`
+- `Segment(start, end, text, speaker=None, words=[], extra={})`
+- `SentenceRecord(src_text, start, end, segments=[], ...)`
+- `Span(text, start, end)` — positional text fragment
 
 ## Fonts
 

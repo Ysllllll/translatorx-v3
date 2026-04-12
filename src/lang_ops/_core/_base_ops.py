@@ -44,6 +44,11 @@ class _BaseOps(ABC):
     @abstractmethod
     def is_cjk(self) -> bool: ...
 
+    @property
+    def strip_spaces(self) -> bool:
+        """Whether to strip inter-sentence/clause leading spaces. True for CJK except Korean."""
+        return self.is_cjk
+
     # -- Abstract methods (override in subclass) ----------------------------
 
     @abstractmethod
@@ -103,20 +108,28 @@ class _BaseOps(ABC):
     def split_sentences(self, text: str) -> list[str]:
         """Split text into sentences."""
         from lang_ops.splitter._sentence import split_sentences as _split
-        return Span.to_texts(_split(text, self.sentence_terminators, self.abbreviations, is_cjk=self.is_cjk))
+        return Span.to_texts(_split(
+            text, self.sentence_terminators, self.abbreviations,
+            is_cjk=self.is_cjk, strip_spaces=self.strip_spaces,
+        ))
 
     def split_clauses(self, text: str) -> list[str]:
         """Split text into clauses (sentence boundaries are also clause boundaries)."""
         from lang_ops.splitter._clause import split_clauses_full as _split
         return Span.to_texts(_split(
             text, self.clause_separators, self.sentence_terminators,
-            self.abbreviations, is_cjk=self.is_cjk,
+            self.abbreviations, is_cjk=self.is_cjk, strip_spaces=self.strip_spaces,
         ))
 
     def split_paragraphs(self, text: str) -> list[str]:
         """Split text into paragraphs."""
         from lang_ops.splitter._paragraph import split_paragraphs as _split
         return Span.to_texts(_split(text))
+
+    def split_by_length(self, text: str, max_length: int, unit: str = "character") -> list[str]:
+        """Split text into chunks that don't exceed *max_length*."""
+        from lang_ops.splitter._length import split_by_length as _split
+        return Span.to_texts(_split(text, self, max_length, unit))
 
     def chunk(self, text: str) -> "ChunkPipeline":
         """Create a ChunkPipeline for chainable splitting."""

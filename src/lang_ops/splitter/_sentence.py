@@ -46,6 +46,7 @@ def split_sentences(
     abbreviations: frozenset[str],
     *,
     is_cjk: bool,
+    strip_spaces: bool = False,
 ) -> list[Span]:
     """Split text into sentences at terminal punctuation.
 
@@ -57,7 +58,12 @@ def split_sentences(
     result: list[Span] = []
     current_start = 0
 
-    i = 0
+    # Skip leading spaces
+    if strip_spaces:
+        while current_start < len(text) and text[current_start] == ' ':
+            current_start += 1
+
+    i = current_start
     while i < len(text):
         ch = text[i]
 
@@ -76,12 +82,21 @@ def split_sentences(
                     continue
 
             end = i + 1
+            # Absorb consecutive terminators
+            while end < len(text) and text[end] in terminators:
+                if _is_ellipsis(text, end):
+                    break
+                end += 1
             if end < len(text) and text[end] in _CLOSING_QUOTES:
                 end += 1
 
             result.append(Span(text[current_start:end], current_start, end))
             current_start = end
-            i = end
+            # Skip leading spaces for next chunk
+            if strip_spaces:
+                while current_start < len(text) and text[current_start] == ' ':
+                    current_start += 1
+            i = current_start
         else:
             i += 1
 

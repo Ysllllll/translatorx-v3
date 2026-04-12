@@ -26,6 +26,10 @@ class KoreanOps(_BaseCjkOps):
     def clause_separators(self) -> frozenset[str]:
         return frozenset({",", "；"})
 
+    @property
+    def strip_spaces(self) -> bool:
+        return False
+
     def _word_tokenize(self, text: str) -> list[str]:
         eojeols = text.split(_SPACE_MARKER)
         tokens: list[str] = []

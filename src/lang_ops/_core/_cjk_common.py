@@ -161,11 +161,11 @@ class _BaseCjkOps(_BaseOps):
 
     @property
     def sentence_terminators(self) -> frozenset[str]:
-        return frozenset({"。", "！", "？"})
+        return frozenset({"。", "！", "？", "!", "?"})
 
     @property
     def clause_separators(self) -> frozenset[str]:
-        return frozenset({"，", "、", "；", "："})
+        return frozenset({"，", "、", "；", "：", ",", ";", ":"})
 
     @property
     def abbreviations(self) -> frozenset[str]:
