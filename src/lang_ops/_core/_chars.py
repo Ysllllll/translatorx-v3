@@ -63,11 +63,11 @@ def is_east_asian(ch: str) -> bool:
 
 # Punctuation sets for CJK attachment
 # 尾部标点（通常附着在前面词汇的末尾，如逗号、句号）
-TRAILING_PUNCT = set(",.!?:;，。！？：；、")
+TRAILING_PUNCT = frozenset(",.!?:;，。！？：；、")
 # 闭合标点（通常附着在前面词汇的末尾，如右括号、右引号）
-CLOSING_PUNCT = set(")]}）》”’")  # ）》”’
+CLOSING_PUNCT = frozenset(")]}）》”’")  # ）》”’
 # 起始标点（通常附着在后面词汇的开头，如左括号、左引号）
-OPENING_PUNCT = set("([{（《“‘")   # （《“‘
+OPENING_PUNCT = frozenset("([{（《“‘")   # （《“‘
 
 # 需要依附于前一个 Token 的标点集合
 ATTACH_TO_PREV = TRAILING_PUNCT | CLOSING_PUNCT

@@ -15,8 +15,8 @@ Example::
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
-from typing import Callable, Optional
 
 from ._types import Segment, Word
 
@@ -47,7 +47,7 @@ def _strip_punct(s: str) -> str:
 
 def fill_words(
     segment: Segment,
-    split_fn: Optional[Callable[[str], list[str]]] = None,
+    split_fn: Callable[[str], list[str]] | None = None,
 ) -> Segment:
     """Ensure *segment* has word-level timing.
 

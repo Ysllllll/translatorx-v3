@@ -35,13 +35,13 @@ A subtitle processing toolkit with two top-level packages under `src/`.
 ```
 src/
 ├── lang_ops/                        # Language-adapted text operations (token + segment)
-│   ├── __init__.py                  # Public API: TextOps, MultilingualText, ChunkPipeline, normalize_language
+│   ├── __init__.py                  # Public API: TextOps, ChunkPipeline, normalize_language
 │   ├── en_type.py                   # EnTypeOps (shared by 7 space-delimited languages)
 │   ├── chinese.py                   # ChineseOps (jieba)
 │   ├── japanese.py                  # JapaneseOps (MeCab)
 │   ├── korean.py                    # KoreanOps (Kiwi)
 │   ├── _core/
-│   │   ├── _mechanism.py            # TextOps factory, MultilingualText
+│   │   ├── _mechanism.py            # TextOps factory
 │   │   ├── _cjk_common.py           # _BaseCjkOps, token parsing, attachment, join logic
 │   │   ├── _chars.py                # Unicode character classification (CJK, hangul, kana, punctuation)
 │   │   ├── _mode.py                 # Mode normalization ("c"→"character", "w"→"word")
@@ -122,7 +122,7 @@ Two fundamentally different token-level processing strategies:
 TextOps.for_language(code)  → returns EnTypeOps | ChineseOps | JapaneseOps | KoreanOps
 ```
 
-`_core/_mechanism.py` defines `TextOps` (factory) and `MultilingualText` (convenience wrapper). Results are cached by normalized language code.
+`_core/_mechanism.py` defines `TextOps` (factory). Results are cached by normalized language code.
 
 ## Dependencies
 
@@ -176,7 +176,6 @@ CJK tests guard on availability and skip gracefully if the tokenizer is not inst
 Each pipeline method returns a **new** `ChunkPipeline` instance (immutable). `by_length()` produces Spans with `start=-1, end=-1` since tokenize+join can alter whitespace.
 
 **Other:**
-- `MultilingualText(text, language)` — convenience wrapper
 - `normalize_language(value)` — normalize aliases ("中文" → "zh", "english" → "en")
 
 ### Readers (`subtitle.readers`)

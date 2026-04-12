@@ -1,4 +1,4 @@
-from lang_ops import TextOps, MultilingualText, kiwi_is_available
+from lang_ops import TextOps,  kiwi_is_available
 
 from .conftest import TEST_FONT_PATH, expected_pixel_length
 from tests.lang_ops_tests._base import TextOpsTestCase
@@ -28,7 +28,6 @@ class KoreanTextTest(TextOpsTestCase):
             [o.length(text0), 67],
             [o.length(text0, cjk_width=2), 60],
             [o.plength(text0, TEST_FONT_PATH, 16), expected_pixel_length(text0, TEST_FONT_PATH, 16)],
-            [MultilingualText(text0, "ko").plength(TEST_FONT_PATH, 16), expected_pixel_length(text0, TEST_FONT_PATH, 16)],
         ]
         self.assert_actual_vs_expect(actual_vs_expect)
 

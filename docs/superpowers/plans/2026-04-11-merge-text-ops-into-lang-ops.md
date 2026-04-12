@@ -34,14 +34,14 @@ chunks = ops.chunk(text).paragraphs().sentences().clauses().by_length(50).result
 
 ```
 src/lang_ops/
-├── __init__.py                  # Export TextOps, MultilingualText, normalize_language, ChunkPipeline
+├── __init__.py                  # Export TextOps, normalize_language, ChunkPipeline
 ├── en_type.py                   # EnTypeOps (unchanged, already has properties)
 ├── chinese.py                   # ChineseOps (unchanged)
 ├── japanese.py                  # JapaneseOps (unchanged)
 ├── korean.py                    # KoreanOps (unchanged)
 ├── _core/
 │   ├── __init__.py
-│   ├── _mechanism.py            # TextOps factory, MultilingualText
+│   ├── _mechanism.py            # TextOps factory
 │   ├── _cjk_common.py           # _BaseCjkOps
 │   ├── _chars.py
 │   ├── _mode.py
@@ -139,14 +139,13 @@ Add `ChunkPipeline` to exports:
 ```python
 """Multilingual text operations library."""
 
-from ._core._mechanism import TextOps, MultilingualText
+from ._core._mechanism import TextOps
 from ._core._normalize import normalize_language
 from ._core._availability import jieba_is_available, mecab_is_available, kiwi_is_available
 from .splitter import ChunkPipeline
 
 __all__ = [
     "TextOps",
-    "MultilingualText",
     "normalize_language",
     "ChunkPipeline",
     "jieba_is_available",

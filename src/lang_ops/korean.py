@@ -14,6 +14,9 @@ _SPACE_MARKER = " "
 
 
 class KoreanOps(_BaseCjkOps):
+    def __init__(self):
+        from kiwipiepy import Kiwi
+        self._kiwi = Kiwi()
 
     @property
     def sentence_terminators(self) -> frozenset[str]:
@@ -55,9 +58,6 @@ class KoreanOps(_BaseCjkOps):
         return all_tokens
 
     def _tokenize_eojeol(self, eojeol: str) -> list[str]:
-        from kiwipiepy import Kiwi
-        if not hasattr(self, "_kiwi"):
-            self._kiwi = Kiwi()
         return [token.form for token in self._kiwi.tokenize(eojeol)]
 
     def join(self, tokens: list[str]) -> str:

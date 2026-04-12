@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+
 from ._chars import STRIP_PUNCT, decompose_token
 from ._types import Span
+
 
 # Mode shorthand: "c" = "character", "w" = "word"
 _MODE_SHORTHAND = {"c": "character", "w": "word"}
@@ -15,7 +18,7 @@ def normalize_mode(mode: str) -> str:
     return _MODE_SHORTHAND.get(mode, mode)
 
 
-class _BaseOps:
+class _BaseOps(ABC):
     """Abstract base for all language-specific text operations.
 
     Subclasses must implement:
@@ -26,34 +29,34 @@ class _BaseOps:
     # -- Abstract properties (override in subclass) -------------------------
 
     @property
-    def sentence_terminators(self) -> frozenset[str]:
-        raise NotImplementedError
+    @abstractmethod
+    def sentence_terminators(self) -> frozenset[str]: ...
 
     @property
-    def clause_separators(self) -> frozenset[str]:
-        raise NotImplementedError
+    @abstractmethod
+    def clause_separators(self) -> frozenset[str]: ...
 
     @property
-    def abbreviations(self) -> frozenset[str]:
-        raise NotImplementedError
+    @abstractmethod
+    def abbreviations(self) -> frozenset[str]: ...
 
     @property
-    def is_cjk(self) -> bool:
-        raise NotImplementedError
+    @abstractmethod
+    def is_cjk(self) -> bool: ...
 
     # -- Abstract methods (override in subclass) ----------------------------
 
-    def split(self, text: str, mode: str = "word", attach_punctuation: bool = True) -> list[str]:
-        raise NotImplementedError
+    @abstractmethod
+    def split(self, text: str, mode: str = "word", attach_punctuation: bool = True) -> list[str]: ...
 
-    def join(self, tokens: list[str]) -> str:
-        raise NotImplementedError
+    @abstractmethod
+    def join(self, tokens: list[str]) -> str: ...
 
-    def length(self, text: str, **kwargs: int) -> int:
-        raise NotImplementedError
+    @abstractmethod
+    def length(self, text: str, **kwargs: int) -> int: ...
 
-    def normalize(self, text: str) -> str:
-        raise NotImplementedError
+    @abstractmethod
+    def normalize(self, text: str) -> str: ...
 
     # -- Shared concrete methods --------------------------------------------
 

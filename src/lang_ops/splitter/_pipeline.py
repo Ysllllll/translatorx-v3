@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from lang_ops import TextOps
+from lang_ops._core._base_ops import _BaseOps
 from lang_ops._core._types import Span
 
 from lang_ops.splitter._paragraph import split_paragraphs
@@ -16,7 +17,7 @@ class ChunkPipeline:
 
     __slots__ = ("_spans", "_ops", "_language")
 
-    def __init__(self, text: str, *, language: str | None = None, ops: object | None = None) -> None:
+    def __init__(self, text: str, *, language: str | None = None, ops: _BaseOps | None = None) -> None:
         if ops is not None:
             self._ops = ops
         elif language is not None:

@@ -1,4 +1,4 @@
-from lang_ops import TextOps, MultilingualText, jieba_is_available
+from lang_ops import TextOps, jieba_is_available
 
 from .conftest import TEST_FONT_PATH, expected_pixel_length
 from tests.lang_ops_tests._base import TextOpsTestCase
@@ -24,7 +24,6 @@ class ChineseTextTest(TextOpsTestCase):
             [o.length(text1), 50],
             [o.length(text1, cjk_width=2), 39],
             [o.plength(text1, TEST_FONT_PATH, 16), expected_pixel_length(text1, TEST_FONT_PATH, 16)],
-            [MultilingualText(text1, "zh").plength(TEST_FONT_PATH, 16), expected_pixel_length(text1, TEST_FONT_PATH, 16)],
         ])
         expect_join_text = '今天 AI Deep 上线，你应该去体验一下最新的 Agent！叫“AI”什么？叫：“Deep”，是的...'
         self._assert_text_join_case(text1, expect_join_text)
@@ -40,7 +39,6 @@ class ChineseTextTest(TextOpsTestCase):
             [o.length(text2), 97],
             [o.length(text2, cjk_width=2), 85],
             [o.plength(text2, TEST_FONT_PATH, 16), expected_pixel_length(text2, TEST_FONT_PATH, 16)],
-            [MultilingualText(text2, "zh").plength(TEST_FONT_PATH, 16), expected_pixel_length(text2, TEST_FONT_PATH, 16)],
         ])
         expect_text2 = '[旁白]：突然天边飘来了一朵乌云，那乌云之中...他说：“突然天边飘来了一朵乌云，那乌云之中...”《三体》很好看。“AI”上线了！（测试）……开始这是 English subtitle，你知道吗？'
         self._assert_text_join_case(text2, expect_text2)

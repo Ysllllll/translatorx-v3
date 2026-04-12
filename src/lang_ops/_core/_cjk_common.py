@@ -103,10 +103,6 @@ def _is_trailing_or_closing_token(token: str, multi_dot_attaches: bool = True) -
     return False
 
 
-def _is_content_token(token: str) -> bool:
-    return not _is_opening_token(token) and not _is_trailing_or_closing_token(token)
-
-
 def _attach_tokens(raw_tokens: list[str], multi_dot_attaches: bool = True) -> list[str]:
     result: list[str] = []
     current = ""
@@ -153,14 +149,6 @@ def _cjk_join_tokens(tokens: list[str]) -> str:
             parts.append(" ")
         parts.append(token)
     return "".join(parts)
-
-
-def _determine_kind(token: str, mode: str) -> str:
-    if not any(c.isalnum() for c in token):
-        return "punctuation"
-    if mode == "character" and len(token) == 1 and is_east_asian(token):
-        return "character"
-    return "word"
 
 
 class _BaseCjkOps(_BaseOps):

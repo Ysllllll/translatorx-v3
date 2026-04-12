@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Union
 
 from subtitle._types import Segment
 
@@ -65,7 +64,7 @@ def parse_srt(content: str) -> list[Segment]:
     return segments
 
 
-def read_srt(path: Union[str, Path]) -> list[Segment]:
+def read_srt(path: str | Path) -> list[Segment]:
     """Read an SRT file and return a list of Segments.
 
     Args:
