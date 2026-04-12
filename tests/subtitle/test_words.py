@@ -128,6 +128,40 @@ class TestFindWords:
     def test_start_beyond_end(self):
         assert find_words(self.words, "Hello", start=10) == (10, 10)
 
+    def test_case_insensitive_match(self):
+        """Words with different casing than text."""
+        words = [Word("hello", 0.0, 0.5), Word("WORLD", 0.6, 1.0)]
+        assert find_words(words, "Hello World") == (0, 2)
+
+    def test_whisper_leading_space(self):
+        """Whisper-style tokens with leading whitespace."""
+        words = [Word(" Hello", 0.0, 0.5), Word(" world", 0.6, 1.0)]
+        assert find_words(words, "Hello world") == (0, 2)
+
+    def test_case_and_punct_combined(self):
+        """Both casing and punctuation mismatch."""
+        words = [Word("hello", 0.0, 0.5), Word("world", 0.6, 1.0)]
+        assert find_words(words, "Hello, World!") == (0, 2)
+
+    def test_chinese_char_level_words(self):
+        """Real-world: Chinese words are single characters."""
+        words = [
+            Word("你", 0.0, 0.2), Word("好", 0.2, 0.4),
+            Word("世", 0.4, 0.6), Word("界", 0.6, 0.8),
+        ]
+        assert find_words(words, "你好") == (0, 2)
+        assert find_words(words, "世界", start=2) == (2, 4)
+
+    def test_chinese_char_level_with_punct(self):
+        """Chinese char words matched against text with punctuation."""
+        words = [
+            Word("你", 0.0, 0.2), Word("好", 0.2, 0.4),
+            Word("。", 0.4, 0.5),
+            Word("再", 0.5, 0.7), Word("见", 0.7, 0.9),
+        ]
+        assert find_words(words, "你好。") == (0, 3)
+        assert find_words(words, "再见", start=3) == (3, 5)
+
 
 # ---------------------------------------------------------------------------
 # distribute_words

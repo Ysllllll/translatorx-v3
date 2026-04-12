@@ -356,16 +356,22 @@ class TestSegmentBuilderCJK:
 
     def test_zh_sentences(self) -> None:
         zh = TextOps.for_language("zh")
+        # Real-world: words are single-character level (from ASR)
         segments = [
             _seg("你好世界。", 0.0, 2.0, words=[
-                _word("你好", 0.0, 1.0),
-                _word("世界", 1.0, 1.8),
+                _word("你", 0.0, 0.5),
+                _word("好", 0.5, 1.0),
+                _word("世", 1.0, 1.4),
+                _word("界", 1.4, 1.8),
                 _word("。", 1.8, 2.0),
             ]),
             _seg("今天天气不错！", 2.0, 5.0, words=[
-                _word("今天", 2.0, 2.8),
-                _word("天气", 2.8, 3.5),
-                _word("不错", 3.5, 4.5),
+                _word("今", 2.0, 2.4),
+                _word("天", 2.4, 2.8),
+                _word("天", 2.8, 3.1),
+                _word("气", 3.1, 3.5),
+                _word("不", 3.5, 4.0),
+                _word("错", 4.0, 4.5),
                 _word("！", 4.5, 5.0),
             ]),
         ]
@@ -383,8 +389,14 @@ class TestSegmentBuilderCJK:
         """CJK segments should be joined without spaces."""
         zh = TextOps.for_language("zh")
         segments = [
-            _seg("你好", 0.0, 1.0, words=[_word("你好", 0.0, 1.0)]),
-            _seg("世界", 1.0, 2.0, words=[_word("世界", 1.0, 2.0)]),
+            _seg("你好", 0.0, 1.0, words=[
+                _word("你", 0.0, 0.5),
+                _word("好", 0.5, 1.0),
+            ]),
+            _seg("世界", 1.0, 2.0, words=[
+                _word("世", 1.0, 1.5),
+                _word("界", 1.5, 2.0),
+            ]),
         ]
         result = SegmentBuilder(segments, zh).build()
 

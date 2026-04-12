@@ -88,6 +88,11 @@ def fill_words(
 # find_words
 # ------------------------------------------------------------------
 
+def _normalize_word(w: str) -> str:
+    """Strip punctuation and whitespace for tolerant matching."""
+    return _strip_punct(w.strip())
+
+
 def find_words(
     words: list[Word],
     sub_text: str,
@@ -95,8 +100,13 @@ def find_words(
 ) -> tuple[int, int]:
     """Find the contiguous slice of *words* that covers *sub_text*.
 
-    Uses punctuation-tolerant matching: strips punctuation from both
-    word tokens and the search text when exact matching fails.
+    Uses multi-level tolerant matching:
+        1. Exact match
+        2. Punctuation-stripped match
+        3. Case-insensitive + punctuation/whitespace-stripped match
+
+    This handles real-world word lists where tokens may have leading
+    spaces (Whisper-style), different casing, or missing punctuation.
 
     Args:
         words: Full word list (e.g. ``segment.words``).
@@ -110,34 +120,50 @@ def find_words(
     if not sub_text or not sub_text.strip() or start >= len(words):
         return (start, start)
 
+    sub_lower = sub_text.lower()
     first: int | None = None
     last = start
-    pos = 0  # scan position in sub_text
+    pos = 0       # scan position in sub_text
+    pos_lower = 0  # scan position in sub_lower (for case-insensitive)
 
     for i in range(start, len(words)):
-        w_content = _strip_punct(words[i].word)
+        w_raw = words[i].word
+        w_content = _normalize_word(w_raw)
         if not w_content:
-            # Pure-punctuation word — absorb into current match if started
+            # Pure-punctuation / whitespace word — absorb if match started
             if first is not None:
                 last = i + 1
             continue
 
-        # Try exact word match first
-        idx = sub_text.find(words[i].word, pos)
+        # Level 1: exact match
+        idx = sub_text.find(w_raw, pos)
         if idx >= 0:
             if first is None:
                 first = i
             last = i + 1
-            pos = idx + len(words[i].word)
+            pos = idx + len(w_raw)
+            pos_lower = pos
             continue
 
-        # Fallback: content-only match (punctuation stripped)
+        # Level 2: content-only match (punctuation + whitespace stripped)
         idx = sub_text.find(w_content, pos)
         if idx >= 0:
             if first is None:
                 first = i
             last = i + 1
             pos = idx + len(w_content)
+            pos_lower = pos
+            continue
+
+        # Level 3: case-insensitive content match
+        w_lower = w_content.lower()
+        idx = sub_lower.find(w_lower, pos_lower)
+        if idx >= 0:
+            if first is None:
+                first = i
+            last = i + 1
+            pos = idx + len(w_lower)
+            pos_lower = pos
             continue
 
         # Word doesn't appear in remaining sub_text → stop

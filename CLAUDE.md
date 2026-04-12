@@ -61,7 +61,9 @@ src/
 
 **Two language families:**
 - **EnType** (`en_type.py`): Space-delimited languages (en, ru, es, fr, de, pt, vi). `split()` uses `str.split()`. Per-language abbreviation sets. French `normalize()` has special spacing rules.
-- **CJK** (`_cjk_common.py` base): Character-based. `split()` uses external tokenizers (jieba/MeCab/Kiwi). Korean overrides `split()`/`join()` to preserve eojeol boundaries.
+- **CJK** (`_cjk_common.py` base): Character-based. `split()` uses external tokenizers (jieba/MeCab/Kiwi). Korean overrides `split()`/`join()` to preserve eojeol boundaries. CJK terminators include both full-width and half-width punctuation (e.g. `"。", "！", "？", "!", "?"`).
+
+**strip_spaces property:** `_BaseOps.strip_spaces` controls whether `split_sentences`/`split_clauses_full` strip leading spaces from chunks. Defaults to `self.is_cjk` (True for Chinese/Japanese, since CJK doesn't use inter-sentence spaces). Korean overrides to `False` because it uses spaces between eojeols.
 
 **Immutability:** `ChunkPipeline` returns new instances per step. All `subtitle` dataclasses use `frozen=True`. `words.py` uses `dataclasses.replace()` instead of mutation.
 
@@ -127,6 +129,7 @@ ops.restore_punc(text_a, text_b)
 ops.split_sentences(text) → list[str]
 ops.split_clauses(text)   → list[str]   # sentence-aware (splits at sentence boundaries too)
 ops.split_paragraphs(text) → list[str]
+ops.split_by_length(text, max_length) → list[str]
 ops.chunk(text) → ChunkPipeline
 ```
 
@@ -137,7 +140,7 @@ ops.chunk(text)
   .paragraphs()
   .sentences()
   .clauses()            # sentence-aware
-  .by_length(50, unit="character")
+  .by_length(50)        # token-boundary aware, uses ops.length()
   .result()             → list[str]
   .spans()              → list[Span]
   .segments(words)      → list[Segment]   # deferred import from subtitle.words
