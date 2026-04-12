@@ -30,7 +30,7 @@ class TestKoreanSplitter(SplitterTestBase):
         assert _s("안녕하세요. 반갑습니다!") == ["안녕하세요.", " 반갑습니다!"]
 
     def test_split_sentences_ops_shortcut(self) -> None:
-        assert Span.to_texts(_ops.split_sentences("안녕하세요. 반갑습니다!")) == ["안녕하세요.", " 반갑습니다!"]
+        assert _ops.split_sentences("안녕하세요. 반갑습니다!") == ["안녕하세요.", " 반갑습니다!"]
 
     def test_split_sentences_long_text(self) -> None:
         assert self._split_sentences() == [

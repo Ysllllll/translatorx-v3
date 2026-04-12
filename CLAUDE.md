@@ -159,9 +159,9 @@ CJK tests guard on availability and skip gracefully if the tokenizer is not inst
 - `mechanism.restore_punc(text_a, text_b)` — apply punctuation from text_b onto text_a's content by token alignment
 
 **Segment-level shortcuts:**
-- `mechanism.split_sentences(text)` → `list[Span]` — split by terminal punctuation
-- `mechanism.split_clauses(text)` → `list[Span]` — split by comma/pause punctuation
-- `mechanism.split_paragraphs(text)` → `list[Span]` — split by blank lines
+- `mechanism.split_sentences(text)` → `list[str]` — split by terminal punctuation
+- `mechanism.split_clauses(text)` → `list[str]` — split by comma/pause punctuation
+- `mechanism.split_paragraphs(text)` → `list[str]` — split by blank lines
 - `mechanism.chunk(text)` → `ChunkPipeline` — create a chainable pipeline
 
 **Pipeline (chainable):**
@@ -170,7 +170,8 @@ CJK tests guard on availability and skip gracefully if the tokenizer is not inst
 - `.sentences()` — split by terminal punctuation (abbreviation/ellipsis aware)
 - `.clauses()` — split by comma/pause punctuation
 - `.by_length(max_length, unit="character")` — split at token boundaries by length
-- `.result()` → `list[Span]`
+- `.result()` → `list[str]`
+- `.spans()` → `list[Span]` — when you need character offsets
 
 Each pipeline method returns a **new** `ChunkPipeline` instance (immutable). `by_length()` produces Spans with `start=-1, end=-1` since tokenize+join can alter whitespace.
 

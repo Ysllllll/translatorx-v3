@@ -58,7 +58,7 @@ class SplitterTestBase:
         return Span.to_texts(split_clauses(self.TEXT_SAMPLE, ops.clause_separators))
 
     def _pipeline_sentences_clauses(self) -> list[str]:
-        return Span.to_texts(
+        return (
             ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE)
             .sentences()
             .clauses()
@@ -66,7 +66,7 @@ class SplitterTestBase:
         )
 
     def _pipeline_paragraphs_sentences(self) -> list[str]:
-        return Span.to_texts(
+        return (
             ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE)
             .paragraphs()
             .sentences()

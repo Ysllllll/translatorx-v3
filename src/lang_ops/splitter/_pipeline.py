@@ -69,6 +69,10 @@ class ChunkPipeline:
             result.extend(split_by_length(span.text, self._ops, max_length, unit))
         return self._with_spans(result)
 
-    def result(self) -> list[Span]:
-        """Return the current list of spans."""
+    def result(self) -> list[str]:
+        """Return the current list of text fragments."""
+        return Span.to_texts(self._spans)
+
+    def spans(self) -> list[Span]:
+        """Return the current list of spans (with offsets)."""
         return list(self._spans)

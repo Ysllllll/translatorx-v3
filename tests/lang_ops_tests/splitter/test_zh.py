@@ -43,10 +43,10 @@ class TestChineseSplitter(SplitterTestBase):
         assert _s("这是一段文字") == ["这是一段文字"]
 
     def test_split_sentences_ops_shortcut(self) -> None:
-        assert Span.to_texts(_ops.split_sentences("你好。世界！")) == ["你好。", "世界！"]
+        assert _ops.split_sentences("你好。世界！") == ["你好。", "世界！"]
 
     def test_split_sentences_ops_chunk_shortcut(self) -> None:
-        assert Span.to_texts(_ops.chunk("你好。世界！").sentences().result()) == ["你好。", "世界！"]
+        assert _ops.chunk("你好。世界！").sentences().result() == ["你好。", "世界！"]
 
     def test_split_sentences_long_text(self) -> None:
         assert self._split_sentences() == [
@@ -68,7 +68,7 @@ class TestChineseSplitter(SplitterTestBase):
         assert _c("苹果、香蕉、橘子") == ["苹果、", "香蕉、", "橘子"]
 
     def test_split_clauses_ops_shortcut(self) -> None:
-        assert Span.to_texts(_ops.split_clauses("苹果、香蕉、橘子")) == ["苹果、", "香蕉、", "橘子"]
+        assert _ops.split_clauses("苹果、香蕉、橘子") == ["苹果、", "香蕉、", "橘子"]
 
     def test_split_clauses_long_text(self) -> None:
         assert self._split_clauses() == [

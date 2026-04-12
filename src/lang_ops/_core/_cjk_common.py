@@ -16,6 +16,7 @@ from ._chars import (
     decompose_token,
 )
 from ._mode import normalize_mode, _VALID_MODES
+from ._types import Span
 
 
 def _is_cjk_or_kana(ch: str) -> bool:
@@ -255,20 +256,20 @@ class _BaseCjkOps:
 
     # -- Segment-level shortcuts ----------------------------------------
 
-    def split_sentences(self, text: str) -> list["Span"]:
+    def split_sentences(self, text: str) -> list[str]:
         """Split text into sentences."""
         from lang_ops.splitter._sentence import split_sentences as _split
-        return _split(text, self.sentence_terminators, self.abbreviations, is_cjk=self.is_cjk)
+        return Span.to_texts(_split(text, self.sentence_terminators, self.abbreviations, is_cjk=self.is_cjk))
 
-    def split_clauses(self, text: str) -> list["Span"]:
+    def split_clauses(self, text: str) -> list[str]:
         """Split text into clauses."""
         from lang_ops.splitter._clause import split_clauses as _split
-        return _split(text, self.clause_separators)
+        return Span.to_texts(_split(text, self.clause_separators))
 
-    def split_paragraphs(self, text: str) -> list["Span"]:
+    def split_paragraphs(self, text: str) -> list[str]:
         """Split text into paragraphs."""
         from lang_ops.splitter._paragraph import split_paragraphs as _split
-        return _split(text)
+        return Span.to_texts(_split(text))
 
     def chunk(self, text: str) -> "ChunkPipeline":
         """Create a ChunkPipeline for chainable splitting."""

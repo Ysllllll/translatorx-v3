@@ -35,7 +35,7 @@ class TestJapaneseSplitter(SplitterTestBase):
         assert _s("今日は。いい天気！") == ["今日は。", "いい天気！"]
 
     def test_split_sentences_ops_shortcut(self) -> None:
-        assert Span.to_texts(_ops.split_sentences("今日は。いい天気！")) == ["今日は。", "いい天気！"]
+        assert _ops.split_sentences("今日は。いい天気！") == ["今日は。", "いい天気！"]
 
     def test_split_sentences_long_text(self) -> None:
         assert self._split_sentences() == [
@@ -60,7 +60,7 @@ class TestJapaneseSplitter(SplitterTestBase):
         assert _c("今日は、いい天気ですね") == ["今日は、", "いい天気ですね"]
 
     def test_split_clauses_ops_shortcut(self) -> None:
-        assert Span.to_texts(_ops.split_clauses("今日は、いい天気ですね")) == ["今日は、", "いい天気ですね"]
+        assert _ops.split_clauses("今日は、いい天気ですね") == ["今日は、", "いい天気ですね"]
 
     def test_split_clauses_long_text(self) -> None:
         assert self._split_clauses() == [
