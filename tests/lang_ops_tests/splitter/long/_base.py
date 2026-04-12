@@ -28,6 +28,22 @@ class LongTextTestBase:
     TEXT_SAMPLE: str = ""
     PARAGRAPH_TEXT: str = ""
 
+    # ------------------------------------------------------------------
+    # Reconstruction property: join(split(text)) == text
+    # ------------------------------------------------------------------
+
+    def test_sentence_reconstruction(self) -> None:
+        """Joining split sentences must reconstruct the original text."""
+        assert "".join(self._split_sentences()) == self.TEXT_SAMPLE
+
+    def test_clause_reconstruction(self) -> None:
+        """Joining split clauses must reconstruct the original text."""
+        assert "".join(self._split_clauses()) == self.TEXT_SAMPLE
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
     def _split_sentences(self) -> list[str]:
         ops = TextOps.for_language(self.LANGUAGE)
         return Span.to_texts(split_sentences(
