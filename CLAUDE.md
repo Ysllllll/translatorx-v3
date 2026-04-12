@@ -12,19 +12,12 @@ pytest tests/ -v
 pytest tests/lang_ops_tests/test_chinese.py -v
 pytest tests/lang_ops_tests/test_english.py -v
 
-# Run all splitter tests
+# Run splitter tests (all languages)
 pytest tests/lang_ops_tests/splitter/ -v
 
-# Run splitter unit tests
-pytest tests/lang_ops_tests/splitter/test_sentence.py -v
-pytest tests/lang_ops_tests/splitter/test_clause.py -v
-pytest tests/lang_ops_tests/splitter/test_pipeline.py -v
-pytest tests/lang_ops_tests/splitter/test_shortcuts.py -v  # Shortcut methods on ops
-
-# Run per-language long-text tests
-pytest tests/lang_ops_tests/splitter/long/ -v
-pytest tests/lang_ops_tests/splitter/long/test_en.py -v
-pytest tests/lang_ops_tests/splitter/long/test_zh.py -v
+# Run splitter tests for a specific language
+pytest tests/lang_ops_tests/splitter/test_en.py -v
+pytest tests/lang_ops_tests/splitter/test_zh.py -v
 
 # Run reader tests
 pytest tests/subtitle/readers/test_srt.py -v
@@ -82,24 +75,18 @@ tests/
 │   ├── test_english.py          # Token-level tests per language (10 total)
 │   ├── test_chinese.py
 │   ├── ...
-│   ├── splitter/                # All split-related tests
-│   │   ├── test_paragraph.py   # Unit: paragraph splitter
-│   │   ├── test_sentence.py    # Unit: sentence splitter (abbreviations, ellipsis, quotes)
-│   │   ├── test_clause.py      # Unit: clause splitter
-│   │   ├── test_length.py      # Unit: length-based splitter
-│   │   ├── test_pipeline.py    # Unit: ChunkPipeline chaining, immutability
-│   │   ├── test_shortcuts.py   # Shortcut methods (split_sentences, split_clauses, chunk)
-│   │   └── long/               # Per-language long-text integration tests (10 total)
-│   │       ├── test_en.py
-│   │       ├── test_zh.py
-│   │       ├── test_ja.py
-│   │       ├── test_ko.py
-│   │       ├── test_ru.py
-│   │       ├── test_es.py
-│   │       ├── test_fr.py
-│   │       ├── test_de.py
-│   │       ├── test_pt.py
-│   │       └── test_vi.py
+│   ├── splitter/                # Per-language splitter tests (unit + long-text)
+│   │   ├── _base.py            # SplitterTestBase: reconstruction assertions, helpers
+│   │   ├── test_en.py          # EN: sentence/clause/paragraph/pipeline/length + long text
+│   │   ├── test_zh.py          # ZH: sentence/clause/pipeline/length + long text
+│   │   ├── test_ja.py          # JA: sentence/clause + long text
+│   │   ├── test_ko.py          # KO: sentence + long text
+│   │   ├── test_ru.py          # RU: long text
+│   │   ├── test_es.py          # ES: long text
+│   │   ├── test_fr.py          # FR: long text
+│   │   ├── test_de.py          # DE: long text
+│   │   ├── test_pt.py          # PT: long text
+│   │   └── test_vi.py          # VI: long text
 │   └── _core/
 │       ├── test_mechanism.py    # Factory-level tests (unsupported language)
 │       └── test_normalize.py    # Language code normalization tests
