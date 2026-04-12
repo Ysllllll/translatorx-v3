@@ -7,10 +7,8 @@ from ._core._cjk_common import (
     _parse_characters,
     _attach_tokens,
     _cjk_join_tokens,
-    _determine_kind,
-    normalize_mode,
-    _VALID_MODES,
 )
+from ._core._base_ops import normalize_mode, _VALID_MODES
 
 _SPACE_MARKER = " "
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ._normalize import normalize_language
+from ._base_ops import _BaseOps
 
 from ..en_type import EnTypeOps
 from ..chinese import ChineseOps
@@ -13,16 +14,14 @@ from ..korean import KoreanOps
 _EN_TYPE_LANGUAGES = {"en", "ru", "es", "fr", "de", "pt", "vi"}
 _CJK_LANGUAGES = {"zh": ChineseOps, "ja": JapaneseOps, "ko": KoreanOps}
 
-_LangOps = EnTypeOps | ChineseOps | JapaneseOps | KoreanOps
-
 
 class TextOps:
     """Factory for language-specific text operations."""
 
-    _cache: dict[str, _LangOps] = {}
+    _cache: dict[str, _BaseOps] = {}
 
     @staticmethod
-    def for_language(code: str) -> _LangOps:
+    def for_language(code: str) -> _BaseOps:
         lang = normalize_language(code)
         cached = TextOps._cache.get(lang)
         if cached is not None:

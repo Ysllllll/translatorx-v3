@@ -12,11 +12,8 @@ from ._chars import (
     is_attach_to_prev_char,
     cjk_needs_space,
     CONTENT_LIKE_CHARS,
-    STRIP_PUNCT,
-    decompose_token,
 )
-from ._mode import normalize_mode, _VALID_MODES
-from ._types import Span
+from ._base_ops import _BaseOps, normalize_mode, _VALID_MODES
 
 
 def _is_cjk_or_kana(ch: str) -> bool:
@@ -166,7 +163,7 @@ def _determine_kind(token: str, mode: str) -> str:
     return "word"
 
 
-class _BaseCjkOps:
+class _BaseCjkOps(_BaseOps):
     """Base class for CJK text operations.
 
     Subclasses must implement ``_word_tokenize``.
@@ -210,68 +207,9 @@ class _BaseCjkOps:
     def join(self, tokens: list[str]) -> str:
         return _cjk_join_tokens(tokens)
 
-    def length(self, text: str, cjk_width: int = 1) -> int:
+    def length(self, text: str, **kwargs: int) -> int:
+        cjk_width = kwargs.get("cjk_width", 1)
         return _cjk_length(text, cjk_width)
-
-    def plength(self, text: str, font_path: str, font_size: int) -> int:
-        from PIL import ImageFont
-        left, _, right, _ = ImageFont.truetype(font_path, font_size).getbbox(text)
-        return max(0, int(right - left))
-
-    def strip(self, text: str, chars: str | None = None) -> str:
-        return text.strip(chars)
-
-    def lstrip(self, text: str, chars: str | None = None) -> str:
-        return text.lstrip(chars)
-
-    def rstrip(self, text: str, chars: str | None = None) -> str:
-        return text.rstrip(chars)
-
-    def strip_punc(self, text: str) -> str:
-        return text.strip(STRIP_PUNCT)
-
-    def lstrip_punc(self, text: str) -> str:
-        return text.lstrip(STRIP_PUNCT)
-
-    def rstrip_punc(self, text: str) -> str:
-        return text.rstrip(STRIP_PUNCT)
-
-    def restore_punc(self, text_a: str, text_b: str) -> str:
-        tokens_a = self.split(text_a)
-        tokens_b = self.split(text_b)
-        if len(tokens_a) != len(tokens_b):
-            raise ValueError(
-                f"Token count mismatch: text_a has {len(tokens_a)}, "
-                f"text_b has {len(tokens_b)}"
-            )
-        result: list[str] = []
-        for ta, tb in zip(tokens_a, tokens_b):
-            _, content_a, _ = decompose_token(ta)
-            lead_b, _, trail_b = decompose_token(tb)
-            result.append(lead_b + content_a + trail_b)
-        return self.join(result)
 
     def normalize(self, text: str) -> str:
         return text
-
-    # -- Segment-level shortcuts ----------------------------------------
-
-    def split_sentences(self, text: str) -> list[str]:
-        """Split text into sentences."""
-        from lang_ops.splitter._sentence import split_sentences as _split
-        return Span.to_texts(_split(text, self.sentence_terminators, self.abbreviations, is_cjk=self.is_cjk))
-
-    def split_clauses(self, text: str) -> list[str]:
-        """Split text into clauses."""
-        from lang_ops.splitter._clause import split_clauses as _split
-        return Span.to_texts(_split(text, self.clause_separators))
-
-    def split_paragraphs(self, text: str) -> list[str]:
-        """Split text into paragraphs."""
-        from lang_ops.splitter._paragraph import split_paragraphs as _split
-        return Span.to_texts(_split(text))
-
-    def chunk(self, text: str) -> "ChunkPipeline":
-        """Create a ChunkPipeline for chainable splitting."""
-        from lang_ops.splitter._pipeline import ChunkPipeline
-        return ChunkPipeline(text, ops=self)
