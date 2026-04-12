@@ -5,7 +5,6 @@ from lang_ops._core._types import Span
 from lang_ops.splitter._sentence import split_sentences
 from lang_ops.splitter._clause import split_clauses
 from lang_ops.splitter._paragraph import split_paragraphs
-from lang_ops.splitter._length import split_by_length
 from ._base import SplitterTestBase
 
 
@@ -82,10 +81,9 @@ class TestEnglishSplitter(SplitterTestBase):
         assert _ops.split_by_length("Hello world", max_length=20) == ["Hello world"]
         assert _ops.split_by_length("abcdefghij", max_length=5) == ["abcde", "fghij"]
 
-        # Word unit
-        assert _ops.split_by_length("one two three four", max_length=2, unit="word") == ["one two", "three four"]
-        assert _ops.split_by_length("a b c d e", max_length=2, unit="word") == ["a b", "c d", "e"]
-        assert _ops.split_by_length("hello", max_length=3, unit="word") == ["hello"]
+        # Multi-word split
+        assert _ops.split_by_length("one two three four", max_length=9) == ["one two", "three", "four"]
+        assert _ops.split_by_length("a b c d e", max_length=3) == ["a b", "c d", "e"]
 
         # Hard split (single long word)
         assert _ops.split_by_length("supercalifragilisticexpialidocious", max_length=5) == [
@@ -94,11 +92,11 @@ class TestEnglishSplitter(SplitterTestBase):
 
         # Boundary
         assert _ops.split_by_length("a b c", max_length=1) == ["a", "b", "c"]
-        assert _ops.split_by_length("one two three", max_length=1, unit="word") == ["one", "two", "three"]
+        assert _ops.split_by_length("one two three", max_length=5) == ["one", "two", "three"]
 
         # Exact fit
         assert _ops.split_by_length("Hello", max_length=5) == ["Hello"]
-        assert _ops.split_by_length("ab cd", max_length=2, unit="word") == ["ab cd"]
+        assert _ops.split_by_length("ab cd", max_length=5) == ["ab cd"]
 
         # Fit / empty / edge
         assert _ops.split_by_length("Hi there", max_length=8) == ["Hi there"]
@@ -110,7 +108,7 @@ class TestEnglishSplitter(SplitterTestBase):
             _ops.split_by_length("Hello", max_length=0)
         with pytest.raises(ValueError):
             _ops.split_by_length("Hello", max_length=-1)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             _ops.split_by_length("Hello", max_length=5, unit="sentence")
 
         # Chunk chains

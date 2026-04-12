@@ -4,7 +4,6 @@ from lang_ops import TextOps, ChunkPipeline
 from lang_ops._core._types import Span
 from lang_ops.splitter._sentence import split_sentences
 from lang_ops.splitter._clause import split_clauses
-from lang_ops.splitter._length import split_by_length
 from ._base import SplitterTestBase
 
 
@@ -85,7 +84,7 @@ class TestChineseSplitter(SplitterTestBase):
     def test_split_by_length(self) -> None:
         # split_by_length()
         assert _ops.split_by_length("你好世界", max_length=1) == ["你", "好", "世", "界"]
-        assert _ops.split_by_length("人工智能技术在中国蓬勃发展", max_length=2, unit="word") == [
+        assert _ops.split_by_length("人工智能技术在中国蓬勃发展", max_length=6) == [
             "人工智能技术", "在中国", "蓬勃发展",
         ]
         
@@ -104,7 +103,7 @@ class TestChineseSplitter(SplitterTestBase):
             _ops.split_by_length("你好", max_length=0)
         with pytest.raises(ValueError):
             _ops.split_by_length("你好", max_length=-1)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             _ops.split_by_length("你好", max_length=5, unit="sentence")
 
         # chunk chain

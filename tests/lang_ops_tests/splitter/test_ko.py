@@ -4,7 +4,6 @@ from lang_ops import TextOps, ChunkPipeline
 from lang_ops._core._types import Span
 from lang_ops.splitter._sentence import split_sentences
 from lang_ops.splitter._clause import split_clauses
-from lang_ops.splitter._length import split_by_length
 from ._base import SplitterTestBase
 
 
@@ -59,7 +58,7 @@ class TestKoreanSplitter(SplitterTestBase):
 
     def test_split_by_length(self) -> None:
         # 문자 수 기준 분할
-        assert _ops.split_by_length("가나다라마바사", max_length=3, unit="character") == ["가나다", "라", "마바사"]
+        assert _ops.split_by_length("가나다라마바사", max_length=3) == ["가나다", "라", "마바사"]
 
         # 피트 / 빈 문자열
         assert _ops.split_by_length("테스트", max_length=10) == ["테스트"]
@@ -71,7 +70,7 @@ class TestKoreanSplitter(SplitterTestBase):
             _ops.split_by_length("테스트", max_length=0)
         with pytest.raises(ValueError):
             _ops.split_by_length("테스트", max_length=-1)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             _ops.split_by_length("테스트", max_length=5, unit="sentence")
 
         # 청크 체인

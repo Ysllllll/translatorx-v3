@@ -71,11 +71,11 @@ class ChunkPipeline:
             result.extend(span.child(c) for c in children)
         return self._with_spans(result)
 
-    def by_length(self, max_length: int, unit: str = "character") -> ChunkPipeline:
+    def by_length(self, max_length: int) -> ChunkPipeline:
         """Split each span by length. Resulting spans have start=-1."""
         result: list[Span] = []
         for span in self._spans:
-            result.extend(split_by_length(span.text, self._ops, max_length, unit))
+            result.extend(split_by_length(span.text, self._ops, max_length))
         return self._with_spans(result)
 
     def result(self) -> list[str]:

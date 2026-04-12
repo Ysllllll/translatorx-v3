@@ -4,7 +4,6 @@ from lang_ops import TextOps, ChunkPipeline
 from lang_ops._core._types import Span
 from lang_ops.splitter._sentence import split_sentences
 from lang_ops.splitter._clause import split_clauses
-from lang_ops.splitter._length import split_by_length
 from ._base import SplitterTestBase
 
 
@@ -59,9 +58,6 @@ class TestRussianSplitter(SplitterTestBase):
         # Character split
         assert _ops.split_by_length("Привет мир как дела", max_length=12) == ["Привет мир", "как дела"]
 
-        # Word unit
-        assert _ops.split_by_length("Привет мир как дела", max_length=2, unit="word") == ["Привет мир", "как дела"]
-
         # Fit / empty / edge
         assert _ops.split_by_length("Привет", max_length=20) == ["Привет"]
         assert _ops.split_by_length("", max_length=10) == []
@@ -72,7 +68,7 @@ class TestRussianSplitter(SplitterTestBase):
             _ops.split_by_length("Привет", max_length=0)
         with pytest.raises(ValueError):
             _ops.split_by_length("Привет", max_length=-1)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             _ops.split_by_length("Привет", max_length=5, unit="sentence")
 
         # Chunk chains

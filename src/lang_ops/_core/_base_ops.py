@@ -126,10 +126,10 @@ class _BaseOps(ABC):
         from lang_ops.splitter._paragraph import split_paragraphs as _split
         return Span.to_texts(_split(text))
 
-    def split_by_length(self, text: str, max_length: int, unit: str = "character") -> list[str]:
-        """Split text into chunks that don't exceed *max_length*."""
+    def split_by_length(self, text: str, max_length: int) -> list[str]:
+        """Split text into chunks whose length ≤ *max_length*."""
         from lang_ops.splitter._length import split_by_length as _split
-        return Span.to_texts(_split(text, self, max_length, unit))
+        return Span.to_texts(_split(text, self, max_length))
 
     def chunk(self, text: str) -> "ChunkPipeline":
         """Create a ChunkPipeline for chainable splitting."""

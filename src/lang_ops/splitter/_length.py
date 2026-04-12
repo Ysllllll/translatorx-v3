@@ -19,11 +19,14 @@ def split_by_length(
     text: str,
     ops: _HasSplitJoin,
     max_length: int,
-    unit: str = "character",
 ) -> list[Span]:
-    """Split text into chunks that don't exceed max_length.
+    """Split *text* into chunks whose ``ops.length()`` ≤ *max_length*.
 
-    Returns Span objects with start=-1, end=-1 because tokenize+join
+    Always tokenises with ``ops.split()`` (word mode) and accumulates
+    tokens until the joined length would exceed the limit.  Single tokens
+    that exceed *max_length* are hard-split by characters.
+
+    Returns Span objects with ``start=-1, end=-1`` because tokenise+join
     may alter whitespace, making character offsets unreliable.
     """
     if not text:
@@ -31,53 +34,30 @@ def split_by_length(
 
     if max_length <= 0:
         raise ValueError(f"max_length must be positive, got {max_length}")
-    if unit not in ("character", "word"):
-        raise ValueError(f"unit must be 'character' or 'word', got {unit!r}")
 
-    if unit == "word":
-        return _split_by_word_count(text, ops, max_length)
-    return _split_by_char_count(text, ops, max_length)
-
-
-def _split_by_char_count(
-    text: str,
-    ops: _HasSplitJoin,
-    max_length: int,
-) -> list[Span]:
-    """Split by character count, breaking at word/token boundaries."""
     tokens = ops.split(text)
     if not tokens:
         return []
 
     result: list[Span] = []
     chunk_tokens: list[str] = []
-    chunk_len = 0
 
     for token in tokens:
         token_len = ops.length(token)
 
         if chunk_tokens:
-            # Measure the actual joined length including separators
             joined_len = ops.length(ops.join(chunk_tokens + [token]))
             if joined_len > max_length:
                 result.append(Span(ops.join(chunk_tokens), -1, -1))
                 chunk_tokens = []
-                chunk_len = 0
 
         if token_len > max_length:
             if chunk_tokens:
                 result.append(Span(ops.join(chunk_tokens), -1, -1))
                 chunk_tokens = []
-                chunk_len = 0
-            # Hard-split oversized token by characters
-            i = 0
-            while i < len(token):
-                piece = token[i : i + max_length]
-                result.append(Span(piece, -1, -1))
-                i += max_length
+            _hard_split(token, ops, max_length, result)
         else:
             chunk_tokens.append(token)
-            chunk_len = ops.length(ops.join(chunk_tokens))
 
     if chunk_tokens:
         result.append(Span(ops.join(chunk_tokens), -1, -1))
@@ -85,21 +65,21 @@ def _split_by_char_count(
     return result
 
 
-def _split_by_word_count(
-    text: str,
+def _hard_split(
+    token: str,
     ops: _HasSplitJoin,
     max_length: int,
-) -> list[Span]:
-    """Split by word/token count."""
-    tokens = ops.split(text)
-    if not tokens:
-        return []
+    out: list[Span],
+) -> None:
+    """Break an oversized token into pieces ≤ *max_length* by characters.
 
-    result: list[Span] = []
-    i = 0
-    while i < len(tokens):
-        chunk = tokens[i : i + max_length]
-        result.append(Span(ops.join(chunk), -1, -1))
-        i += max_length
-
-    return result
+    Slices the raw string directly so that ``ops.join`` semantics
+    (e.g. EN adding spaces) do not distort the result.
+    """
+    piece_start = 0
+    for i in range(1, len(token) + 1):
+        if ops.length(token[piece_start:i]) > max_length:
+            out.append(Span(token[piece_start:i - 1], -1, -1))
+            piece_start = i - 1
+    if piece_start < len(token):
+        out.append(Span(token[piece_start:], -1, -1))

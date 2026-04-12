@@ -4,7 +4,6 @@ from lang_ops import TextOps, ChunkPipeline
 from lang_ops._core._types import Span
 from lang_ops.splitter._sentence import split_sentences
 from lang_ops.splitter._clause import split_clauses
-from lang_ops.splitter._length import split_by_length
 from ._base import SplitterTestBase
 
 
@@ -69,9 +68,6 @@ class TestJapaneseSplitter(SplitterTestBase):
         assert _ops.split_by_length("これはテストです", max_length=4) == ["これは", "テスト", "です"]
         assert _ops.split_by_length("今日はいい天気ですね", max_length=5) == ["今日はいい", "天気ですね"]
 
-        # 単語数による分割
-        assert _ops.split_by_length("これはテストです", max_length=2, unit="word") == ["これは", "テストです"]
-
         # フィット / 空 / 端のケース
         assert _ops.split_by_length("テスト", max_length=10) == ["テスト"]
         assert _ops.split_by_length("", max_length=10) == []
@@ -82,7 +78,7 @@ class TestJapaneseSplitter(SplitterTestBase):
             _ops.split_by_length("テスト", max_length=0)
         with pytest.raises(ValueError):
             _ops.split_by_length("テスト", max_length=-1)
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             _ops.split_by_length("テスト", max_length=5, unit="sentence")
 
         # チャンクチェーン
