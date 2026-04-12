@@ -2,8 +2,8 @@
 
 import pytest
 
-from lang_ops.splitter._paragraph import split_paragraphs
 from lang_ops._core._types import Span
+from lang_ops.splitter._paragraph import split_paragraphs
 
 
 def _split(text):

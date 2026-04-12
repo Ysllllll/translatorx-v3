@@ -170,7 +170,7 @@ class EnTypeOps:
 
     @property
     def clause_separators(self) -> frozenset[str]:
-        return frozenset({",", ";", ":", "\u2014"})
+        return frozenset({",", ";", ":", "—"})
 
     @property
     def abbreviations(self) -> frozenset[str]:
@@ -291,17 +291,17 @@ class EnTypeOps:
 
     # -- Segment-level shortcuts ----------------------------------------
 
-    def split_sentences(self, text: str) -> list[str]:
+    def split_sentences(self, text: str) -> list["Span"]:
         """Split text into sentences."""
         from lang_ops.splitter._sentence import split_sentences as _split
         return _split(text, self.sentence_terminators, self.abbreviations, is_cjk=self.is_cjk)
 
-    def split_clauses(self, text: str) -> list[str]:
+    def split_clauses(self, text: str) -> list["Span"]:
         """Split text into clauses."""
         from lang_ops.splitter._clause import split_clauses as _split
         return _split(text, self.clause_separators)
 
-    def split_paragraphs(self, text: str) -> list[str]:
+    def split_paragraphs(self, text: str) -> list["Span"]:
         """Split text into paragraphs."""
         from lang_ops.splitter._paragraph import split_paragraphs as _split
         return _split(text)

@@ -4,6 +4,7 @@ from lang_ops import TextOps
 from lang_ops import ChunkPipeline
 from lang_ops.splitter._clause import split_clauses
 from lang_ops.splitter._sentence import split_sentences
+from lang_ops._core._types import Span
 
 # ---------------------------------------------------------------------------
 # Realistic Japanese paragraph (~490 chars) covering: 。 ！ ？ 、 ； …… 「」
@@ -78,12 +79,12 @@ class TestSentenceSplitJa:
 
     def test_sentence_count(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # 13 sentence terminators (。……。！。……？。。！。。。。)
         # …… does NOT split (CJK ellipsis U+2026)
         # 。 after 語った splits before 「, and ！ inside 「」 splits after 」
@@ -91,32 +92,32 @@ class TestSentenceSplitJa:
 
     def test_full_reconstruction(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         assert "".join(result) == TEXT_SAMPLE
 
     def test_no_empty_results(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         assert all(s for s in result)
 
     def test_first_sentence(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         assert result[0] == (
             "日本の伝統文化と現代テクノロジーは、"
             "一見すると相反するもののように思える。"
@@ -124,34 +125,34 @@ class TestSentenceSplitJa:
 
     def test_period_before_quoted_exclamation(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # 。after 語った creates a split, so the text before 「 is its own sentence
         assert result[3] == "ある書道家は次のように語った。"
 
     def test_exclamation_with_closing_quote(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # ！inside 「」 — closing 」(U+300D) is consumed after ！
         assert result[4] == "「技術は人間の感性を拡張するものである！」"
 
     def test_ellipsis_does_not_split(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # …… sits between 呼んだ and 伝統工芸
         assert "……" in result[5]
         assert result[5] == (
@@ -162,12 +163,12 @@ class TestSentenceSplitJa:
 
     def test_question_mark_sentence(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         assert result[6] == (
             "果たしてテクノロジーは伝統を破壊するのか、"
             "それとも新たな可能性を切り開くのか？"
@@ -175,12 +176,12 @@ class TestSentenceSplitJa:
 
     def test_exclamation_without_closing_quote(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # ！after ている — no closing quote right after ！
         assert result[8] == (
             "ある人類学者は「デジタルとアナログの融合は避けられない」"
@@ -189,12 +190,12 @@ class TestSentenceSplitJa:
 
     def test_last_sentence(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         assert result[12] == (
             "伝統を守りながら革新を取り入れる、"
             "この絶妙なバランスこそが"
@@ -212,39 +213,39 @@ class TestClauseSplitJa:
 
     def test_clause_count(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         # Separators: 、 、 、 → 3 separators → 4 clauses
         assert len(result) == 4
 
     def test_full_reconstruction(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         assert "".join(result) == CLAUSE_TEXT
 
     def test_no_empty_results(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         assert all(c for c in result)
 
     def test_first_clause_with_touten(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         assert result[0] == "日本の伝統文化と現代テクノロジーは、"
 
     def test_mid_clause_with_period_and_touten(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         # 。is NOT a clause separator, so it stays in the clause text
         assert result[1] == "一見すると相反するもののように思える。しかし実際には、"
 
     def test_third_clause(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         assert result[2] == "両者は深い関係にあり、"
 
     def test_final_clause_no_separator(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         assert result[3] == "多くの場面で融合が進んでいる。"
 
 
@@ -258,7 +259,7 @@ class TestPipelineJa:
 
     def test_sentences_then_clauses(self) -> None:
         pipeline = ChunkPipeline(PIPELINE_TEXT, language="ja")
-        result = pipeline.sentences().clauses().result()
+        result = Span.to_texts(pipeline.sentences().clauses().result())
         # 2 sentences, each with multiple 、 separators → 5 total clauses
         assert len(result) == 5
         assert result[0] == "日本の伝統文化と現代テクノロジーは、"
@@ -269,7 +270,7 @@ class TestPipelineJa:
 
     def test_paragraphs(self) -> None:
         pipeline = ChunkPipeline(PARAGRAPH_TEXT, language="ja")
-        result = pipeline.paragraphs().result()
+        result = Span.to_texts(pipeline.paragraphs().result())
         assert len(result) == 3
         assert result[0] == "日本の伝統文化と現代テクノロジーは密接な関係にある。"
         assert result[1] == "新しい表現方法が注目を集めている。"
@@ -277,15 +278,15 @@ class TestPipelineJa:
 
     def test_immutability(self) -> None:
         original = ChunkPipeline(PIPELINE_TEXT, language="ja")
-        original_result = original.result()
+        original_result = Span.to_texts(original.result())
 
         chained = original.sentences().clauses()
-        chained_result = chained.result()
+        chained_result = Span.to_texts(chained.result())
 
         # Original pipeline unchanged
-        assert original.result() == original_result
-        assert len(original.result()) == 1
-        assert original.result()[0] == PIPELINE_TEXT
+        assert Span.to_texts(original.result()) == original_result
+        assert len(Span.to_texts(original.result())) == 1
+        assert Span.to_texts(original.result())[0] == PIPELINE_TEXT
 
         # Chained pipeline produces split results
         assert len(chained_result) == 5

@@ -8,19 +8,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Run all tests
 pytest tests/ -v
 
-# Run lang_ops tests for a specific language
+# Run lang_ops token-level tests for a specific language
 pytest tests/lang_ops_tests/test_chinese.py -v
 pytest tests/lang_ops_tests/test_english.py -v
 
-# Run splitter tests
-pytest tests/lang_ops_tests/test_sentence.py -v
-pytest tests/lang_ops_tests/test_clause.py -v
-pytest tests/lang_ops_tests/test_pipeline.py -v
-pytest tests/lang_ops_tests/test_chunk_shortcuts.py -v
+# Run all splitter tests
+pytest tests/lang_ops_tests/splitter/ -v
+
+# Run splitter unit tests
+pytest tests/lang_ops_tests/splitter/test_sentence.py -v
+pytest tests/lang_ops_tests/splitter/test_clause.py -v
+pytest tests/lang_ops_tests/splitter/test_pipeline.py -v
+pytest tests/lang_ops_tests/splitter/test_shortcuts.py -v  # Shortcut methods on ops
 
 # Run per-language long-text tests
-pytest tests/lang_ops_tests/test_split_en.py -v
-pytest tests/lang_ops_tests/test_split_zh.py -v
+pytest tests/lang_ops_tests/splitter/long/ -v
+pytest tests/lang_ops_tests/splitter/long/test_en.py -v
+pytest tests/lang_ops_tests/splitter/long/test_zh.py -v
 
 # Run reader tests
 pytest tests/subtitle/readers/test_srt.py -v
@@ -50,7 +54,7 @@ src/
 │   │   ├── _mode.py                 # Mode normalization ("c"→"character", "w"→"word")
 │   │   ├── _normalize.py            # Language code normalization (aliases → ISO codes)
 │   │   ├── _availability.py         # Optional dependency checks (jieba, mecab, kiwi)
-│   │   └── _types.py                # AnalysisUnit dataclass
+│   │   └── _types.py                # AnalysisUnit, Span dataclasses
 │   └── splitter/                    # Text splitting pipeline
 │       ├── __init__.py              # Exports ChunkPipeline
 │       ├── _pipeline.py             # ChunkPipeline class (immutable, chainable)
@@ -78,15 +82,24 @@ tests/
 │   ├── test_english.py          # Token-level tests per language (10 total)
 │   ├── test_chinese.py
 │   ├── ...
-│   ├── test_paragraph.py        # Paragraph splitting
-│   ├── test_sentence.py         # Sentence splitting (abbreviations, ellipsis, quotes)
-│   ├── test_clause.py           # Clause splitting
-│   ├── test_length.py           # Length-based splitting
-│   ├── test_pipeline.py         # ChunkPipeline chaining, immutability
-│   ├── test_chunk_shortcuts.py  # Shortcut methods (split_sentences, split_clauses, chunk)
-│   ├── test_split_en.py         # Per-language long-text tests (10 total)
-│   ├── test_split_zh.py
-│   ├── ...
+│   ├── splitter/                # All split-related tests
+│   │   ├── test_paragraph.py   # Unit: paragraph splitter
+│   │   ├── test_sentence.py    # Unit: sentence splitter (abbreviations, ellipsis, quotes)
+│   │   ├── test_clause.py      # Unit: clause splitter
+│   │   ├── test_length.py      # Unit: length-based splitter
+│   │   ├── test_pipeline.py    # Unit: ChunkPipeline chaining, immutability
+│   │   ├── test_shortcuts.py   # Shortcut methods (split_sentences, split_clauses, chunk)
+│   │   └── long/               # Per-language long-text integration tests (10 total)
+│   │       ├── test_en.py
+│   │       ├── test_zh.py
+│   │       ├── test_ja.py
+│   │       ├── test_ko.py
+│   │       ├── test_ru.py
+│   │       ├── test_es.py
+│   │       ├── test_fr.py
+│   │       ├── test_de.py
+│   │       ├── test_pt.py
+│   │       └── test_vi.py
 │   └── _core/
 │       ├── test_mechanism.py    # Factory-level tests (unsupported language)
 │       └── test_normalize.py    # Language code normalization tests
@@ -145,6 +158,8 @@ CJK tests guard on availability and skip gracefully if the tokenizer is not inst
 ### Language operations (`lang_ops`)
 
 - `TextOps.for_language(code)` — factory, returns language-specific mechanism
+- `Span(text, start, end)` — positional text fragment; `start`/`end` are character offsets (`-1` = unknown)
+- `Span.to_texts(spans)` — convenience: `list[Span]` → `list[str]`
 
 **Token-level:**
 - `mechanism.split(text, mode, attach_punctuation)` — tokenize; modes: `"word"`, `"character"` (shorthands: `"w"`, `"c"`)
@@ -157,9 +172,9 @@ CJK tests guard on availability and skip gracefully if the tokenizer is not inst
 - `mechanism.restore_punc(text_a, text_b)` — apply punctuation from text_b onto text_a's content by token alignment
 
 **Segment-level shortcuts:**
-- `mechanism.split_sentences(text)` → `list[str]` — split by terminal punctuation
-- `mechanism.split_clauses(text)` → `list[str]` — split by comma/pause punctuation
-- `mechanism.split_paragraphs(text)` → `list[str]` — split by blank lines
+- `mechanism.split_sentences(text)` → `list[Span]` — split by terminal punctuation
+- `mechanism.split_clauses(text)` → `list[Span]` — split by comma/pause punctuation
+- `mechanism.split_paragraphs(text)` → `list[Span]` — split by blank lines
 - `mechanism.chunk(text)` → `ChunkPipeline` — create a chainable pipeline
 
 **Pipeline (chainable):**
@@ -168,9 +183,9 @@ CJK tests guard on availability and skip gracefully if the tokenizer is not inst
 - `.sentences()` — split by terminal punctuation (abbreviation/ellipsis aware)
 - `.clauses()` — split by comma/pause punctuation
 - `.by_length(max_length, unit="character")` — split at token boundaries by length
-- `.result()` → `list[str]`
+- `.result()` → `list[Span]`
 
-Each pipeline method returns a **new** `ChunkPipeline` instance (immutable).
+Each pipeline method returns a **new** `ChunkPipeline` instance (immutable). `by_length()` produces Spans with `start=-1, end=-1` since tokenize+join can alter whitespace.
 
 **Other:**
 - `MultilingualText(text, language)` — convenience wrapper

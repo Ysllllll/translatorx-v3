@@ -44,8 +44,8 @@ def is_east_asian(ch: str) -> bool:
 
 # Punctuation sets for CJK attachment
 TRAILING_PUNCT = set(",.!?:;，。！？：；、")
-CLOSING_PUNCT = set(")]}）》\u201d\u2019")  # ）》"' (\u201d=" \u2019=' right double/single quotation mark)
-OPENING_PUNCT = set("([{（《\u201c\u2018")   # （《"' (\u201c=" \u2018=' left double/single quotation mark)
+CLOSING_PUNCT = set(")]}）》”’")  # ）》”’
+OPENING_PUNCT = set("([{（《“‘")   # （《“‘
 
 ATTACH_TO_PREV = TRAILING_PUNCT | CLOSING_PUNCT
 
@@ -71,7 +71,7 @@ def cjk_needs_space(prev_last: str, curr_first: str) -> bool:
 
 
 # Characters treated as content (not punctuation) in CJK mode
-CONTENT_LIKE_CHARS = {"\u2026", "\u30FB"}  # \u2026=… (ellipsis), \u30FB=・ (katakana middle dot)
+CONTENT_LIKE_CHARS = {"…", "・"}
 
 
 def decompose_token(token: str) -> tuple[str, str, str]:

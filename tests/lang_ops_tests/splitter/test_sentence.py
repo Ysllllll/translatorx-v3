@@ -3,8 +3,8 @@
 import pytest
 
 from lang_ops import TextOps
-from lang_ops.splitter._sentence import split_sentences
 from lang_ops._core._types import Span
+from lang_ops.splitter._sentence import split_sentences
 
 
 def _split(text: str, language: str) -> list[str]:

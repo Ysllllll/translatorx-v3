@@ -96,19 +96,19 @@ class TestChunkPipeline:
 
     def test_en_sentences(self) -> None:
         ops = TextOps.for_language("en")
-        result = ops.chunk("Hello. World.").sentences().result()
-        assert Span.to_texts(result) == ["Hello.", " World."]
+        result = Span.to_texts(ops.chunk("Hello. World.").sentences().result())
+        assert result == ["Hello.", " World."]
 
     def test_en_paragraphs_then_sentences(self) -> None:
         ops = TextOps.for_language("en")
         text = "First sentence. Second.\n\nThird sentence."
-        result = ops.chunk(text).paragraphs().sentences().result()
-        assert Span.to_texts(result) == ["First sentence.", " Second.", "Third sentence."]
+        result = Span.to_texts(ops.chunk(text).paragraphs().sentences().result())
+        assert result == ["First sentence.", " Second.", "Third sentence."]
 
     def test_zh_sentences(self) -> None:
         ops = TextOps.for_language("zh")
-        result = ops.chunk("你好。世界！").sentences().result()
-        assert Span.to_texts(result) == ["你好。", "世界！"]
+        result = Span.to_texts(ops.chunk("你好。世界！").sentences().result())
+        assert result == ["你好。", "世界！"]
 
     def test_immutability(self) -> None:
         ops = TextOps.for_language("en")
@@ -120,7 +120,7 @@ class TestChunkPipeline:
 
     def test_by_length(self) -> None:
         ops = TextOps.for_language("en")
-        result = ops.chunk("Hello world foo bar").by_length(12).result()
+        result = Span.to_texts(ops.chunk("Hello world foo bar").by_length(12).result())
         assert len(result) >= 1
         for chunk in result:
-            assert len(chunk.text) <= 12
+            assert len(chunk) <= 12

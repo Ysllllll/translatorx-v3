@@ -3,9 +3,9 @@
 import pytest
 
 from lang_ops import TextOps, jieba_is_available
+from lang_ops._core._types import Span
 
 from lang_ops.splitter._length import split_by_length
-from lang_ops._core._types import Span
 
 
 def _split(text, ops, max_length, unit="character"):

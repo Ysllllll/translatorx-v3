@@ -4,6 +4,7 @@ from lang_ops import TextOps
 from lang_ops import ChunkPipeline
 from lang_ops.splitter._clause import split_clauses
 from lang_ops.splitter._sentence import split_sentences
+from lang_ops._core._types import Span
 
 # ---------------------------------------------------------------------------
 # Realistic Chinese paragraph (~400 chars) covering: 。 ！ ？ ， 、 ； ： …… 《》
@@ -76,44 +77,44 @@ class TestSentenceSplitZh:
 
     def test_sentence_count(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # 10 sentence terminators (。……。！。……？。。。。。)
         # …… does NOT split (CJK ellipsis U+2026)
         assert len(result) == 10
 
     def test_full_reconstruction(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         assert "".join(result) == TEXT_SAMPLE
 
     def test_no_empty_results(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         assert all(s for s in result)
 
     def test_first_sentence(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         expected = (
             "近年来，人工智能技术在中国蓬勃发展："
             "从语音识别到自动驾驶、从智能制造到智慧城市，"
@@ -123,23 +124,23 @@ class TestSentenceSplitZh:
 
     def test_exclamation_sentence_with_closing_quote(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # ！ followed by \u201d — closing quote is consumed into the sentence
         assert result[3] == "有人惊叹：\u201c技术发展的速度超乎想象！\u201d"
 
     def test_ellipsis_does_not_split(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # …… sits mid-sentence between 无处不在 and 这场
         assert "……" in result[5]
         # The sentence spans from 在日常生活中 to 隐患？
@@ -152,24 +153,24 @@ class TestSentenceSplitZh:
 
     def test_question_mark_sentence(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # ？ is in the ellipsis-containing sentence (S6), not a standalone sentence
         # S7 is the answer sentence
         assert result[6] == "没有人能给出绝对确定的答案。"
 
     def test_closing_quote_after_period(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         # 。 followed by \u201d — closing quote consumed
         assert result[8] == (
             "正如一位资深研究员所说：\u201c面对变革，"
@@ -178,12 +179,12 @@ class TestSentenceSplitZh:
 
     def test_last_sentence(self) -> None:
         ops = _ops()
-        result = split_sentences(
+        result = Span.to_texts(split_sentences(
             TEXT_SAMPLE,
             ops.sentence_terminators,
             ops.abbreviations,
             is_cjk=ops.is_cjk,
-        )
+        ))
         assert result[9] == (
             "我们应该积极拥抱技术进步带来的便利，"
             "同时保持理性的思考和审慎的态度，"
@@ -201,47 +202,47 @@ class TestClauseSplitZh:
 
     def test_clause_count(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         # Separators: ，：、， → 4 separators → 5 clauses
         assert len(result) == 5
 
     def test_full_reconstruction(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         assert "".join(result) == CLAUSE_TEXT
 
     def test_no_empty_results(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         assert all(c for c in result)
 
     def test_comma_clause(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         # First ， separator: 近年来，
         assert result[0] == "近年来，"
 
     def test_colon_clause(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         # ： separator: 人工智能技术在中国蓬勃发展：
         assert result[1] == "人工智能技术在中国蓬勃发展："
 
     def test_dunhao_clause(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         # 、 separator: 从语音识别到自动驾驶、
         assert result[2] == "从语音识别到自动驾驶、"
 
     def test_trailing_comma_clause(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         # ， separator: 从智能制造到智慧城市，
         assert result[3] == "从智能制造到智慧城市，"
 
     def test_final_clause_no_separator(self) -> None:
         ops = _ops()
-        result = split_clauses(CLAUSE_TEXT, ops.clause_separators)
+        result = Span.to_texts(split_clauses(CLAUSE_TEXT, ops.clause_separators))
         # No trailing separator: 各个领域都取得了令人瞩目的进步。
         assert result[4] == "各个领域都取得了令人瞩目的进步。"
 
@@ -256,7 +257,7 @@ class TestPipelineZh:
 
     def test_sentences_then_clauses(self) -> None:
         pipeline = ChunkPipeline(PIPELINE_TEXT, language="zh")
-        result = pipeline.sentences().clauses().result()
+        result = Span.to_texts(pipeline.sentences().clauses().result())
         # 2 sentences × mixed clause separators = 9 total clauses
         assert len(result) == 9
         assert result[0] == "近年来，"
@@ -266,7 +267,7 @@ class TestPipelineZh:
 
     def test_paragraphs(self) -> None:
         pipeline = ChunkPipeline(PARAGRAPH_TEXT, language="zh")
-        result = pipeline.paragraphs().result()
+        result = Span.to_texts(pipeline.paragraphs().result())
         assert len(result) == 3
         assert result[0].startswith("近年来")
         assert result[1].startswith("专家们")
@@ -274,15 +275,15 @@ class TestPipelineZh:
 
     def test_immutability(self) -> None:
         original = ChunkPipeline(PIPELINE_TEXT, language="zh")
-        original_result = original.result()
+        original_result = Span.to_texts(original.result())
 
         chained = original.sentences().clauses()
-        chained_result = chained.result()
+        chained_result = Span.to_texts(chained.result())
 
         # Original pipeline unchanged
-        assert original.result() == original_result
-        assert len(original.result()) == 1
-        assert original.result()[0] == PIPELINE_TEXT
+        assert Span.to_texts(original.result()) == original_result
+        assert len(Span.to_texts(original.result())) == 1
+        assert Span.to_texts(original.result())[0] == PIPELINE_TEXT
 
         # Chained pipeline produces split results
         assert len(chained_result) == 9

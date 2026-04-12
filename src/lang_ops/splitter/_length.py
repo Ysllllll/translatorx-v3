@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from lang_ops._core._types import Span
+
 
 class _HasSplitJoin(Protocol):
     """Protocol for the lang_ops methods we need."""
@@ -18,8 +20,12 @@ def split_by_length(
     ops: _HasSplitJoin,
     max_length: int,
     unit: str = "character",
-) -> list[str]:
-    """Split text into chunks that don't exceed max_length."""
+) -> list[Span]:
+    """Split text into chunks that don't exceed max_length.
+
+    Returns Span objects with start=-1, end=-1 because tokenize+join
+    may alter whitespace, making character offsets unreliable.
+    """
     if not text:
         return []
 
@@ -37,13 +43,13 @@ def _split_by_char_count(
     text: str,
     ops: _HasSplitJoin,
     max_length: int,
-) -> list[str]:
+) -> list[Span]:
     """Split by character count, breaking at word/token boundaries."""
     tokens = ops.split(text)
     if not tokens:
         return []
 
-    result: list[str] = []
+    result: list[Span] = []
     chunk_tokens: list[str] = []
     chunk_len = 0
 
@@ -51,25 +57,25 @@ def _split_by_char_count(
         token_len = ops.length(token)
 
         if chunk_tokens and chunk_len + token_len > max_length:
-            result.append(ops.join(chunk_tokens))
+            result.append(Span(ops.join(chunk_tokens), -1, -1))
             chunk_tokens = []
             chunk_len = 0
 
         if token_len > max_length:
             if chunk_tokens:
-                result.append(ops.join(chunk_tokens))
+                result.append(Span(ops.join(chunk_tokens), -1, -1))
                 chunk_tokens = []
                 chunk_len = 0
             i = 0
             while i < len(token):
-                result.append(token[i : i + max_length])
+                result.append(Span(token[i : i + max_length], -1, -1))
                 i += max_length
         else:
             chunk_tokens.append(token)
             chunk_len += token_len
 
     if chunk_tokens:
-        result.append(ops.join(chunk_tokens))
+        result.append(Span(ops.join(chunk_tokens), -1, -1))
 
     return result
 
@@ -78,17 +84,17 @@ def _split_by_word_count(
     text: str,
     ops: _HasSplitJoin,
     max_length: int,
-) -> list[str]:
+) -> list[Span]:
     """Split by word/token count."""
     tokens = ops.split(text)
     if not tokens:
         return []
 
-    result: list[str] = []
+    result: list[Span] = []
     i = 0
     while i < len(tokens):
         chunk = tokens[i : i + max_length]
-        result.append(ops.join(chunk))
+        result.append(Span(ops.join(chunk), -1, -1))
         i += max_length
 
     return result

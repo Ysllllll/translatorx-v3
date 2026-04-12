@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from lang_ops import TextOps
+from lang_ops._core._types import Span
 
 from lang_ops.splitter._paragraph import split_paragraphs
 from lang_ops.splitter._sentence import split_sentences
@@ -13,7 +14,7 @@ from lang_ops.splitter._length import split_by_length
 class ChunkPipeline:
     """Immutable pipeline for multi-granularity text splitting."""
 
-    __slots__ = ("_pieces", "_ops", "_language")
+    __slots__ = ("_spans", "_ops", "_language")
 
     def __init__(self, text: str, *, language: str | None = None, ops: object | None = None) -> None:
         if ops is not None:
@@ -23,50 +24,65 @@ class ChunkPipeline:
         else:
             raise TypeError("ChunkPipeline requires either language or ops")
         self._language = getattr(self._ops, '_language', language or '')
-        self._pieces: list[str] = [text] if text else []
+        self._spans: list[Span] = [Span(text, 0, len(text))] if text else []
 
-    def _with_pieces(self, pieces: list[str]) -> ChunkPipeline:
-        """Create a new pipeline with updated pieces."""
+    def _with_spans(self, spans: list[Span]) -> ChunkPipeline:
+        """Create a new pipeline with updated spans."""
         new = object.__new__(ChunkPipeline)
         new._ops = self._ops
         new._language = self._language
-        new._pieces = pieces
+        new._spans = spans
         return new
 
     def paragraphs(self) -> ChunkPipeline:
-        """Split each piece into paragraphs."""
-        result: list[str] = []
-        for piece in self._pieces:
-            result.extend(split_paragraphs(piece))
-        return self._with_pieces(result)
+        """Split each span into paragraphs."""
+        result: list[Span] = []
+        for span in self._spans:
+            for child in split_paragraphs(span.text):
+                result.append(Span(
+                    child.text,
+                    span.start + child.start if span.start >= 0 else -1,
+                    span.start + child.end if span.start >= 0 else -1,
+                ))
+        return self._with_spans(result)
 
     def sentences(self) -> ChunkPipeline:
-        """Split each piece into sentences."""
-        result: list[str] = []
-        for piece in self._pieces:
-            result.extend(split_sentences(
-                piece,
+        """Split each span into sentences."""
+        result: list[Span] = []
+        for span in self._spans:
+            for child in split_sentences(
+                span.text,
                 self._ops.sentence_terminators,
                 self._ops.abbreviations,
                 is_cjk=self._ops.is_cjk,
-            ))
-        return self._with_pieces(result)
+            ):
+                result.append(Span(
+                    child.text,
+                    span.start + child.start if span.start >= 0 else -1,
+                    span.start + child.end if span.start >= 0 else -1,
+                ))
+        return self._with_spans(result)
 
     def clauses(self) -> ChunkPipeline:
-        """Split each piece into clauses."""
+        """Split each span into clauses."""
         seps = self._ops.clause_separators
-        result: list[str] = []
-        for piece in self._pieces:
-            result.extend(split_clauses(piece, seps))
-        return self._with_pieces(result)
+        result: list[Span] = []
+        for span in self._spans:
+            for child in split_clauses(span.text, seps):
+                result.append(Span(
+                    child.text,
+                    span.start + child.start if span.start >= 0 else -1,
+                    span.start + child.end if span.start >= 0 else -1,
+                ))
+        return self._with_spans(result)
 
     def by_length(self, max_length: int, unit: str = "character") -> ChunkPipeline:
-        """Split each piece by length."""
-        result: list[str] = []
-        for piece in self._pieces:
-            result.extend(split_by_length(piece, self._ops, max_length, unit))
-        return self._with_pieces(result)
+        """Split each span by length. Resulting spans have start=-1."""
+        result: list[Span] = []
+        for span in self._spans:
+            result.extend(split_by_length(span.text, self._ops, max_length, unit))
+        return self._with_spans(result)
 
-    def result(self) -> list[str]:
-        """Return the current list of text pieces."""
-        return list(self._pieces)
+    def result(self) -> list[Span]:
+        """Return the current list of spans."""
+        return list(self._spans)

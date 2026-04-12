@@ -6,6 +6,7 @@ from lang_ops import TextOps
 from lang_ops.splitter._clause import split_clauses
 from lang_ops.splitter._sentence import split_sentences
 from lang_ops import ChunkPipeline
+from lang_ops._core._types import Span
 
 
 def _ops(language: str) -> TextOps:
@@ -14,17 +15,17 @@ def _ops(language: str) -> TextOps:
 
 def _split_sentences(text: str, language: str) -> list[str]:
     ops = _ops(language)
-    return split_sentences(
+    return Span.to_texts(split_sentences(
         text,
         ops.sentence_terminators,
         ops.abbreviations,
         is_cjk=ops.is_cjk,
-    )
+    ))
 
 
 def _split_clauses(text: str, language: str) -> list[str]:
     ops = _ops(language)
-    return split_clauses(text, ops.clause_separators)
+    return Span.to_texts(split_clauses(text, ops.clause_separators))
 
 
 # 532 characters. Topic: Latin American culture and science.
@@ -171,7 +172,7 @@ class TestClauseSplitEs:
 class TestPipelineEs:
 
     def test_sentences_then_clauses(self) -> None:
-        result = (
+        result = Span.to_texts(
             ChunkPipeline("Hola, mundo. Adiós, mundo.", language="es")
             .sentences()
             .clauses()
@@ -180,7 +181,7 @@ class TestPipelineEs:
         assert result == ["Hola,", " mundo.", " Adiós,", " mundo."]
 
     def test_multi_paragraph(self) -> None:
-        result = (
+        result = Span.to_texts(
             ChunkPipeline(MULTI_PARAGRAPH, language="es")
             .paragraphs()
             .result()
@@ -190,10 +191,10 @@ class TestPipelineEs:
     def test_immutability(self) -> None:
         original = ChunkPipeline("Hola. Mundo.", language="es")
         _derived = original.sentences().clauses()
-        assert original.result() == ["Hola. Mundo."]
+        assert Span.to_texts(original.result()) == ["Hola. Mundo."]
 
     def test_sentences_on_sample(self) -> None:
-        result = (
+        result = Span.to_texts(
             ChunkPipeline(TEXT_SAMPLE, language="es")
             .sentences()
             .result()
@@ -201,7 +202,7 @@ class TestPipelineEs:
         assert len(result) == SENTENCE_COUNT
 
     def test_paragraphs_then_sentences(self) -> None:
-        result = (
+        result = Span.to_texts(
             ChunkPipeline(MULTI_PARAGRAPH, language="es")
             .paragraphs()
             .sentences()
