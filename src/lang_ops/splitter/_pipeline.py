@@ -8,7 +8,7 @@ from lang_ops._core._types import Span
 
 from lang_ops.splitter._paragraph import split_paragraphs
 from lang_ops.splitter._sentence import split_sentences
-from lang_ops.splitter._clause import split_clauses
+from lang_ops.splitter._clause import split_clauses, split_clauses_full
 from lang_ops.splitter._length import split_by_length
 
 
@@ -56,11 +56,17 @@ class ChunkPipeline:
         return self._with_spans(result)
 
     def clauses(self) -> ChunkPipeline:
-        """Split each span into clauses."""
-        seps = self._ops.clause_separators
+        """Split each span into clauses (sentence boundaries are also clause boundaries)."""
         result: list[Span] = []
         for span in self._spans:
-            result.extend(span.child(c) for c in split_clauses(span.text, seps))
+            children = split_clauses_full(
+                span.text,
+                self._ops.clause_separators,
+                self._ops.sentence_terminators,
+                self._ops.abbreviations,
+                is_cjk=self._ops.is_cjk,
+            )
+            result.extend(span.child(c) for c in children)
         return self._with_spans(result)
 
     def by_length(self, max_length: int, unit: str = "character") -> ChunkPipeline:
@@ -77,3 +83,18 @@ class ChunkPipeline:
     def spans(self) -> list[Span]:
         """Return the current list of spans (with offsets)."""
         return list(self._spans)
+
+    def segments(self, words: list) -> list:
+        """Align pipeline chunks with timed words to produce Segments.
+
+        Convenience wrapper around :func:`subtitle.words.align_segments`.
+        Requires the ``subtitle`` package.
+
+        Args:
+            words: Word list with timing (e.g. ``segment.words``).
+
+        Returns:
+            A list of :class:`~subtitle.Segment`, one per current chunk.
+        """
+        from subtitle.words import align_segments
+        return align_segments(self.result(), words)

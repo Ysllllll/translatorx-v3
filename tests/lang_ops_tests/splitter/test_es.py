@@ -31,12 +31,19 @@ class TestSpanishSplitter(SplitterTestBase):
 
     def test_split_clauses_long_text(self) -> None:
         assert self._split_clauses() == [
-            'Dra. García y la Sra. López caminan por la av. Reforma en Madrid. En pág. 42 del informe,',
+            'Dra. García y la Sra. López caminan por la av. Reforma en Madrid.',
+            ' En pág. 42 del informe,',
             ' tel. +34-91-555-0100,',
             ' se documenta un proyecto de aprox. 4.8 millones... Los resultados incluyen arte,',
             ' ciencia,',
             ' música,',
-            ' etc. ¿Ha terminado? ¡Es increíble! La Profa. Ruiz preguntó si Ud. conoce la exposición de arte. Cultura y ciencia transforman el mundo. ¡Qué maravilloso! No es un gran futuro? La tradición española lo promete.',
+            ' etc. ¿Ha terminado?',
+            ' ¡Es increíble!',
+            ' La Profa. Ruiz preguntó si Ud. conoce la exposición de arte.',
+            ' Cultura y ciencia transforman el mundo.',
+            ' ¡Qué maravilloso!',
+            ' No es un gran futuro?',
+            ' La tradición española lo promete.',
         ]
 
     # ── ChunkPipeline ────────────────────────────────────────────────

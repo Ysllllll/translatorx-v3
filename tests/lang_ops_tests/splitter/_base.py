@@ -46,16 +46,11 @@ class SplitterTestBase:
 
     def _split_sentences(self) -> list[str]:
         ops = TextOps.for_language(self.LANGUAGE)
-        return Span.to_texts(split_sentences(
-            self.TEXT_SAMPLE,
-            ops.sentence_terminators,
-            ops.abbreviations,
-            is_cjk=ops.is_cjk,
-        ))
+        return ops.split_sentences(self.TEXT_SAMPLE)
 
     def _split_clauses(self) -> list[str]:
         ops = TextOps.for_language(self.LANGUAGE)
-        return Span.to_texts(split_clauses(self.TEXT_SAMPLE, ops.clause_separators))
+        return ops.split_clauses(self.TEXT_SAMPLE)
 
     def _pipeline_sentences_clauses(self) -> list[str]:
         return (

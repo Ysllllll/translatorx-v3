@@ -31,12 +31,19 @@ class TestPortugueseSplitter(SplitterTestBase):
 
     def test_split_clauses_long_text(self) -> None:
         assert self._split_clauses() == [
-            'Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo. Na pág. 87 do relatório,',
+            'Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo.',
+            ' Na pág. 87 do relatório,',
             ' tel. +55-11-98765-4321,',
             ' descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte,',
             ' ciência,',
             ' música,',
-            ' etc. O projeto está pronto? É simplesmente incrível! A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte. A ciência transforma o mundo. Que futuro maravilhoso! Não é um grande futuro? A inovação brasileira promete.',
+            ' etc. O projeto está pronto?',
+            ' É simplesmente incrível!',
+            ' A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.',
+            ' A ciência transforma o mundo.',
+            ' Que futuro maravilhoso!',
+            ' Não é um grande futuro?',
+            ' A inovação brasileira promete.',
         ]
 
     # ── ChunkPipeline ────────────────────────────────────────────────

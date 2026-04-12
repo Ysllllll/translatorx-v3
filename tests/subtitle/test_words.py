@@ -2,7 +2,7 @@
 
 import pytest
 
-from subtitle import Word, Segment, fill_words, find_words, distribute_words
+from subtitle import Word, Segment, fill_words, find_words, distribute_words, align_segments
 from subtitle.words import _strip_punct
 
 
@@ -181,3 +181,114 @@ class TestDistributeWords:
         assert len(groups) == 2
         assert groups[0][0].start == pytest.approx(0.0)
         assert groups[1][-1].end == pytest.approx(10.0)
+
+
+# ---------------------------------------------------------------------------
+# align_segments
+# ---------------------------------------------------------------------------
+
+class TestAlignSegments:
+    def test_basic(self):
+        words = [
+            Word("Hello", 0.0, 0.5),
+            Word("world", 0.6, 1.0),
+            Word("How", 1.1, 1.3),
+            Word("are", 1.4, 1.6),
+            Word("you", 1.7, 2.0),
+        ]
+        chunks = ["Hello world.", "How are you?"]
+        segs = align_segments(chunks, words)
+        assert len(segs) == 2
+        assert segs[0].text == "Hello world."
+        assert segs[0].start == pytest.approx(0.0)
+        assert segs[0].end == pytest.approx(1.0)
+        assert [w.word for w in segs[0].words] == ["Hello", "world"]
+        assert segs[1].text == "How are you?"
+        assert segs[1].start == pytest.approx(1.1)
+        assert segs[1].end == pytest.approx(2.0)
+        assert [w.word for w in segs[1].words] == ["How", "are", "you"]
+
+    def test_single_chunk(self):
+        words = [Word("Hi", 0.0, 0.5), Word("there", 0.6, 1.0)]
+        segs = align_segments(["Hi there"], words)
+        assert len(segs) == 1
+        assert segs[0].start == pytest.approx(0.0)
+        assert segs[0].end == pytest.approx(1.0)
+        assert len(segs[0].words) == 2
+
+    def test_empty_chunks(self):
+        words = [Word("Hi", 0.0, 0.5)]
+        segs = align_segments([], words)
+        assert segs == []
+
+    def test_no_words(self):
+        segs = align_segments(["Hello world"], [])
+        assert len(segs) == 1
+        assert segs[0].text == "Hello world"
+        assert segs[0].start == 0.0
+        assert segs[0].end == 0.0
+        assert segs[0].words == []
+
+    def test_end_to_end_with_fill(self):
+        """Full workflow: fill_words → pipeline → align_segments."""
+        seg = Segment(start=0.0, end=10.0, text="Hello world. How are you?")
+        seg = fill_words(seg)
+        chunks = ["Hello world.", "How are you?"]
+        result = align_segments(chunks, seg.words)
+        assert len(result) == 2
+        assert result[0].start == pytest.approx(0.0)
+        assert result[1].end == pytest.approx(10.0)
+        assert result[0].text == "Hello world."
+        assert result[1].text == "How are you?"
+
+
+# ---------------------------------------------------------------------------
+# Pipeline .segments() integration
+# ---------------------------------------------------------------------------
+
+class TestPipelineSegments:
+    def test_sentences_segments(self):
+        """Pipeline .sentences().segments(words) end-to-end."""
+        from lang_ops import TextOps
+        ops = TextOps.for_language("en")
+        words = [
+            Word("Hello", 0.0, 0.5),
+            Word("world.", 0.6, 1.0),
+            Word("How", 1.1, 1.3),
+            Word("are", 1.4, 1.6),
+            Word("you?", 1.7, 2.0),
+        ]
+        text = "Hello world. How are you?"
+        segs = ops.chunk(text).sentences().segments(words)
+        assert len(segs) == 2
+        assert segs[0].text == "Hello world."
+        assert segs[0].start == pytest.approx(0.0)
+        assert segs[0].end == pytest.approx(1.0)
+        assert segs[1].text == " How are you?"
+        assert segs[1].start == pytest.approx(1.1)
+        assert segs[1].end == pytest.approx(2.0)
+
+    def test_clauses_segments(self):
+        """Pipeline .clauses().segments(words) end-to-end."""
+        from lang_ops import TextOps
+        ops = TextOps.for_language("en")
+        words = [
+            Word("Well,", 0.0, 0.5),
+            Word("hello", 0.6, 1.0),
+            Word("world.", 1.1, 1.5),
+            Word("How", 1.6, 1.8),
+            Word("are", 1.9, 2.1),
+            Word("you?", 2.2, 2.5),
+        ]
+        text = "Well, hello world. How are you?"
+        segs = ops.chunk(text).clauses().segments(words)
+        assert len(segs) == 3
+        assert segs[0].text == "Well,"
+        assert segs[0].start == pytest.approx(0.0)
+        assert segs[0].end == pytest.approx(0.5)
+        assert segs[1].text == " hello world."
+        assert segs[1].start == pytest.approx(0.6)
+        assert segs[1].end == pytest.approx(1.5)
+        assert segs[2].text == " How are you?"
+        assert segs[2].start == pytest.approx(1.6)
+        assert segs[2].end == pytest.approx(2.5)

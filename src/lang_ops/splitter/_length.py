@@ -56,23 +56,28 @@ def _split_by_char_count(
     for token in tokens:
         token_len = ops.length(token)
 
-        if chunk_tokens and chunk_len + token_len > max_length:
-            result.append(Span(ops.join(chunk_tokens), -1, -1))
-            chunk_tokens = []
-            chunk_len = 0
+        if chunk_tokens:
+            # Measure the actual joined length including separators
+            joined_len = ops.length(ops.join(chunk_tokens + [token]))
+            if joined_len > max_length:
+                result.append(Span(ops.join(chunk_tokens), -1, -1))
+                chunk_tokens = []
+                chunk_len = 0
 
         if token_len > max_length:
             if chunk_tokens:
                 result.append(Span(ops.join(chunk_tokens), -1, -1))
                 chunk_tokens = []
                 chunk_len = 0
+            # Hard-split oversized token by characters
             i = 0
             while i < len(token):
-                result.append(Span(token[i : i + max_length], -1, -1))
+                piece = token[i : i + max_length]
+                result.append(Span(piece, -1, -1))
                 i += max_length
         else:
             chunk_tokens.append(token)
-            chunk_len += token_len
+            chunk_len = ops.length(ops.join(chunk_tokens))
 
     if chunk_tokens:
         result.append(Span(ops.join(chunk_tokens), -1, -1))

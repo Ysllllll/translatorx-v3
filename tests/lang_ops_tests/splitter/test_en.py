@@ -113,12 +113,18 @@ class TestEnglishSplitter(SplitterTestBase):
     def test_split_clauses_long_text(self) -> None:
         assert self._split_clauses() == [
             'Dr. Smith works at Acme Inc. She earned a degree from MIT and published 3.2 million copies... Prof. Jones asked,',
-            ' "Is this the best we can do?" Yes! The company,',
+            ' "Is this the best we can do?"',
+            ' Yes!',
+            ' The company,',
             ' founded in Jan. 2010,',
             ' has offices in St. Petersburg,',
             ' London,',
-            ' and New York. What a remarkable achievement! Revenue grew 4.5% in 2024,',
-            ' reaching $2.1 billion. Can you believe it? The future is bright.',
+            ' and New York.',
+            ' What a remarkable achievement!',
+            ' Revenue grew 4.5% in 2024,',
+            ' reaching $2.1 billion.',
+            ' Can you believe it?',
+            ' The future is bright.',
         ]
 
     # ── split_paragraphs() ───────────────────────────────────────────
@@ -230,12 +236,44 @@ class TestEnglishSplitter(SplitterTestBase):
         assert _len("Hi there", max_length=8) == ["Hi there"]
 
     def test_split_by_length_split(self) -> None:
-        result = _len("abcdefghij", max_length=5)
-        assert len(result) >= 2
+        assert _len("abcdefghij", max_length=5) == ["abcde", "fghij"]
 
     def test_split_by_length_hard_split(self) -> None:
-        result = _len("supercalifragilisticexpialidocious", max_length=5)
-        assert len(result) >= 2
+        assert _len("supercalifragilisticexpialidocious", max_length=5) == [
+            "super", "calif", "ragil", "istic", "expia", "lidoc", "ious",
+        ]
 
     def test_split_by_length_edge(self) -> None:
         assert _len("", max_length=10) == []
+
+    def test_split_by_length_error(self) -> None:
+        with pytest.raises(ValueError):
+            _len("Hello", max_length=0)
+        with pytest.raises(ValueError):
+            _len("Hello", max_length=-1)
+        with pytest.raises(ValueError):
+            _len("Hello", max_length=5, unit="sentence")
+
+    def test_split_by_length_boundary(self) -> None:
+        assert _len("a b c", max_length=1) == ["a", "b", "c"]
+        assert _len("one two three", max_length=1, unit="word") == ["one", "two", "three"]
+
+    def test_split_by_length_exact_fit(self) -> None:
+        assert _len("Hello", max_length=5) == ["Hello"]
+        assert _len("ab cd", max_length=2, unit="word") == ["ab cd"]
+
+    def test_split_by_length_word_unit_variants(self) -> None:
+        assert _len("a b c d e", max_length=2, unit="word") == ["a b", "c d", "e"]
+        assert _len("hello", max_length=3, unit="word") == ["hello"]
+
+    def test_pipeline_sentences_by_length(self) -> None:
+        text = "Hello world. This is a test sentence."
+        assert _ops.chunk(text).sentences().by_length(25).result() == [
+            "Hello world.", "This is a test sentence.",
+        ]
+
+    def test_pipeline_clauses_by_length(self) -> None:
+        text = "First clause, second clause, and a third one."
+        assert _ops.chunk(text).clauses().by_length(20).result() == [
+            "First clause,", "second clause,", "and a third one.",
+        ]

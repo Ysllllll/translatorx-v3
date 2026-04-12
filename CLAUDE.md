@@ -160,7 +160,7 @@ CJK tests guard on availability and skip gracefully if the tokenizer is not inst
 
 **Segment-level shortcuts:**
 - `mechanism.split_sentences(text)` → `list[str]` — split by terminal punctuation
-- `mechanism.split_clauses(text)` → `list[str]` — split by comma/pause punctuation
+- `mechanism.split_clauses(text)` → `list[str]` — split by comma/pause punctuation and sentence terminators
 - `mechanism.split_paragraphs(text)` → `list[str]` — split by blank lines
 - `mechanism.chunk(text)` → `ChunkPipeline` — create a chainable pipeline
 
@@ -168,7 +168,7 @@ CJK tests guard on availability and skip gracefully if the tokenizer is not inst
 - `ChunkPipeline(text, language="en")` or `ops.chunk(text)` — immutable, chainable pipeline
 - `.paragraphs()` — split by blank lines
 - `.sentences()` — split by terminal punctuation (abbreviation/ellipsis aware)
-- `.clauses()` — split by comma/pause punctuation
+- `.clauses()` — split by comma/pause punctuation and sentence terminators (superset of `.sentences()`)
 - `.by_length(max_length, unit="character")` — split at token boundaries by length
 - `.result()` → `list[str]`
 - `.spans()` → `list[Span]` — when you need character offsets

@@ -33,13 +33,22 @@ class TestFrenchSplitter(SplitterTestBase):
 
     def test_split_clauses_long_text(self) -> None:
         assert self._split_clauses() == [
-            'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris. Elle se promène souvent sur le bd. Haussmann;',
+            'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.',
+            ' Elle se promène souvent sur le bd. Haussmann;',
             " elle adore l'architecture haussmannienne,",
             ' éd. originaire du XIXe siècle,',
-            " réf. classée depuis 3.2 décennies. C'est vraiment superbe! Les marchés,",
+            ' réf. classée depuis 3.2 décennies.',
+            " C'est vraiment superbe!",
+            ' Les marchés,',
             ' les cafés,',
-            ' les librairies etc. rendent la ville unique. Avez-vous visité le no. 1 de la Place cette année? Chaque quartier offre des perspectives fascinantes sur les villes cités. En janv.,',
-            " les lumières illuminent le monde. Quel merveilleux! N'est-ce pas un bel avenir? La culture française le promet.",
+            ' les librairies etc. rendent la ville unique.',
+            ' Avez-vous visité le no. 1 de la Place cette année?',
+            ' Chaque quartier offre des perspectives fascinantes sur les villes cités.',
+            ' En janv.,',
+            ' les lumières illuminent le monde.',
+            ' Quel merveilleux!',
+            " N'est-ce pas un bel avenir?",
+            ' La culture française le promet.',
         ]
 
     # ── ChunkPipeline ────────────────────────────────────────────────

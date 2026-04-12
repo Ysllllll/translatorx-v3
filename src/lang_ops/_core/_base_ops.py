@@ -106,9 +106,12 @@ class _BaseOps(ABC):
         return Span.to_texts(_split(text, self.sentence_terminators, self.abbreviations, is_cjk=self.is_cjk))
 
     def split_clauses(self, text: str) -> list[str]:
-        """Split text into clauses."""
-        from lang_ops.splitter._clause import split_clauses as _split
-        return Span.to_texts(_split(text, self.clause_separators))
+        """Split text into clauses (sentence boundaries are also clause boundaries)."""
+        from lang_ops.splitter._clause import split_clauses_full as _split
+        return Span.to_texts(_split(
+            text, self.clause_separators, self.sentence_terminators,
+            self.abbreviations, is_cjk=self.is_cjk,
+        ))
 
     def split_paragraphs(self, text: str) -> list[str]:
         """Split text into paragraphs."""

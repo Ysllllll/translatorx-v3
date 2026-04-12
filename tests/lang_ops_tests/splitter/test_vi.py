@@ -31,7 +31,14 @@ class TestVietnameseSplitter(SplitterTestBase):
 
     def test_split_clauses_long_text(self) -> None:
         assert self._split_clauses() == [
-            'GS. Nguyễn và TS. Trần làm việc tại TP. Hà Nội. ThS. Lê cùng KS. Phạm đã phát triển một dự án trị giá 2.8 triệu đô la VN... Dr. Vũ gọi điện qua ĐT. để kiểm tra tiến độ. Dự án đã hoàn thành xong? Thật tuyệt vời! Prof. Đình cho biết kết quả nghiên cứu đã được công bố trên toàn đất nước. Khoa học thay đổi thế giới! Đây không phải là một tương lai tươi sáng? Công nghệ Việt Nam tiếp tục phát triển.',
+            'GS. Nguyễn và TS. Trần làm việc tại TP. Hà Nội.',
+            ' ThS. Lê cùng KS. Phạm đã phát triển một dự án trị giá 2.8 triệu đô la VN... Dr. Vũ gọi điện qua ĐT. để kiểm tra tiến độ.',
+            ' Dự án đã hoàn thành xong?',
+            ' Thật tuyệt vời!',
+            ' Prof. Đình cho biết kết quả nghiên cứu đã được công bố trên toàn đất nước.',
+            ' Khoa học thay đổi thế giới!',
+            ' Đây không phải là một tương lai tươi sáng?',
+            ' Công nghệ Việt Nam tiếp tục phát triển.',
         ]
 
     # ── ChunkPipeline ────────────────────────────────────────────────

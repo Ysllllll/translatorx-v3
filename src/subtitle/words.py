@@ -182,3 +182,41 @@ def distribute_words(
         result.append(list(words[start_i:end_i]))
         idx = end_i
     return result
+
+
+# ------------------------------------------------------------------
+# align_segments
+# ------------------------------------------------------------------
+
+def align_segments(
+    chunks: list[str],
+    words: list[Word],
+) -> list[Segment]:
+    """Align text chunks with timed words to produce :class:`Segment` objects.
+
+    Typical usage with :class:`~lang_ops.splitter.ChunkPipeline`::
+
+        spans = ops.chunk(seg.text).sentences().result()
+        segments = align_segments(spans, seg.words)
+
+    Each returned Segment carries the text of one chunk, the subset of
+    *words* that fall within it, and timing derived from those words.
+
+    Args:
+        chunks: Consecutive text pieces (e.g. from a pipeline ``.result()``).
+        words: Full word list with timing (e.g. ``segment.words``).
+
+    Returns:
+        A list of :class:`Segment`, one per chunk.  If a chunk has no
+        matching words its ``start`` and ``end`` are both ``0.0``.
+    """
+    groups = distribute_words(words, chunks)
+    segments: list[Segment] = []
+    for text, group in zip(chunks, groups):
+        if group:
+            start = group[0].start
+            end = group[-1].end
+        else:
+            start = end = 0.0
+        segments.append(Segment(start=start, end=end, text=text, words=group))
+    return segments
