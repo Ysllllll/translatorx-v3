@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from lang_ops._core._types import Span
 
+_CLOSING_QUOTES = frozenset({'"', "\u201d", "'", "\u2019", "」", "』"})
+
 
 def _is_abbreviation(text: str, dot_pos: int, abbreviations: frozenset[str]) -> bool:
-    """Check if the period at dot_pos follows an abbreviation."""
+    """Check if the period at *dot_pos* follows an abbreviation."""
     i = dot_pos - 1
     while i >= 0 and text[i].isalnum():
         i -= 1
@@ -27,19 +29,15 @@ def _is_number_dot(text: str, dot_pos: int) -> bool:
 
 
 def _is_ellipsis(text: str, pos: int) -> bool:
-    """Check if the character at pos is part of '...'."""
-    if text[pos] != ".":
+    """Check if the character at *pos* is part of ``...`` or is ``…``."""
+    ch = text[pos]
+    if ch == "…":
+        return True
+    if ch != ".":
         return False
     before = pos > 0 and text[pos - 1] == "."
     after = pos + 1 < len(text) and text[pos + 1] == "."
     return before or after
-
-
-def _is_cjk_ellipsis(text: str, pos: int) -> bool:
-    """Check if char at pos is … (U+2026)."""
-    if text[pos] == "…":
-        return True
-    return False
 
 
 def split_sentences(
@@ -64,14 +62,10 @@ def split_sentences(
         ch = text[i]
 
         if ch in terminators:
-            if is_cjk:
-                if _is_cjk_ellipsis(text, i):
-                    i += 1
-                    continue
-            else:
-                if _is_ellipsis(text, i):
-                    i += 1
-                    continue
+            # Guard: ellipsis is never a sentence boundary
+            if _is_ellipsis(text, i):
+                i += 1
+                continue
 
             if not is_cjk and ch == ".":
                 if _is_abbreviation(text, i, abbreviations):
@@ -82,8 +76,6 @@ def split_sentences(
                     continue
 
             end = i + 1
-            # Consume at most one closing quote pair after the terminator
-            _CLOSING_QUOTES = {'"', "”", "’", "'", "」", "』"}
             if end < len(text) and text[end] in _CLOSING_QUOTES:
                 end += 1
 

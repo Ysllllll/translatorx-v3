@@ -6,7 +6,7 @@ import re
 
 from lang_ops._core._types import Span
 
-_SPLIT_RE = re.compile(r"\n\s*\n")
+_BLANK_LINE_RE = re.compile(r"\n\s*\n")
 
 
 def split_paragraphs(text: str) -> list[Span]:
@@ -20,23 +20,22 @@ def split_paragraphs(text: str) -> list[Span]:
     if not text or not text.strip():
         return []
 
+    # Find separator positions, then derive paragraph slices from gaps
+    separators = [m.span() for m in _BLANK_LINE_RE.finditer(text)]
+
+    # Build raw slices: before first sep, between seps, after last sep
+    boundaries = [0] + [end for _, end in separators]
+    endings = [start for start, _ in separators] + [len(text)]
+    raw_slices = list(zip(boundaries, endings))
+
     result: list[Span] = []
-    for m in re.finditer(r"(?:(?<=\n)\s*\n|\A)(.*?)(?=\n\s*\n|\Z)", text, re.DOTALL):
-        content = m.group(1).strip()
-        if not content:
+    for slice_start, slice_end in raw_slices:
+        raw = text[slice_start:slice_end]
+        stripped = raw.strip()
+        if not stripped:
             continue
-        # Find the actual position of the stripped content within the match
-        match_start = m.start(1)
-        raw = m.group(1)
         leading = len(raw) - len(raw.lstrip())
-        start = match_start + leading
-        end = start + len(content)
-        result.append(Span(content, start, end))
+        start = slice_start + leading
+        result.append(Span(stripped, start, start + len(stripped)))
 
-    if result:
-        return result
-
-    # Fallback: no blank-line separators found, treat as single paragraph
-    stripped = text.strip()
-    leading = len(text) - len(text.lstrip())
-    return [Span(stripped, leading, leading + len(stripped))]
+    return result

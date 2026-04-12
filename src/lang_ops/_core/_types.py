@@ -21,6 +21,16 @@ class Span:
     start: int
     end: int
 
+    def child(self, child: Span) -> Span:
+        """Create a new Span with offsets composed from *self* and *child*.
+
+        If the parent has known offsets (>= 0), the child's offsets are
+        shifted by the parent's start.  Otherwise the result keeps -1.
+        """
+        if self.start >= 0:
+            return Span(child.text, self.start + child.start, self.start + child.end)
+        return Span(child.text, -1, -1)
+
     @staticmethod
     def to_texts(spans: list[Span]) -> list[str]:
         """Extract plain text from a list of spans."""

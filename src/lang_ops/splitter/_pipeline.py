@@ -38,29 +38,20 @@ class ChunkPipeline:
         """Split each span into paragraphs."""
         result: list[Span] = []
         for span in self._spans:
-            for child in split_paragraphs(span.text):
-                result.append(Span(
-                    child.text,
-                    span.start + child.start if span.start >= 0 else -1,
-                    span.start + child.end if span.start >= 0 else -1,
-                ))
+            result.extend(span.child(c) for c in split_paragraphs(span.text))
         return self._with_spans(result)
 
     def sentences(self) -> ChunkPipeline:
         """Split each span into sentences."""
         result: list[Span] = []
         for span in self._spans:
-            for child in split_sentences(
+            children = split_sentences(
                 span.text,
                 self._ops.sentence_terminators,
                 self._ops.abbreviations,
                 is_cjk=self._ops.is_cjk,
-            ):
-                result.append(Span(
-                    child.text,
-                    span.start + child.start if span.start >= 0 else -1,
-                    span.start + child.end if span.start >= 0 else -1,
-                ))
+            )
+            result.extend(span.child(c) for c in children)
         return self._with_spans(result)
 
     def clauses(self) -> ChunkPipeline:
@@ -68,12 +59,7 @@ class ChunkPipeline:
         seps = self._ops.clause_separators
         result: list[Span] = []
         for span in self._spans:
-            for child in split_clauses(span.text, seps):
-                result.append(Span(
-                    child.text,
-                    span.start + child.start if span.start >= 0 else -1,
-                    span.start + child.end if span.start >= 0 else -1,
-                ))
+            result.extend(span.child(c) for c in split_clauses(span.text, seps))
         return self._with_spans(result)
 
     def by_length(self, max_length: int, unit: str = "character") -> ChunkPipeline:
