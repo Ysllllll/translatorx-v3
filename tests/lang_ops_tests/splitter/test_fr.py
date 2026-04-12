@@ -1,5 +1,10 @@
 """French (fr) splitter tests."""
 
+from lang_ops import TextOps, ChunkPipeline
+from lang_ops._core._types import Span
+from lang_ops.splitter._sentence import split_sentences
+from lang_ops.splitter._clause import split_clauses
+from lang_ops.splitter._length import split_by_length
 from ._base import SplitterTestBase
 
 
@@ -7,16 +12,75 @@ TEXT_SAMPLE: str = "Mme. Dupont habite au 15 av. des Champs-Élysées à Paris. 
 
 PARAGRAPH_TEXT: str = 'Premier paragraphe. Deux phrases.\n\nDeuxième paragraphe. Avec trois. Phrases courtes.\n\nTroisième et dernier paragraphe.'
 
+_ops = TextOps.for_language("fr")
+
 
 class TestFrenchSplitter(SplitterTestBase):
     LANGUAGE = "fr"
     TEXT_SAMPLE = TEXT_SAMPLE
     PARAGRAPH_TEXT = PARAGRAPH_TEXT
 
-    # ── split_sentences() ─────────────────────────────────────────────
+    def test_split_sentences(self) -> None:
+        # Basic sentence splitting
+        assert _ops.split_sentences("Bonjour monde. Comment vas-tu?") == ["Bonjour monde.", " Comment vas-tu?"]
+        assert _ops.split_sentences("Incroyable! Vraiment? Oui.") == ["Incroyable!", " Vraiment?", " Oui."]
 
-    def test_split_sentences_long_text(self) -> None:
-        assert self._split_sentences() == [
+        # Consecutive terminators
+        assert _ops.split_sentences("Attends!! Vraiment???") == ["Attends!!", " Vraiment???"]
+
+        # Abbreviation
+        assert _ops.split_sentences("Mme. Dupont est partie.") == ["Mme. Dupont est partie."]
+
+        # Ellipsis
+        assert _ops.split_sentences("Attends... Continue.") == ["Attends... Continue."]
+
+        # Edge cases
+        assert _ops.split_sentences("") == []
+        assert _ops.split_sentences("Pas de terminateurs") == ["Pas de terminateurs"]
+
+    def test_split_clauses(self) -> None:
+        # Basic clause splitting
+        assert _ops.split_clauses("Bonjour, monde.") == ["Bonjour,", " monde."]
+        assert _ops.split_clauses("Premier; deuxième: troisième.") == ["Premier;", " deuxième:", " troisième."]
+
+        # Consecutive separators
+        assert _ops.split_clauses(",,,") == [",,,"]
+
+        # Edge cases
+        assert _ops.split_clauses("") == []
+        assert _ops.split_clauses("Pas de séparateurs") == ["Pas de séparateurs"]
+
+    def test_split_by_length(self) -> None:
+        # Character split
+        assert _ops.split_by_length("Bonjour le monde entier", max_length=12) == ["Bonjour le", "monde entier"]
+
+        # Word unit
+        assert _ops.split_by_length("one two three four", max_length=2, unit="word") == ["one two", "three four"]
+
+        # Fit / empty / edge
+        assert _ops.split_by_length("Bonjour", max_length=20) == ["Bonjour"]
+        assert _ops.split_by_length("", max_length=10) == []
+
+        # Errors
+        import pytest
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Bonjour", max_length=0)
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Bonjour", max_length=-1)
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Bonjour", max_length=5, unit="sentence")
+
+        # Chunk chains
+        assert _ops.chunk("Hello world. This is a test. Another one.").sentences().by_length(20).result() == [
+            "Hello world.", "This is a test.", "Another one.",
+        ]
+        assert _ops.chunk("First clause, second clause, and third.").clauses().by_length(20).result() == [
+            "First clause,", "second clause,", "and third.",
+        ]
+
+    def test_split_long_text(self) -> None:
+        # long text split_sentences()
+        assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.',
             " Elle se promène souvent sur le bd. Haussmann; elle adore l'architecture haussmannienne, éd. originaire du XIXe siècle, réf. classée depuis 3.2 décennies.",
             " C'est vraiment superbe!",
@@ -29,10 +93,8 @@ class TestFrenchSplitter(SplitterTestBase):
             ' La culture française le promet.',
         ]
 
-    # ── split_clauses() ──────────────────────────────────────────────
-
-    def test_split_clauses_long_text(self) -> None:
-        assert self._split_clauses() == [
+        # long text split_clauses()
+        assert _ops.split_clauses(self.TEXT_SAMPLE) == [
             'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.',
             ' Elle se promène souvent sur le bd. Haussmann;',
             " elle adore l'architecture haussmannienne,",
@@ -51,30 +113,13 @@ class TestFrenchSplitter(SplitterTestBase):
             ' La culture française le promet.',
         ]
 
-    # ── ChunkPipeline ────────────────────────────────────────────────
+        # long text chunk chain equivalence
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
 
-    def test_pipeline_sentences_clauses(self) -> None:
-        assert self._pipeline_sentences_clauses() == [
-            'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.',
-            ' Elle se promène souvent sur le bd. Haussmann;',
-            " elle adore l'architecture haussmannienne,",
-            ' éd. originaire du XIXe siècle,',
-            ' réf. classée depuis 3.2 décennies.',
-            " C'est vraiment superbe!",
-            ' Les marchés,',
-            ' les cafés,',
-            ' les librairies etc. rendent la ville unique.',
-            ' Avez-vous visité le no. 1 de la Place cette année?',
-            ' Chaque quartier offre des perspectives fascinantes sur les villes cités.',
-            ' En janv.,',
-            ' les lumières illuminent le monde.',
-            ' Quel merveilleux!',
-            " N'est-ce pas un bel avenir?",
-            ' La culture française le promet.',
-        ]
-
-    def test_pipeline_paragraphs_sentences(self) -> None:
-        assert self._pipeline_paragraphs_sentences() == [
+        # long text pipeline_paragraphs_sentences()
+        assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
             'Premier paragraphe.',
             ' Deux phrases.',
             'Deuxième paragraphe.',

@@ -1,7 +1,5 @@
 """English (en) splitter tests."""
 
-import pytest
-
 from lang_ops import TextOps, ChunkPipeline
 from lang_ops._core._types import Span
 from lang_ops.splitter._sentence import split_sentences
@@ -18,68 +16,114 @@ PARAGRAPH_TEXT: str = 'First paragraph here. It has two sentences.\n\nSecond par
 _ops = TextOps.for_language("en")
 
 
-def _s(text: str) -> list[str]:
-    return Span.to_texts(split_sentences(
-        text, _ops.sentence_terminators, _ops.abbreviations, is_cjk=False,
-    ))
-
-
-def _c(text: str) -> list[str]:
-    return Span.to_texts(split_clauses(text, _ops.clause_separators))
-
-
-def _p(text: str) -> list[str]:
-    return Span.to_texts(split_paragraphs(text))
-
-
-def _len(text: str, max_length: int, unit: str = "character") -> list[str]:
-    return Span.to_texts(split_by_length(text, _ops, max_length=max_length, unit=unit))
-
-
 class TestEnglishSplitter(SplitterTestBase):
     LANGUAGE = "en"
     TEXT_SAMPLE = TEXT_SAMPLE
     PARAGRAPH_TEXT = PARAGRAPH_TEXT
 
-    # ── split_sentences() ─────────────────────────────────────────────
-
     def test_split_sentences(self) -> None:
-        assert _s("Hello world. How are you?") == ["Hello world.", " How are you?"]
-        assert _s("Wow! Really? Yes.") == ["Wow!", " Really?", " Yes."]
-
-    def test_split_sentences_abbreviation(self) -> None:
-        assert _s("Dr. Smith went home.") == ["Dr. Smith went home."]
-        assert _s("He met Dr. Smith. Then he left.") == ["He met Dr. Smith.", " Then he left."]
-
-    def test_split_sentences_ellipsis(self) -> None:
-        assert _s("Wait... Go on.") == ["Wait... Go on."]
-
-    def test_split_sentences_number_dot(self) -> None:
-        assert _s("The value is 3.14 approx.") == ["The value is 3.14 approx."]
-
-    def test_split_sentences_consecutive_terminators(self) -> None:
-        assert _s("Wait!! Really???") == ["Wait!!", " Really???"]
-        assert _s("What?! Yes.") == ["What?!", " Yes."]
-
-    def test_split_sentences_closing_quote(self) -> None:
-        assert _s('He said "hello." Then he left.') == ['He said "hello."', " Then he left."]
-
-    def test_split_sentences_edge(self) -> None:
-        assert _s("") == []
-        assert _s("No terminators here") == ["No terminators here"]
-
-    def test_split_sentences_ops_shortcut(self) -> None:
+        # Basic sentence splitting
         assert _ops.split_sentences("Hello world. How are you?") == ["Hello world.", " How are you?"]
-        assert _ops.split_sentences("Dr. Smith went home.") == ["Dr. Smith went home."]
-        assert _ops.split_sentences("") == []
+        assert _ops.split_sentences("Wow! Really? Yes.") == ["Wow!", " Really?", " Yes."]
 
-    def test_split_sentences_span_offsets(self) -> None:
+        # Abbreviations
+        assert _ops.split_sentences("Dr. Smith went home.") == ["Dr. Smith went home."]
+        assert _ops.split_sentences("He met Dr. Smith. Then he left.") == ["He met Dr. Smith.", " Then he left."]
+
+        # Ellipsis
+        assert _ops.split_sentences("Wait... Go on.") == ["Wait... Go on."]
+
+        # Number dot
+        assert _ops.split_sentences("The value is 3.14 approx.") == ["The value is 3.14 approx."]
+
+        # Consecutive terminators
+        assert _ops.split_sentences("Wait!! Really???") == ["Wait!!", " Really???"]
+        assert _ops.split_sentences("What?! Yes.") == ["What?!", " Yes."]
+
+        # Closing quotes
+        assert _ops.split_sentences('He said "hello." Then he left.') == ['He said "hello."', " Then he left."]
+
+        # Emoji
+        assert _ops.split_sentences("Hello😊! Bye👋.") == ["Hello😊!", " Bye👋."]
+
+        # Edge cases
+        assert _ops.split_sentences("") == []
+        assert _ops.split_sentences("No terminators here") == ["No terminators here"]
+
+        # Span offsets
         spans = split_sentences("Hello. World!", _ops.sentence_terminators, _ops.abbreviations, is_cjk=False)
         assert spans[0] == Span("Hello.", 0, 6)
         assert spans[1] == Span(" World!", 6, 13)
 
-    def test_split_sentences_long_text(self) -> None:
-        assert self._split_sentences() == [
+    def test_split_clauses(self) -> None:
+        # Basic clause splitting
+        assert _ops.split_clauses("Hello, world, how are you?") == ["Hello,", " world,", " how are you?"]
+        assert _ops.split_clauses("First; second; third") == ["First;", " second;", " third"]
+
+        # Single clause / trailing separator
+        assert _ops.split_clauses("No commas here") == ["No commas here"]
+        assert _ops.split_clauses("Hello,") == ["Hello,"]
+        assert _ops.split_clauses(",Hello") == [",Hello"]
+
+        # Consecutive separators
+        assert _ops.split_clauses(",,,") == [",,,"]
+        assert _ops.split_clauses("Hello,,, world") == ["Hello,,,", " world"]
+
+        # Edge cases
+        assert _ops.split_clauses("") == []
+
+        # Span offsets
+        spans = split_clauses("Hello, world", _ops.clause_separators)
+        assert spans[0] == Span("Hello,", 0, 6)
+        assert spans[1] == Span(" world", 6, 12)
+
+    def test_split_by_length(self) -> None:
+        # Basic character split
+        assert _ops.split_by_length("Hello world", max_length=20) == ["Hello world"]
+        assert _ops.split_by_length("abcdefghij", max_length=5) == ["abcde", "fghij"]
+
+        # Word unit
+        assert _ops.split_by_length("one two three four", max_length=2, unit="word") == ["one two", "three four"]
+        assert _ops.split_by_length("a b c d e", max_length=2, unit="word") == ["a b", "c d", "e"]
+        assert _ops.split_by_length("hello", max_length=3, unit="word") == ["hello"]
+
+        # Hard split (single long word)
+        assert _ops.split_by_length("supercalifragilisticexpialidocious", max_length=5) == [
+            "super", "calif", "ragil", "istic", "expia", "lidoc", "ious",
+        ]
+
+        # Boundary
+        assert _ops.split_by_length("a b c", max_length=1) == ["a", "b", "c"]
+        assert _ops.split_by_length("one two three", max_length=1, unit="word") == ["one", "two", "three"]
+
+        # Exact fit
+        assert _ops.split_by_length("Hello", max_length=5) == ["Hello"]
+        assert _ops.split_by_length("ab cd", max_length=2, unit="word") == ["ab cd"]
+
+        # Fit / empty / edge
+        assert _ops.split_by_length("Hi there", max_length=8) == ["Hi there"]
+        assert _ops.split_by_length("", max_length=10) == []
+
+        # Errors
+        import pytest
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Hello", max_length=0)
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Hello", max_length=-1)
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Hello", max_length=5, unit="sentence")
+
+        # Chunk chains
+        assert _ops.chunk("Hello world. This is a test sentence.").sentences().by_length(25).result() == [
+            "Hello world.", "This is a test sentence.",
+        ]
+        assert _ops.chunk("First clause, second clause, and a third one.").clauses().by_length(20).result() == [
+            "First clause,", "second clause,", "and a third one.",
+        ]
+
+    def test_split_long_text(self) -> None:
+        # Long text split_sentences()
+        assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'Dr. Smith works at Acme Inc. She earned a degree from MIT and published 3.2 million copies... Prof. Jones asked, "Is this the best we can do?"',
             ' Yes!',
             ' The company, founded in Jan. 2010, has offices in St. Petersburg, London, and New York.',
@@ -89,37 +133,8 @@ class TestEnglishSplitter(SplitterTestBase):
             ' The future is bright.',
         ]
 
-    # ── split_clauses() ──────────────────────────────────────────────
-
-    def test_split_clauses(self) -> None:
-        assert _c("Hello, world, how are you?") == ["Hello,", " world,", " how are you?"]
-        assert _c("First; second; third") == ["First;", " second;", " third"]
-
-    def test_split_clauses_single(self) -> None:
-        assert _c("No commas here") == ["No commas here"]
-        assert _c("Hello,") == ["Hello,"]
-        assert _c(",Hello") == [",Hello"]
-
-    def test_split_clauses_consecutive_separators(self) -> None:
-        assert _c(",,,") == [",,,"]
-        assert _c("Hello,,, world") == ["Hello,,,", " world"]
-
-    def test_split_clauses_edge(self) -> None:
-        assert _c("") == []
-
-    def test_split_clauses_ops_shortcut(self) -> None:
-        assert _ops.split_clauses("Hello, world, how are you?") == ["Hello,", " world,", " how are you?"]
-        assert _ops.split_clauses("First; second; third") == ["First;", " second;", " third"]
-        assert _ops.split_clauses("No commas here") == ["No commas here"]
-        assert _ops.split_clauses("") == []
-
-    def test_split_clauses_span_offsets(self) -> None:
-        spans = split_clauses("Hello, world", _ops.clause_separators)
-        assert spans[0] == Span("Hello,", 0, 6)
-        assert spans[1] == Span(" world", 6, 12)
-
-    def test_split_clauses_long_text(self) -> None:
-        assert self._split_clauses() == [
+        # Long text split_clauses()
+        assert _ops.split_clauses(self.TEXT_SAMPLE) == [
             'Dr. Smith works at Acme Inc. She earned a degree from MIT and published 3.2 million copies... Prof. Jones asked,',
             ' "Is this the best we can do?"',
             ' Yes!',
@@ -135,99 +150,13 @@ class TestEnglishSplitter(SplitterTestBase):
             ' The future is bright.',
         ]
 
-    # ── split_paragraphs() ───────────────────────────────────────────
+        # Long text chunk chain equivalence
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
 
-    def test_split_paragraphs(self) -> None:
-        assert _p("First paragraph.\n\nSecond paragraph.") == ["First paragraph.", "Second paragraph."]
-        assert _p("Hello world.") == ["Hello world."]
-
-    def test_split_paragraphs_whitespace(self) -> None:
-        assert _p("  Hello.  \n\n  World.  ") == ["Hello.", "World."]
-        assert _p("First.\n\n\n\nSecond.") == ["First.", "Second."]
-
-    def test_split_paragraphs_crlf(self) -> None:
-        assert _p("First.\r\n\r\nSecond.") == ["First.", "Second."]
-
-    def test_split_paragraphs_single_newline(self) -> None:
-        assert _p("Line one.\nLine two.") == ["Line one.\nLine two."]
-
-    def test_split_paragraphs_edge(self) -> None:
-        assert _p("") == []
-        assert _p("   \n\n   ") == []
-
-    def test_split_paragraphs_ops_shortcut(self) -> None:
-        assert _ops.split_paragraphs("Para 1\n\nPara 2\n\nPara 3") == ["Para 1", "Para 2", "Para 3"]
-        assert _ops.split_paragraphs("No paragraph break") == ["No paragraph break"]
-        assert _ops.split_paragraphs("P1\n\n\n\nP2") == ["P1", "P2"]
-        assert _ops.split_paragraphs("") == []
-
-    def test_split_paragraphs_span_offsets(self) -> None:
-        spans = split_paragraphs("Hello.\n\nWorld.")
-        assert spans[0] == Span("Hello.", 0, 6)
-        assert spans[1] == Span("World.", 8, 14)
-
-    # ── ChunkPipeline ────────────────────────────────────────────────
-
-    def test_pipeline_single_step(self) -> None:
-        assert ChunkPipeline("Hello. World.", language="en").sentences().result() == ["Hello.", " World."]
-        assert ChunkPipeline("Hello, world, how are you?", language="en").clauses().result() == ["Hello,", " world,", " how are you?"]
-        assert ChunkPipeline("First.\n\nSecond.", language="en").paragraphs().result() == ["First.", "Second."]
-
-    def test_pipeline_chaining(self) -> None:
-        text = "First sentence. Second sentence.\n\nThird sentence."
-        assert ChunkPipeline(text, language="en").paragraphs().sentences().result() == [
-            "First sentence.", " Second sentence.", "Third sentence.",
-        ]
-        assert ChunkPipeline("Hello, world. Goodbye, world.", language="en").sentences().clauses().result() == [
-            "Hello,", " world.", " Goodbye,", " world.",
-        ]
-
-    def test_pipeline_immutability(self) -> None:
-        p1 = ChunkPipeline("Hello. World.", language="en")
-        p2 = p1.sentences()
-        p3 = p2.clauses()
-        assert p1 is not p2 and p2 is not p3
-        assert p1.result() == ["Hello. World."]
-        assert p2.result() == ["Hello.", " World."]
-
-    def test_pipeline_edge(self) -> None:
-        assert ChunkPipeline("", language="en").sentences().result() == []
-        assert ChunkPipeline("No terminators", language="en").sentences().result() == ["No terminators"]
-        with pytest.raises(ValueError):
-            ChunkPipeline("Hello", language="xx").result()
-
-    def test_pipeline_ops_chunk_shortcut(self) -> None:
-        assert _ops.chunk("Hello. World.").sentences().result() == ["Hello.", " World."]
-        text = "First sentence. Second.\n\nThird sentence."
-        assert _ops.chunk(text).paragraphs().sentences().result() == [
-            "First sentence.", " Second.", "Third sentence.",
-        ]
-
-    def test_pipeline_by_length(self) -> None:
-        result = ChunkPipeline("one two three four five", language="en").by_length(max_length=2, unit="word").result()
-        assert len(result) >= 2
-        result = _ops.chunk("Hello world foo bar").by_length(12).result()
-        assert all(len(chunk) <= 12 for chunk in result)
-
-    def test_pipeline_sentences_clauses_long_text(self) -> None:
-        assert self._pipeline_sentences_clauses() == [
-            'Dr. Smith works at Acme Inc. She earned a degree from MIT and published 3.2 million copies... Prof. Jones asked,',
-            ' "Is this the best we can do?"',
-            ' Yes!',
-            ' The company,',
-            ' founded in Jan. 2010,',
-            ' has offices in St. Petersburg,',
-            ' London,',
-            ' and New York.',
-            ' What a remarkable achievement!',
-            ' Revenue grew 4.5% in 2024,',
-            ' reaching $2.1 billion.',
-            ' Can you believe it?',
-            ' The future is bright.',
-        ]
-
-    def test_pipeline_paragraphs_sentences_long_text(self) -> None:
-        assert self._pipeline_paragraphs_sentences() == [
+        # Pipeline paragraphs + sentences
+        assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
             'First paragraph here.',
             ' It has two sentences.',
             'Second paragraph.',
@@ -236,52 +165,29 @@ class TestEnglishSplitter(SplitterTestBase):
             'Third and final paragraph.',
         ]
 
-    # ── split_by_length() ────────────────────────────────────────────
+        # Paragraphs basic tests
+        assert _ops.split_paragraphs("First paragraph.\n\nSecond paragraph.") == ["First paragraph.", "Second paragraph."]
+        assert _ops.split_paragraphs("Hello world.") == ["Hello world."]
+        assert _ops.split_paragraphs("  Hello.  \n\n  World.  ") == ["Hello.", "World."]
+        assert _ops.split_paragraphs("First.\n\n\n\nSecond.") == ["First.", "Second."]
+        assert _ops.split_paragraphs("First.\r\n\r\nSecond.") == ["First.", "Second."]
+        assert _ops.split_paragraphs("Line one.\nLine two.") == ["Line one.\nLine two."]
+        assert _ops.split_paragraphs("") == []
+        assert _ops.split_paragraphs("   \n\n   ") == []
 
-    def test_split_by_length(self) -> None:
-        assert _len("Hello world", max_length=20) == ["Hello world"]
-        assert _len("one two three four", max_length=2, unit="word") == ["one two", "three four"]
-        assert _len("Hi there", max_length=8) == ["Hi there"]
+        # Paragraph span offsets
+        spans = split_paragraphs("Hello.\n\nWorld.")
+        assert spans[0] == Span("Hello.", 0, 6)
+        assert spans[1] == Span("World.", 8, 14)
 
-    def test_split_by_length_split(self) -> None:
-        assert _len("abcdefghij", max_length=5) == ["abcde", "fghij"]
+        # Pipeline immutability
+        p1 = ChunkPipeline("Hello. World.", language="en")
+        p2 = p1.sentences()
+        p3 = p2.clauses()
+        assert p1 is not p2 and p2 is not p3
+        assert p1.result() == ["Hello. World."]
+        assert p2.result() == ["Hello.", " World."]
 
-    def test_split_by_length_hard_split(self) -> None:
-        assert _len("supercalifragilisticexpialidocious", max_length=5) == [
-            "super", "calif", "ragil", "istic", "expia", "lidoc", "ious",
-        ]
-
-    def test_split_by_length_edge(self) -> None:
-        assert _len("", max_length=10) == []
-
-    def test_split_by_length_error(self) -> None:
-        with pytest.raises(ValueError):
-            _len("Hello", max_length=0)
-        with pytest.raises(ValueError):
-            _len("Hello", max_length=-1)
-        with pytest.raises(ValueError):
-            _len("Hello", max_length=5, unit="sentence")
-
-    def test_split_by_length_boundary(self) -> None:
-        assert _len("a b c", max_length=1) == ["a", "b", "c"]
-        assert _len("one two three", max_length=1, unit="word") == ["one", "two", "three"]
-
-    def test_split_by_length_exact_fit(self) -> None:
-        assert _len("Hello", max_length=5) == ["Hello"]
-        assert _len("ab cd", max_length=2, unit="word") == ["ab cd"]
-
-    def test_split_by_length_word_unit_variants(self) -> None:
-        assert _len("a b c d e", max_length=2, unit="word") == ["a b", "c d", "e"]
-        assert _len("hello", max_length=3, unit="word") == ["hello"]
-
-    def test_pipeline_sentences_by_length(self) -> None:
-        text = "Hello world. This is a test sentence."
-        assert _ops.chunk(text).sentences().by_length(25).result() == [
-            "Hello world.", "This is a test sentence.",
-        ]
-
-    def test_pipeline_clauses_by_length(self) -> None:
-        text = "First clause, second clause, and a third one."
-        assert _ops.chunk(text).clauses().by_length(20).result() == [
-            "First clause,", "second clause,", "and a third one.",
-        ]
+        # Pipeline edge cases
+        assert ChunkPipeline("", language="en").sentences().result() == []
+        assert ChunkPipeline("No terminators", language="en").sentences().result() == ["No terminators"]

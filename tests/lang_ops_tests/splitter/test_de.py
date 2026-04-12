@@ -1,5 +1,10 @@
 """German (de) splitter tests."""
 
+from lang_ops import TextOps, ChunkPipeline
+from lang_ops._core._types import Span
+from lang_ops.splitter._sentence import split_sentences
+from lang_ops.splitter._clause import split_clauses
+from lang_ops.splitter._length import split_by_length
 from ._base import SplitterTestBase
 
 
@@ -7,16 +12,75 @@ TEXT_SAMPLE: str = 'Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.
 
 PARAGRAPH_TEXT: str = 'Erster Absatz. Zwei Sätze.\n\nZweiter Absatz. Mit drei. Kurzen Sätzen.\n\nDritter und letzter Absatz.'
 
+_ops = TextOps.for_language("de")
+
 
 class TestGermanSplitter(SplitterTestBase):
     LANGUAGE = "de"
     TEXT_SAMPLE = TEXT_SAMPLE
     PARAGRAPH_TEXT = PARAGRAPH_TEXT
 
-    # ── split_sentences() ─────────────────────────────────────────────
+    def test_split_sentences(self) -> None:
+        # Basic sentence splitting
+        assert _ops.split_sentences("Hallo Welt. Wie geht es?") == ["Hallo Welt.", " Wie geht es?"]
+        assert _ops.split_sentences("Wahnsinn! Wirklich? Ja.") == ["Wahnsinn!", " Wirklich?", " Ja."]
 
-    def test_split_sentences_long_text(self) -> None:
-        assert self._split_sentences() == [
+        # Consecutive terminators
+        assert _ops.split_sentences("Warte!! Wirklich???") == ["Warte!!", " Wirklich???"]
+
+        # Abbreviation
+        assert _ops.split_sentences("Dr. Schmidt ging heim.") == ["Dr. Schmidt ging heim."]
+
+        # Ellipsis
+        assert _ops.split_sentences("Warte... Mach weiter.") == ["Warte... Mach weiter."]
+
+        # Edge cases
+        assert _ops.split_sentences("") == []
+        assert _ops.split_sentences("Keine Terminatoren") == ["Keine Terminatoren"]
+
+    def test_split_clauses(self) -> None:
+        # Basic clause splitting
+        assert _ops.split_clauses("Hallo, Welt.") == ["Hallo,", " Welt."]
+        assert _ops.split_clauses("Erste; zweite: dritte.") == ["Erste;", " zweite:", " dritte."]
+
+        # Consecutive separators
+        assert _ops.split_clauses(",,,") == [",,,"]
+
+        # Edge cases
+        assert _ops.split_clauses("") == []
+        assert _ops.split_clauses("Keine Trennzeichen") == ["Keine Trennzeichen"]
+
+    def test_split_by_length(self) -> None:
+        # Character split
+        assert _ops.split_by_length("Hallo Welt wie geht es", max_length=12) == ["Hallo Welt", "wie geht es"]
+
+        # Word unit
+        assert _ops.split_by_length("one two three four", max_length=2, unit="word") == ["one two", "three four"]
+
+        # Fit / empty / edge
+        assert _ops.split_by_length("Hallo", max_length=20) == ["Hallo"]
+        assert _ops.split_by_length("", max_length=10) == []
+
+        # Errors
+        import pytest
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Hallo", max_length=0)
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Hallo", max_length=-1)
+        with pytest.raises(ValueError):
+            _ops.split_by_length("Hallo", max_length=5, unit="sentence")
+
+        # Chunk chains
+        assert _ops.chunk("Hello world. This is a test. Another one.").sentences().by_length(20).result() == [
+            "Hello world.", "This is a test.", "Another one.",
+        ]
+        assert _ops.chunk("First clause, second clause, and third.").clauses().by_length(20).result() == [
+            "First clause,", "second clause,", "and third.",
+        ]
+
+    def test_split_long_text(self) -> None:
+        # long text split_sentences()
+        assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.',
             ' Ihr Buch, Hrsg. von Prof. Krause, erschien in der 3. Aufl. und kostet ca. 2.5 Millionen Euro... Das Team sammelte Daten aus Physik, Chemie, Biologie usw., bzw. aus ca. 12 Institutionen.',
             ' „Sind die Daten korrekt?"',
@@ -27,10 +91,8 @@ class TestGermanSplitter(SplitterTestBase):
             ' Die deutsche Forschung.',
         ]
 
-    # ── split_clauses() ──────────────────────────────────────────────
-
-    def test_split_clauses_long_text(self) -> None:
-        assert self._split_clauses() == [
+        # long text split_clauses()
+        assert _ops.split_clauses(self.TEXT_SAMPLE) == [
             'Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.',
             ' Ihr Buch,',
             ' Hrsg. von Prof. Krause,',
@@ -47,28 +109,13 @@ class TestGermanSplitter(SplitterTestBase):
             ' Die deutsche Forschung.',
         ]
 
-    # ── ChunkPipeline ────────────────────────────────────────────────
+        # long text chunk chain equivalence
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
 
-    def test_pipeline_sentences_clauses(self) -> None:
-        assert self._pipeline_sentences_clauses() == [
-            'Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.',
-            ' Ihr Buch,',
-            ' Hrsg. von Prof. Krause,',
-            ' erschien in der 3. Aufl. und kostet ca. 2.5 Millionen Euro... Das Team sammelte Daten aus Physik,',
-            ' Chemie,',
-            ' Biologie usw.,',
-            ' bzw. aus ca. 12 Institutionen.',
-            ' „Sind die Daten korrekt?"',
-            ' Wahnsinn!',
-            ' Im 19. Jh. begann diese Forschung;',
-            ' das ist ein beachtliches Ergebnis.',
-            ' Er wird evtl. die Studie in Berlin vorstellen.',
-            ' Ist das nicht die Zukunft?',
-            ' Die deutsche Forschung.',
-        ]
-
-    def test_pipeline_paragraphs_sentences(self) -> None:
-        assert self._pipeline_paragraphs_sentences() == [
+        # long text pipeline_paragraphs_sentences()
+        assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
             'Erster Absatz.',
             ' Zwei Sätze.',
             'Zweiter Absatz.',
