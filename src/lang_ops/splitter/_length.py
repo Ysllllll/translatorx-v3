@@ -23,8 +23,9 @@ def split_by_length(
     """Split *text* into chunks whose ``ops.length()`` ≤ *max_length*.
 
     Always tokenises with ``ops.split()`` (word mode) and accumulates
-    tokens until the joined length would exceed the limit.  Single tokens
-    that exceed *max_length* are hard-split by characters.
+    tokens until the joined length would exceed the limit.  If a single
+    token already exceeds *max_length* it is emitted as-is (the minimum
+    unit is one token — we never break a token to preserve readability).
 
     Returns Span objects with ``start=-1, end=-1`` because tokenise+join
     may alter whitespace, making character offsets unreliable.
@@ -43,43 +44,15 @@ def split_by_length(
     chunk_tokens: list[str] = []
 
     for token in tokens:
-        token_len = ops.length(token)
-
         if chunk_tokens:
             joined_len = ops.length(ops.join(chunk_tokens + [token]))
             if joined_len > max_length:
                 result.append(Span(ops.join(chunk_tokens), -1, -1))
                 chunk_tokens = []
 
-        if token_len > max_length:
-            if chunk_tokens:
-                result.append(Span(ops.join(chunk_tokens), -1, -1))
-                chunk_tokens = []
-            _hard_split(token, ops, max_length, result)
-        else:
-            chunk_tokens.append(token)
+        chunk_tokens.append(token)
 
     if chunk_tokens:
         result.append(Span(ops.join(chunk_tokens), -1, -1))
 
     return result
-
-
-def _hard_split(
-    token: str,
-    ops: _HasSplitJoin,
-    max_length: int,
-    out: list[Span],
-) -> None:
-    """Break an oversized token into pieces ≤ *max_length* by characters.
-
-    Slices the raw string directly so that ``ops.join`` semantics
-    (e.g. EN adding spaces) do not distort the result.
-    """
-    piece_start = 0
-    for i in range(1, len(token) + 1):
-        if ops.length(token[piece_start:i]) > max_length:
-            out.append(Span(token[piece_start:i - 1], -1, -1))
-            piece_start = i - 1
-    if piece_start < len(token):
-        out.append(Span(token[piece_start:], -1, -1))

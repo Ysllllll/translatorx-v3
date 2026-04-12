@@ -57,8 +57,8 @@ class TestKoreanSplitter(SplitterTestBase):
         assert _ops.split_clauses("구분자없음") == ["구분자없음"]
 
     def test_split_by_length(self) -> None:
-        # 문자 수 기준 분할
-        assert _ops.split_by_length("가나다라마바사", max_length=3) == ["가나다", "라", "마바사"]
+        # 문자 수 기준 분할 (oversized tokens kept whole)
+        assert _ops.split_by_length("가나다라마바사", max_length=3) == ["가나다라", "마바사"]
 
         # 피트 / 빈 문자열
         assert _ops.split_by_length("테스트", max_length=10) == ["테스트"]

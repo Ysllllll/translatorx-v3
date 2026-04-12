@@ -77,17 +77,17 @@ class TestEnglishSplitter(SplitterTestBase):
         assert spans[1] == Span(" world", 6, 12)
 
     def test_split_by_length(self) -> None:
-        # Basic character split
+        # Basic split
         assert _ops.split_by_length("Hello world", max_length=20) == ["Hello world"]
-        assert _ops.split_by_length("abcdefghij", max_length=5) == ["abcde", "fghij"]
+        assert _ops.split_by_length("abcdefghij", max_length=5) == ["abcdefghij"]
 
         # Multi-word split
         assert _ops.split_by_length("one two three four", max_length=9) == ["one two", "three", "four"]
         assert _ops.split_by_length("a b c d e", max_length=3) == ["a b", "c d", "e"]
 
-        # Hard split (single long word)
+        # Oversized token kept whole (minimum unit = one token)
         assert _ops.split_by_length("supercalifragilisticexpialidocious", max_length=5) == [
-            "super", "calif", "ragil", "istic", "expia", "lidoc", "ious",
+            "supercalifragilisticexpialidocious",
         ]
 
         # Boundary

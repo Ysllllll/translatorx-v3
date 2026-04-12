@@ -82,8 +82,8 @@ class TestChineseSplitter(SplitterTestBase):
         assert _ops.split_clauses("，，，") == ["，，，"]
 
     def test_split_by_length(self) -> None:
-        # split_by_length()
-        assert _ops.split_by_length("你好世界", max_length=1) == ["你", "好", "世", "界"]
+        # split_by_length() — oversized tokens kept whole (minimum unit = one token)
+        assert _ops.split_by_length("你好世界", max_length=1) == ["你好", "世界"]
         assert _ops.split_by_length("人工智能技术在中国蓬勃发展", max_length=6) == [
             "人工智能技术", "在中国", "蓬勃发展",
         ]
