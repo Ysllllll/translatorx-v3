@@ -1,4 +1,4 @@
-"""Shared base class for per-language long-text splitting tests.
+"""Shared base class for per-language splitter tests.
 
 Subclasses set LANGUAGE, TEXT_SAMPLE, and PARAGRAPH_TEXT as class
 attributes; the base provides helper methods for calling each API.
@@ -15,8 +15,8 @@ from lang_ops.splitter._sentence import split_sentences
 from lang_ops.splitter._clause import split_clauses
 
 
-class LongTextTestBase:
-    """Long-text splitting test base.
+class SplitterTestBase:
+    """Splitter test base.
 
     Required class attributes:
         LANGUAGE       — ISO language code (e.g. "en", "zh")
@@ -29,7 +29,7 @@ class LongTextTestBase:
     PARAGRAPH_TEXT: str = ""
 
     # ------------------------------------------------------------------
-    # Reconstruction property: join(split(text)) == text
+    # Reconstruction: join(split(text)) == text
     # ------------------------------------------------------------------
 
     def test_sentence_reconstruction(self) -> None:
