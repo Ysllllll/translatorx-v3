@@ -3,7 +3,7 @@
 import pytest
 
 from subtitle import Word, Segment, fill_words, find_words, distribute_words, align_segments, attach_punct_words
-from subtitle.align import _strip_punct
+from lang_ops._core._punctuation import strip_punct as _strip_punct
 
 
 # ---------------------------------------------------------------------------
