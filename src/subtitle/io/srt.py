@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from subtitle._types import Segment
+from subtitle.model import Segment
 
 # HH:MM:SS,mmm --> HH:MM:SS,mmm
 _TIMESTAMP_RE = re.compile(

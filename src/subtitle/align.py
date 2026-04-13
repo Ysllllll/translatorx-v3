@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 
-from ._types import Segment, Word
+from .model import Segment, Word
 
 # Punctuation characters for tolerant matching.
 _PUNCT = frozenset(

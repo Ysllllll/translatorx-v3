@@ -1,6 +1,6 @@
-from ._types import Word, Segment, SentenceRecord
-from .words import fill_words, find_words, distribute_words, align_segments
-from .builder import SegmentBuilder
+from .model import Word, Segment, SentenceRecord
+from .align import fill_words, find_words, distribute_words, align_segments
+from .build import SegmentBuilder
 
 __all__ = [
     "Word",

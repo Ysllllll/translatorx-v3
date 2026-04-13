@@ -24,8 +24,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from ._types import Segment, SentenceRecord, Word
-from .words import fill_words, align_segments
+from .model import Segment, SentenceRecord, Word
+from .align import fill_words, align_segments
 
 if TYPE_CHECKING:
     from lang_ops._core._base_ops import _BaseOps

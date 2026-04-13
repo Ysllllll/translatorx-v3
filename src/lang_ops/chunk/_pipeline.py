@@ -89,7 +89,7 @@ class ChunkPipeline:
     def segments(self, words: list) -> list:
         """Align pipeline chunks with timed words to produce Segments.
 
-        Convenience wrapper around :func:`subtitle.words.align_segments`.
+        Convenience wrapper around :func:`subtitle.align.align_segments`.
         Requires the ``subtitle`` package.
 
         Args:
@@ -98,5 +98,5 @@ class ChunkPipeline:
         Returns:
             A list of :class:`~subtitle.Segment`, one per current chunk.
         """
-        from subtitle.words import align_segments
+        from subtitle.align import align_segments
         return align_segments(self.result(), words)

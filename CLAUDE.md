@@ -11,7 +11,7 @@ pytest tests/ -v
 # Run a single test file
 pytest tests/lang_ops_tests/test_chinese.py -v
 pytest tests/lang_ops_tests/chunk/test_en.py -v
-pytest tests/subtitle/builder_tests/test_en.py -v
+pytest tests/subtitle/build_tests/test_en.py -v
 
 # Run via the venv explicitly (if pytest not on PATH)
 /home/ysl/workspace/.venv/bin/pytest tests/ -v
@@ -46,12 +46,12 @@ src/
 │       ├── _boundary.py             # Token-based boundary detection (sentences + clauses)
 │       ├── _length.py               # Length-based splitting (uses Protocol for decoupling)
 │       └── _merge.py                # Length-based merging (inverse of splitting)
-└── subtitle/                        # Subtitle data structures + word timing + segment building
+└── subtitle/                        # Subtitle data structures + timing alignment + segment building
     ├── __init__.py                  # Exports Word, Segment, SentenceRecord, SegmentBuilder, etc.
-    ├── _types.py                    # Frozen dataclasses (Word, Segment, SentenceRecord)
-    ├── words.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
-    ├── builder.py                   # SegmentBuilder — chainable segment restructuring + streaming
-    └── readers/
+    ├── model.py                     # Frozen dataclasses (Word, Segment, SentenceRecord)
+    ├── align.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
+    ├── build.py                     # SegmentBuilder — chainable segment restructuring + streaming
+    └── io/
         └── srt.py                   # SRT file parser
 ```
 
@@ -81,7 +81,7 @@ lang_ops                              ←  subtitle
   shortcuts: ops.split_sentences() etc.    readers (SRT)
 ```
 
-`subtitle` is independent of `lang_ops` except `ChunkPipeline.segments()` (deferred import of `subtitle.words.align_segments`) and `SegmentBuilder` which takes an `ops` parameter.
+`subtitle` is independent of `lang_ops` except `ChunkPipeline.segments()` (deferred import of `subtitle.align.align_segments`) and `SegmentBuilder` which takes an `ops` parameter.
 
 ### Test structure
 
@@ -98,13 +98,13 @@ tests/
 │       ├── test_mechanism.py    # Factory tests
 │       └── test_normalize.py    # Language code normalization
 └── subtitle/
-    ├── test_words.py            # fill_words, find_words, distribute_words, align_segments
-    ├── test_types.py            # Data type display/pretty tests
-    ├── builder_tests/           # SegmentBuilder tests
+    ├── test_align.py            # fill_words, find_words, distribute_words, align_segments
+    ├── test_model.py            # Data type display/pretty tests
+    ├── build_tests/             # SegmentBuilder tests
     │   ├── _base.py             # BuilderTestBase
     │   ├── test_en.py
     │   └── test_zh.py
-    └── readers/
+    └── io/
         └── test_srt.py          # SRT parser tests
 ```
 
@@ -149,7 +149,7 @@ ops.chunk(text)
   .max_length(50)       # token-boundary aware, uses ops.length()
   .merge(80)            # greedy merge adjacent chunks
   .result()             → list[str]
-  .segments(words)      → list[Segment]   # deferred import from subtitle.words
+  .segments(words)      → list[Segment]   # deferred import from subtitle.align
 ```
 
 ### SegmentBuilder (chainable, immutable)

@@ -1,4 +1,4 @@
-"""Tests for subtitle._types display helpers."""
+"""Tests for subtitle.model display helpers."""
 
 from subtitle import Segment, SentenceRecord, Word
 

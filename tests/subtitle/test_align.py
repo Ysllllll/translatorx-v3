@@ -1,9 +1,9 @@
-"""Tests for subtitle.words — word-level timing utilities."""
+"""Tests for subtitle.align — word-level timing utilities."""
 
 import pytest
 
 from subtitle import Word, Segment, fill_words, find_words, distribute_words, align_segments
-from subtitle.words import _strip_punct
+from subtitle.align import _strip_punct
 
 
 # ---------------------------------------------------------------------------
