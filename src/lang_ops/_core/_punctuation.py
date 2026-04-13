@@ -85,3 +85,22 @@ ALL_PUNCT: frozenset[str] = (
 # 字符串形式，用于 decompose_token 等需要 `ch in STRIP_PUNCT` 的场景
 # String form for character-level membership tests and stripping
 STRIP_PUNCT: str = "".join(sorted(ALL_PUNCT))
+
+
+# =====================================================================
+# 工具函数 — Utility functions
+# =====================================================================
+
+def strip_punct(s: str) -> str:
+    """Strip leading and trailing punctuation from *s*.
+
+    Uses :data:`ALL_PUNCT` (frozenset, O(1) lookup) to classify characters.
+    Middle punctuation (e.g. the dot in ``deeplearning.ai``) is preserved.
+    """
+    i = 0
+    while i < len(s) and s[i] in ALL_PUNCT:
+        i += 1
+    j = len(s)
+    while j > i and s[j - 1] in ALL_PUNCT:
+        j -= 1
+    return s[i:j]

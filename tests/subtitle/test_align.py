@@ -433,3 +433,82 @@ class TestPipelineSegments:
         assert segs[2].text == "How are you?"
         assert segs[2].start == pytest.approx(1.6)
         assert segs[2].end == pytest.approx(2.5)
+
+
+# ---------------------------------------------------------------------------
+# Word.content
+# ---------------------------------------------------------------------------
+
+class TestWordContent:
+    def test_plain_word(self):
+        assert Word("hello", 0, 1).content == "hello"
+
+    def test_trailing_punct(self):
+        assert Word("hello,", 0, 1).content == "hello"
+
+    def test_leading_space(self):
+        assert Word(" world!", 0, 1).content == "world"
+
+    def test_pure_punct(self):
+        assert Word("...", 0, 1).content == ""
+
+    def test_cjk_punct(self):
+        assert Word("你好！", 0, 1).content == "你好"
+
+    def test_url_preserved(self):
+        assert Word("deeplearning.ai", 0, 1).content == "deeplearning.ai"
+
+    def test_apostrophe_preserved(self):
+        assert Word("I'm", 0, 1).content == "I'm"
+
+
+# ---------------------------------------------------------------------------
+# normalize_words
+# ---------------------------------------------------------------------------
+
+from subtitle import normalize_words
+
+
+class TestNormalizeWords:
+    def test_only_text(self):
+        """Case 1: no words — generate from text."""
+        text, words = normalize_words(
+            "Hello world!", [], start=0.0, end=2.0,
+        )
+        assert text == "Hello world!"
+        assert len(words) == 2
+        assert words[0].content == "Hello"
+        assert words[1].content == "world"
+        assert words[0].start == pytest.approx(0.0)
+        assert words[-1].end == pytest.approx(2.0)
+
+    def test_only_words(self):
+        """Case 2: no text — derive from words."""
+        ws = [Word("Hello", 0, 1), Word(" world!", 1, 2)]
+        text, words = normalize_words(None, ws)
+        assert text == "Hello world!"
+        assert len(words) == 2
+
+    def test_both_present(self):
+        """Case 3: both text and words — keep text, attach punct."""
+        ws = [Word("Hello", 0, 1), Word(",", 1, 1.1), Word(" world", 1.1, 2)]
+        text, words = normalize_words("Hello, world", ws)
+        assert text == "Hello, world"
+        # Punct should be attached → 2 words instead of 3
+        assert len(words) == 2
+        assert words[0].word == "Hello,"
+        assert words[1].word == " world"
+
+    def test_empty_input(self):
+        """Neither text nor words."""
+        text, words = normalize_words(None, [])
+        assert text == ""
+        assert words == []
+
+    def test_fill_words_only_words(self):
+        """fill_words should derive text when segment has words but no text."""
+        ws = [Word("Hello", 0, 1), Word(" world", 1, 2)]
+        seg = Segment(start=0, end=2, text="", words=ws)
+        result = fill_words(seg)
+        assert result.text == "Hello world"
+        assert len(result.words) == 2

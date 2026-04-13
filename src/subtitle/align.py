@@ -27,6 +27,7 @@ from lang_ops._core._punctuation import (
     TRAILING_PUNCT as _TRAILING,
     CLOSING_PUNCT as _CLOSING,
     DASHES as _DASHES,
+    strip_punct as _strip_punct,
 )
 
 # Trailing / closing punctuation — attaches to the *previous* word.
@@ -46,17 +47,6 @@ def _is_opening_punct_word(s: str) -> bool:
 def _is_closing_punct_word(s: str) -> bool:
     """Return True if the string consists entirely of closing/trailing punctuation."""
     return bool(s) and all(ch in _CLOSING_PUNCT for ch in s)
-
-
-def _strip_punct(s: str) -> str:
-    """Strip leading and trailing punctuation."""
-    i = 0
-    while i < len(s) and s[i] in _PUNCT:
-        i += 1
-    j = len(s)
-    while j > i and s[j - 1] in _PUNCT:
-        j -= 1
-    return s[i:j]
 
 
 # ------------------------------------------------------------------
@@ -143,14 +133,13 @@ def fill_words(
     segment: Segment,
     split_fn: Callable[[str], list[str]] | None = None,
 ) -> Segment:
-    """Ensure *segment* has word-level timing.
+    """Ensure *segment* has consistent text and word-level timing.
 
-    If ``segment.words`` is already populated, standalone punctuation
-    Words are merged into adjacent text Words via :func:`attach_punct_words`,
-    then the segment is returned.
+    Delegates to :func:`normalize_words` which handles three cases:
 
-    Otherwise, splits the text into tokens (via *split_fn* or ``str.split``)
-    and distributes the segment's time range proportionally by token length.
+    - **Words present**: attaches standalone punctuation words to neighbors.
+    - **No words**: synthesizes words from text with proportional timing.
+    - **No text**: derives text by joining words.
 
     Args:
         segment: Input segment.
@@ -159,39 +148,21 @@ def fill_words(
                   For CJK, pass ``ops.split`` to get proper tokenization.
 
     Returns:
-        Segment with ``words`` populated (punctuation attached).
+        Segment with ``words`` populated (punctuation attached) and ``text``
+        guaranteed non-empty when the segment has content.
     """
-    if segment.words:
-        attached = attach_punct_words(segment.words)
-        if attached is not segment.words:
-            return replace(segment, words=attached)
+    text, words = normalize_words(
+        segment.text, segment.words, split_fn,
+        start=segment.start, end=segment.end,
+    )
+    if text == segment.text and words is segment.words:
         return segment
-
-    tokens = split_fn(segment.text) if split_fn else segment.text.split()
-    if not tokens:
-        return segment
-
-    duration = segment.end - segment.start
-    total_len = sum(len(t) for t in tokens) or 1
-    words: list[Word] = []
-    t = segment.start
-
-    for token in tokens:
-        w_dur = duration * len(token) / total_len
-        words.append(Word(word=token, start=t, end=t + w_dur))
-        t += w_dur
-
-    return replace(segment, words=attach_punct_words(words))
+    return replace(segment, text=text, words=words)
 
 
 # ------------------------------------------------------------------
 # find_words
 # ------------------------------------------------------------------
-
-def _normalize_word(w: str) -> str:
-    """Strip punctuation and whitespace for tolerant matching."""
-    return _strip_punct(w.strip())
-
 
 def find_words(
     words: list[Word],
@@ -200,13 +171,12 @@ def find_words(
 ) -> tuple[int, int]:
     """Find the contiguous slice of *words* that covers *sub_text*.
 
-    Uses multi-level tolerant matching:
-        1. Exact match
-        2. Punctuation-stripped match
-        3. Case-insensitive + punctuation/whitespace-stripped match
+    Uses multi-level tolerant matching via ``Word.content``
+    (punctuation-stripped form, computed once at construction):
 
-    This handles real-world word lists where tokens may have leading
-    spaces (Whisper-style), different casing, or missing punctuation.
+        1. Exact match on ``word.word``
+        2. Match on ``word.content`` (punct/whitespace stripped)
+        3. Case-insensitive match on ``word.content``
 
     Args:
         words: Full word list (e.g. ``segment.words``).
@@ -227,42 +197,41 @@ def find_words(
     pos_lower = 0  # scan position in sub_lower (for case-insensitive)
 
     for i in range(start, len(words)):
-        w_raw = words[i].word
-        w_content = _normalize_word(w_raw)
-        if not w_content:
+        w = words[i]
+        if not w.content:
             # Pure-punctuation / whitespace word — absorb if match started
             if first is not None:
                 last = i + 1
             continue
 
         # Level 1: exact match
-        idx = sub_text.find(w_raw, pos)
+        idx = sub_text.find(w.word, pos)
         if idx >= 0:
             if first is None:
                 first = i
             last = i + 1
-            pos = idx + len(w_raw)
+            pos = idx + len(w.word)
             pos_lower = pos
             continue
 
         # Level 2: content-only match (punctuation + whitespace stripped)
-        idx = sub_text.find(w_content, pos)
+        idx = sub_text.find(w.content, pos)
         if idx >= 0:
             if first is None:
                 first = i
             last = i + 1
-            pos = idx + len(w_content)
+            pos = idx + len(w.content)
             pos_lower = pos
             continue
 
         # Level 3: case-insensitive content match
-        w_lower = w_content.lower()
-        idx = sub_lower.find(w_lower, pos_lower)
+        c_lower = w.content.lower()
+        idx = sub_lower.find(c_lower, pos_lower)
         if idx >= 0:
             if first is None:
                 first = i
             last = i + 1
-            pos = idx + len(w_lower)
+            pos = idx + len(c_lower)
             pos_lower = pos
             continue
 
@@ -272,6 +241,69 @@ def find_words(
     if first is None:
         return (start, start)
     return (first, last)
+
+
+# ------------------------------------------------------------------
+# normalize_words
+# ------------------------------------------------------------------
+
+def normalize_words(
+    text: str | None,
+    words: list[Word],
+    split_fn: Callable[[str], list[str]] | None = None,
+    start: float = 0.0,
+    end: float = 0.0,
+) -> tuple[str, list[Word]]:
+    """Reconcile *text* and *words* into a consistent pair.
+
+    Handles three real-world scenarios:
+
+    1. **Only text** (``words`` empty): split text into tokens and create
+       evenly-spaced Word objects spanning ``[start, end]``.
+    2. **Only words** (``text`` empty/None): derive text by joining words.
+    3. **Both present but inconsistent** (post-correction): keep the new
+       *text* as-is and attach punctuation on *words*.
+
+    Args:
+        text: Segment text (may be ``None`` or empty).
+        words: Word list (may be empty).
+        split_fn: Tokenizer ``(text) -> list[str]``.  Defaults to ``str.split()``.
+        start: Segment start time (used when generating words from text).
+        end: Segment end time.
+
+    Returns:
+        ``(text, words)`` — both guaranteed non-empty when input has content.
+    """
+    has_text = bool(text and text.strip())
+    has_words = bool(words)
+
+    if has_text and has_words:
+        # Case 3: both present — just attach punctuation
+        return text, attach_punct_words(words)  # type: ignore[return-value]
+
+    if has_text:
+        # Case 1: only text — synthesize words
+        assert text is not None
+        tokens = split_fn(text) if split_fn else text.split()
+        if not tokens:
+            return text, []
+        duration = end - start
+        total_len = sum(len(t) for t in tokens) or 1
+        new_words: list[Word] = []
+        t = start
+        for token in tokens:
+            w_dur = duration * len(token) / total_len
+            new_words.append(Word(word=token, start=t, end=t + w_dur))
+            t += w_dur
+        return text, attach_punct_words(new_words)
+
+    if has_words:
+        # Case 2: only words — derive text
+        derived = "".join(w.word for w in words)
+        return derived, attach_punct_words(words)
+
+    # Neither text nor words
+    return text or "", []
 
 
 # ------------------------------------------------------------------

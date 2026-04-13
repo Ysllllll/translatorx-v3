@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from lang_ops._core._punctuation import strip_punct as _strip_punct
+
 
 def _fmt_time(value: float) -> str:
     return f"{value:.2f}"
@@ -15,6 +17,13 @@ class Word:
     end: float
     speaker: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+    content: str = field(init=False, repr=False, compare=False)
+    """Pure text content with leading/trailing punctuation stripped.
+    Auto-computed from *word* at creation time — never pass explicitly.
+    """
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "content", _strip_punct(self.word.strip()))
 
     def __repr__(self) -> str:
         suffix = f", speaker={self.speaker!r}" if self.speaker is not None else ""
