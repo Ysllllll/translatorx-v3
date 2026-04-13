@@ -29,6 +29,31 @@ _PUNCT = frozenset(
     "/\\@#$%^&*+=|~"
 )
 
+# Opening punctuation — attaches to the *next* word.
+_OPENING_PUNCT = frozenset("([{（《\"'「『【〈")
+
+# Trailing / closing punctuation — attaches to the *previous* word.
+_CLOSING_PUNCT = frozenset(
+    ".,!?;:，。！？；：、"
+    ")]}）》\"'」』】〉"
+    "—–‐-…·"
+)
+
+
+def _is_punct_only(s: str) -> bool:
+    """Return True if the string consists entirely of punctuation."""
+    return bool(s) and all(ch in _PUNCT for ch in s)
+
+
+def _is_opening_punct_word(s: str) -> bool:
+    """Return True if the string consists entirely of opening punctuation."""
+    return bool(s) and all(ch in _OPENING_PUNCT for ch in s)
+
+
+def _is_closing_punct_word(s: str) -> bool:
+    """Return True if the string consists entirely of closing/trailing punctuation."""
+    return bool(s) and all(ch in _CLOSING_PUNCT for ch in s)
+
 
 def _strip_punct(s: str) -> str:
     """Strip leading and trailing punctuation."""
@@ -42,6 +67,82 @@ def _strip_punct(s: str) -> str:
 
 
 # ------------------------------------------------------------------
+# attach_punct_words
+# ------------------------------------------------------------------
+
+def attach_punct_words(words: list[Word]) -> list[Word]:
+    """Merge standalone punctuation Words into adjacent text Words.
+
+    Closing/trailing punctuation (e.g. ``","`` ``"."`` ``")"`` ``"。"``)
+    attaches to the **previous** word.  Opening punctuation (e.g.
+    ``"("`` ``"「"``) attaches to the **next** word.  Time ranges are
+    extended to cover the merged punctuation.
+
+    Words that already contain text (not pure punctuation) are left
+    unchanged.  If the entire list is punctuation, it is returned as-is.
+
+    Args:
+        words: Word list, possibly with standalone punctuation Words.
+
+    Returns:
+        New list with punctuation merged into adjacent words.
+        Returns the original list unchanged if no merging was needed.
+    """
+    if not words:
+        return words
+
+    # Fast path: if no standalone punctuation words, return as-is
+    if not any(_is_punct_only(w.word.strip()) for w in words):
+        return words
+
+    # Phase 1: attach closing/trailing punct to previous word
+    merged: list[Word] = []
+    for w in words:
+        text = w.word.strip()
+        if merged and _is_closing_punct_word(text):
+            prev = merged[-1]
+            merged[-1] = replace(
+                prev,
+                word=prev.word + w.word.lstrip(),
+                end=max(prev.end, w.end),
+            )
+        else:
+            merged.append(w)
+
+    # Phase 2: attach opening punct to next word (left-to-right)
+    result: list[Word] = []
+    pending_open: Word | None = None
+    for w in merged:
+        text = w.word.strip()
+        if _is_opening_punct_word(text):
+            if pending_open is not None:
+                # Chain of opening puncts — merge them
+                pending_open = replace(
+                    pending_open,
+                    word=pending_open.word + w.word.lstrip(),
+                    end=max(pending_open.end, w.end),
+                )
+            else:
+                pending_open = w
+        elif pending_open is not None:
+            # Attach pending opening punct to this word
+            combined = pending_open.word + w.word.lstrip()
+            result.append(replace(
+                w,
+                word=combined,
+                start=min(pending_open.start, w.start),
+            ))
+            pending_open = None
+        else:
+            result.append(w)
+
+    if pending_open is not None:
+        result.append(pending_open)
+
+    return result
+
+
+# ------------------------------------------------------------------
 # fill_words
 # ------------------------------------------------------------------
 
@@ -51,7 +152,10 @@ def fill_words(
 ) -> Segment:
     """Ensure *segment* has word-level timing.
 
-    If ``segment.words`` is already populated, returns the segment unchanged.
+    If ``segment.words`` is already populated, standalone punctuation
+    Words are merged into adjacent text Words via :func:`attach_punct_words`,
+    then the segment is returned.
+
     Otherwise, splits the text into tokens (via *split_fn* or ``str.split``)
     and distributes the segment's time range proportionally by token length.
 
@@ -62,9 +166,12 @@ def fill_words(
                   For CJK, pass ``ops.split`` to get proper tokenization.
 
     Returns:
-        Segment with ``words`` populated.
+        Segment with ``words`` populated (punctuation attached).
     """
     if segment.words:
+        attached = attach_punct_words(segment.words)
+        if attached is not segment.words:
+            return replace(segment, words=attached)
         return segment
 
     tokens = split_fn(segment.text) if split_fn else segment.text.split()
@@ -81,7 +188,7 @@ def fill_words(
         words.append(Word(word=token, start=t, end=t + w_dur))
         t += w_dur
 
-    return replace(segment, words=words)
+    return replace(segment, words=attach_punct_words(words))
 
 
 # ------------------------------------------------------------------

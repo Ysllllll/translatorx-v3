@@ -176,7 +176,8 @@ Group boundaries (set by `sentences()`) are respected by `merge()` — sentences
 ### Subtitle word timing
 
 ```
-fill_words(segment, split_fn=None) → Segment    # populate segment.words from text
+attach_punct_words(words) → list[Word]           # merge standalone punct into adjacent words
+fill_words(segment, split_fn=None) → Segment     # populate segment.words (auto-attaches punct)
 find_words(words, sub_text, start=0) → (start_idx, end_idx)
 distribute_words(words, texts) → list[list[Word]]
 align_segments(chunks, words) → list[Segment]    # text chunks + timed words → Segments

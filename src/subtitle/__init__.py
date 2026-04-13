@@ -1,5 +1,8 @@
 from .model import Word, Segment, SentenceRecord
-from .align import fill_words, find_words, distribute_words, align_segments
+from .align import (
+    fill_words, find_words, distribute_words, align_segments,
+    attach_punct_words,
+)
 from .build import SegmentBuilder
 
 __all__ = [
@@ -10,5 +13,6 @@ __all__ = [
     "find_words",
     "distribute_words",
     "align_segments",
+    "attach_punct_words",
     "SegmentBuilder",
 ]
