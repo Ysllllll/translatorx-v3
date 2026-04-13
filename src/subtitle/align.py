@@ -20,24 +20,17 @@ from dataclasses import replace
 
 from .model import Segment, Word
 
-# Punctuation characters for tolerant matching.
-_PUNCT = frozenset(
-    ".,!?;:，。！？；：、"
-    "\"\"\"'''"
-    "()[]{}（）《》「」『』【】〈〉"
-    "—–‐-…·"
-    "/\\@#$%^&*+=|~"
+# Punctuation constants — single source of truth in _punctuation.py.
+from lang_ops._core._punctuation import (
+    ALL_PUNCT as _PUNCT,
+    OPENING_PUNCT as _OPENING_PUNCT,
+    TRAILING_PUNCT as _TRAILING,
+    CLOSING_PUNCT as _CLOSING,
+    DASHES as _DASHES,
 )
-
-# Opening punctuation — attaches to the *next* word.
-_OPENING_PUNCT = frozenset("([{（《\"'「『【〈")
 
 # Trailing / closing punctuation — attaches to the *previous* word.
-_CLOSING_PUNCT = frozenset(
-    ".,!?;:，。！？；：、"
-    ")]}）》\"'」』】〉"
-    "—–‐-…·"
-)
+_CLOSING_PUNCT = _TRAILING | _CLOSING | _DASHES
 
 
 def _is_punct_only(s: str) -> bool:

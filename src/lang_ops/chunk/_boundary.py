@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-_CLOSING_QUOTES = frozenset({'"', "\u201d", "'", "\u2019", "」", "』"})
+from lang_ops._core._punctuation import CLOSING_QUOTES as _CLOSING_QUOTES
 _ACRONYM_RE = re.compile(r"^([A-Za-z]\.)+$")
 
 

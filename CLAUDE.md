@@ -38,7 +38,8 @@ src/
 │   │   ├── _base_ops.py             # _BaseOps ABC — abstract interface + shared concrete methods
 │   │   ├── _mechanism.py            # LangOps factory (cached via lru_cache)
 │   │   ├── _cjk_common.py           # _BaseCjkOps + token parsing/attachment/join helpers
-│   │   ├── _chars.py                # Unicode classification + punctuation frozensets
+│   │   ├── _chars.py                # Unicode classification (CJK/Hangul/Kana detection)
+│   │   ├── _punctuation.py          # Single source of truth for all punctuation constants
 │   │   ├── _normalize.py            # Language code normalization
 │   │   └── _availability.py         # Optional dependency guards (jieba/mecab/kiwi)
 │   └── chunk/
