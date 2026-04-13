@@ -112,7 +112,7 @@ class SegmentBuilder:
     """
 
     __slots__ = ("_ops", "_full_text", "_all_words", "_chunks",
-                 "_split_by_speaker")
+                 "_groups", "_split_by_speaker")
 
     # ---- construction ------------------------------------------------
 
@@ -139,7 +139,14 @@ class SegmentBuilder:
         else:
             self._chunks = [full_text] if full_text else []
 
-    def _with_chunks(self, chunks: list[str]) -> SegmentBuilder:
+        # Each chunk is its own group initially
+        self._groups: list[int] = [1] * len(self._chunks)
+
+    def _with_chunks(
+        self,
+        chunks: list[str],
+        groups: list[int] | None = None,
+    ) -> SegmentBuilder:
         """Create a new builder sharing the same words but different chunks."""
         new = object.__new__(SegmentBuilder)
         new._ops = self._ops
@@ -147,61 +154,111 @@ class SegmentBuilder:
         new._all_words = self._all_words
         new._split_by_speaker = self._split_by_speaker
         new._chunks = chunks
+        new._groups = groups if groups is not None else [1] * len(chunks)
         return new
 
     # ---- splitting operations ----------------------------------------
 
     def sentences(self) -> SegmentBuilder:
-        """Split each chunk into sentences."""
+        """Split each chunk into sentences.
+
+        Resets group boundaries — each sentence becomes its own group,
+        so subsequent ``merge()`` will not combine across sentences.
+        """
         result: list[str] = []
         for chunk in self._chunks:
             result.extend(self._ops.split_sentences(chunk))
-        return self._with_chunks(result)
+        # Each sentence is its own group
+        return self._with_chunks(result, [1] * len(result))
 
     def clauses(self) -> SegmentBuilder:
-        """Split each chunk into clauses (sentence-aware)."""
+        """Split each chunk into clauses (sentence-aware).
+
+        Preserves group boundaries — clauses split within each group.
+        """
         result: list[str] = []
-        for chunk in self._chunks:
-            result.extend(self._ops.split_clauses(chunk))
-        return self._with_chunks(result)
+        new_groups: list[int] = []
+        idx = 0
+        for g_size in self._groups:
+            group_chunks = self._chunks[idx:idx + g_size]
+            idx += g_size
+            sub: list[str] = []
+            for chunk in group_chunks:
+                sub.extend(self._ops.split_clauses(chunk))
+            result.extend(sub)
+            new_groups.append(len(sub))
+        return self._with_chunks(result, new_groups)
 
     def by_length(self, max_length: int) -> SegmentBuilder:
-        """Split each chunk by length."""
+        """Split each chunk by length.
+
+        Preserves group boundaries — length splits within each group.
+        """
         result: list[str] = []
-        for chunk in self._chunks:
-            result.extend(self._ops.split_by_length(chunk, max_length))
-        return self._with_chunks(result)
+        new_groups: list[int] = []
+        idx = 0
+        for g_size in self._groups:
+            group_chunks = self._chunks[idx:idx + g_size]
+            idx += g_size
+            sub: list[str] = []
+            for chunk in group_chunks:
+                sub.extend(self._ops.split_by_length(chunk, max_length))
+            result.extend(sub)
+            new_groups.append(len(sub))
+        return self._with_chunks(result, new_groups)
 
     def merge(self, max_length: int) -> SegmentBuilder:
-        """Greedily merge adjacent chunks to minimise segment count.
+        """Greedily merge adjacent chunks **within each group**.
 
-        Iterates through chunks left-to-right.  Each chunk is appended
-        to the current accumulator; if adding it would exceed *max_length*,
-        the accumulator is flushed and a new one starts.  Uses
-        ``ops.length()`` for measurement so CJK width rules apply.
+        Iterates through chunks left-to-right inside every group.
+        Each chunk is appended to the current accumulator; if adding
+        it would exceed *max_length*, the accumulator is flushed and
+        a new one starts.  Uses ``ops.length()`` for measurement so
+        CJK width rules apply.
+
+        Group boundaries (set by ``sentences()``) are never crossed,
+        so sentences stay separate even if they would fit together.
         """
         if not self._chunks:
             return self._with_chunks([])
 
         sep = "" if self._ops.is_cjk else " "
         merged: list[str] = []
-        current_parts: list[str] = []
-        current_text = ""
+        new_groups: list[int] = []
+        idx = 0
 
-        for chunk in self._chunks:
-            candidate = (current_text + sep + chunk) if current_parts else chunk
-            if current_parts and self._ops.length(candidate) > max_length:
-                merged.append(current_text)
-                current_parts = [chunk]
-                current_text = chunk
-            else:
-                current_parts.append(chunk)
-                current_text = candidate
+        for g_size in self._groups:
+            group_chunks = self._chunks[idx:idx + g_size]
+            idx += g_size
 
-        if current_parts:
-            merged.append(current_text)
+            group_merged: list[str] = []
+            current_parts: list[str] = []
+            current_text = ""
 
-        return self._with_chunks(merged)
+            for chunk in group_chunks:
+                if current_parts:
+                    # Don't add separator if chunk already has leading space
+                    if sep and chunk.startswith(sep):
+                        candidate = current_text + chunk
+                    else:
+                        candidate = current_text + sep + chunk
+                else:
+                    candidate = chunk
+                if current_parts and self._ops.length(candidate) > max_length:
+                    group_merged.append(current_text)
+                    current_parts = [chunk]
+                    current_text = chunk
+                else:
+                    current_parts.append(chunk)
+                    current_text = candidate
+
+            if current_parts:
+                group_merged.append(current_text)
+
+            merged.extend(group_merged)
+            new_groups.append(len(group_merged))
+
+        return self._with_chunks(merged, new_groups)
 
     # ---- output ------------------------------------------------------
 

@@ -340,14 +340,16 @@ class TestEnglishMerge:
         ]
 
     def test_merge_all_fit_single(self) -> None:
-        """When max_length fits everything, merge into one segment."""
+        """When max_length fits everything but sentences() was called,
+        merge only combines within each sentence group."""
         result = (SegmentBuilder(_short_segments(), _ops)
                   .sentences()
                   .merge(100)
                   .build())
-        assert len(result) == 1
-        assert "Hello world." in result[0].text
-        assert "How are you?" in result[0].text
+        # Two sentences → two groups → merge won't cross
+        assert len(result) == 2
+        assert result[0].text == "Hello world."
+        assert result[1].text == " How are you?"
 
     def test_merge_nothing_fits(self) -> None:
         """When max_length is smaller than each chunk, no merging occurs."""
@@ -364,10 +366,12 @@ class TestEnglishMerge:
                   .sentences()
                   .merge(100)
                   .build())
-        assert len(result) == 1
+        # Two sentence groups → still 2 segments
+        assert len(result) == 2
         assert result[0].start == 0.0
-        assert result[0].end == 5.0
-        assert len(result[0].words) == 5  # all words from both segments
+        assert result[0].end == 2.0
+        assert result[1].start == 2.5
+        assert result[1].end == 5.0
 
     def test_merge_chain_full(self) -> None:
         """Full chain: sentences → clauses → by_length → merge."""
@@ -379,6 +383,32 @@ class TestEnglishMerge:
                   .build())
         for seg in result:
             assert _ops.length(seg.text.strip()) <= 40 or len(_ops.split(seg.text.strip())) == 1
+
+    def test_merge_respects_sentence_boundaries(self) -> None:
+        """Merge does not combine chunks across sentence groups."""
+        # sentences() → 5 sentences, clauses() splits further
+        builder = (SegmentBuilder(_asr_interview_segments(), _ops)
+                   .sentences().clauses())
+        clause_texts = [s.text for s in builder.build()]
+
+        # merge(200) — huge limit that would combine everything if ungrouped
+        merged = builder.merge(200).build()
+        merged_texts = [s.text for s in merged]
+
+        # Each sentence should be recombined into exactly one segment
+        # (merge within sentence, not across)
+        sentence_texts = [s.text for s in
+            SegmentBuilder(_asr_interview_segments(), _ops).sentences().build()]
+        assert merged_texts == sentence_texts
+
+    def test_merge_without_sentences_can_cross(self) -> None:
+        """Without sentences(), merge is free to combine all chunks."""
+        result = (SegmentBuilder(_short_segments(), _ops)
+                  .by_length(5)
+                  .merge(100)
+                  .build())
+        # No sentence boundary → everything in one group → merges to 1
+        assert len(result) == 1
 
 
 # ---------------------------------------------------------------------------

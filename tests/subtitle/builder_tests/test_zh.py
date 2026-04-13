@@ -418,10 +418,13 @@ class TestChineseMerge:
         ]
 
     def test_merge_all_fit(self) -> None:
+        """With sentences(), merge only combines within each sentence."""
         result = (SegmentBuilder(_short_segments(), _ops)
                   .sentences().merge(100).build())
-        assert len(result) == 1
-        assert result[0].text == "你好世界。今天天气不错！"
+        # Two sentences → two groups → stays 2
+        assert len(result) == 2
+        assert result[0].text == "你好世界。"
+        assert result[1].text == "今天天气不错！"
 
     def test_merge_nothing_fits(self) -> None:
         result = (SegmentBuilder(_short_segments(), _ops)
@@ -431,10 +434,11 @@ class TestChineseMerge:
     def test_merge_words_timing(self) -> None:
         result = (SegmentBuilder(_short_segments(), _ops)
                   .sentences().merge(100).build())
-        assert len(result) == 1
+        assert len(result) == 2
         assert result[0].start == 0.0
-        assert result[0].end == 5.0
-        assert len(result[0].words) == 12  # all words from both segments
+        assert result[0].end == 2.0
+        assert result[1].start == 2.0
+        assert result[1].end == 5.0
 
     def test_merge_chain_full(self) -> None:
         """Full chain: sentences → clauses → by_length → merge."""
@@ -445,6 +449,14 @@ class TestChineseMerge:
         merged_text = "".join(s.text for s in result)
         original_text = "".join(s.text for s in _asr_news_segments())
         assert merged_text == original_text
+
+    def test_merge_respects_sentence_boundaries(self) -> None:
+        """Merge does not cross sentence groups."""
+        builder = SegmentBuilder(_asr_news_segments(), _ops).sentences().clauses()
+        merged = builder.merge(200).build()
+        sentence_texts = [s.text for s in
+            SegmentBuilder(_asr_news_segments(), _ops).sentences().build()]
+        assert [s.text for s in merged] == sentence_texts
 
 
 # ---------------------------------------------------------------------------
