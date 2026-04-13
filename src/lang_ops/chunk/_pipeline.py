@@ -1,4 +1,4 @@
-"""ChunkPipeline — immutable, chainable text splitting.
+"""ChunkPipeline — immutable, chainable text chunking.
 
 Fully token-based: tokenizes once at init, all operations work on
 the token array.  No redundant re-tokenization across chained calls.
@@ -9,15 +9,16 @@ from __future__ import annotations
 from lang_ops import LangOps
 from lang_ops._core._base_ops import _BaseOps
 
-from lang_ops.splitter._boundary import find_boundaries, split_tokens_by_boundaries
-from lang_ops.splitter._length import split_tokens_by_length
+from lang_ops.chunk._boundary import find_boundaries, split_tokens_by_boundaries
+from lang_ops.chunk._length import split_tokens_by_length
+from lang_ops.chunk._merge import merge_token_groups
 
 
 class ChunkPipeline:
-    """Immutable pipeline for multi-granularity text splitting.
+    """Immutable pipeline for multi-granularity text chunking.
 
-    Stores a token array and groups.  Each operation subdivides groups
-    and returns a new pipeline instance.
+    Stores a token array and groups.  Each operation subdivides (or
+    merges) groups and returns a new pipeline instance.
     """
 
     __slots__ = ("_ops", "_groups")
@@ -74,6 +75,12 @@ class ChunkPipeline:
         for group in self._groups:
             result.extend(split_tokens_by_length(group, self._ops, max_length))
         return self._with_groups(result)
+
+    def merge(self, max_length: int) -> ChunkPipeline:
+        """Greedily merge adjacent groups whose combined length ≤ *max_length*."""
+        return self._with_groups(
+            merge_token_groups(self._groups, self._ops, max_length)
+        )
 
     def result(self) -> list[str]:
         """Return the current list of text fragments."""

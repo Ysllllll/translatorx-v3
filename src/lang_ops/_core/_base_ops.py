@@ -106,7 +106,7 @@ class _BaseOps(ABC):
 
     def split_sentences(self, text: str) -> list[str]:
         """Split text into sentences (token-based)."""
-        from lang_ops.splitter._boundary import find_boundaries, split_tokens_by_boundaries
+        from lang_ops.chunk._boundary import find_boundaries, split_tokens_by_boundaries
         tokens = self.split(text)
         if not tokens:
             return []
@@ -116,7 +116,7 @@ class _BaseOps(ABC):
 
     def split_clauses(self, text: str) -> list[str]:
         """Split text into clauses (sentence boundaries included, token-based)."""
-        from lang_ops.splitter._boundary import find_boundaries, split_tokens_by_boundaries
+        from lang_ops.chunk._boundary import find_boundaries, split_tokens_by_boundaries
         tokens = self.split(text)
         if not tokens:
             return []
@@ -128,14 +128,19 @@ class _BaseOps(ABC):
 
     def split_by_length(self, text: str, max_length: int) -> list[str]:
         """Split text into chunks whose length ≤ *max_length* (token-based)."""
-        from lang_ops.splitter._length import split_tokens_by_length
+        from lang_ops.chunk._length import split_tokens_by_length
         tokens = self.split(text)
         if not tokens:
             return []
         groups = split_tokens_by_length(tokens, self, max_length)
         return [self.join(g) for g in groups]
 
+    def merge_by_length(self, chunks: list[str], max_length: int) -> list[str]:
+        """Greedily merge adjacent chunks whose combined length ≤ *max_length*."""
+        from lang_ops.chunk._merge import merge_chunks_by_length
+        return merge_chunks_by_length(chunks, self, max_length)
+
     def chunk(self, text: str) -> "ChunkPipeline":
-        """Create a ChunkPipeline for chainable splitting."""
-        from lang_ops.splitter._pipeline import ChunkPipeline
+        """Create a ChunkPipeline for chainable chunking."""
+        from lang_ops.chunk._pipeline import ChunkPipeline
         return ChunkPipeline(text, ops=self)

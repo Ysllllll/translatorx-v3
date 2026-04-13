@@ -219,10 +219,11 @@ class SegmentBuilder:
         Group boundaries (set by ``sentences()``) are never crossed,
         so sentences stay separate even if they would fit together.
         """
+        from lang_ops.chunk._merge import merge_chunks_by_length
+
         if not self._chunks:
             return self._with_chunks([])
 
-        sep = "" if self._ops.is_cjk else " "
         merged: list[str] = []
         new_groups: list[int] = []
         idx = 0
@@ -231,30 +232,9 @@ class SegmentBuilder:
             group_chunks = self._chunks[idx:idx + g_size]
             idx += g_size
 
-            group_merged: list[str] = []
-            current_parts: list[str] = []
-            current_text = ""
-
-            for chunk in group_chunks:
-                if current_parts:
-                    # Don't add separator if chunk already has leading space
-                    if sep and chunk.startswith(sep):
-                        candidate = current_text + chunk
-                    else:
-                        candidate = current_text + sep + chunk
-                else:
-                    candidate = chunk
-                if current_parts and self._ops.length(candidate) > max_length:
-                    group_merged.append(current_text)
-                    current_parts = [chunk]
-                    current_text = chunk
-                else:
-                    current_parts.append(chunk)
-                    current_text = candidate
-
-            if current_parts:
-                group_merged.append(current_text)
-
+            group_merged = merge_chunks_by_length(
+                group_chunks, self._ops, max_length,
+            )
             merged.extend(group_merged)
             new_groups.append(len(group_merged))
 

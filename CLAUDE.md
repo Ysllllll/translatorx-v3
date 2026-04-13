@@ -10,7 +10,7 @@ pytest tests/ -v
 
 # Run a single test file
 pytest tests/lang_ops_tests/test_chinese.py -v
-pytest tests/lang_ops_tests/splitter/test_en.py -v
+pytest tests/lang_ops_tests/chunk/test_en.py -v
 pytest tests/subtitle/builder_tests/test_en.py -v
 
 # Run via the venv explicitly (if pytest not on PATH)
@@ -41,10 +41,11 @@ src/
 │   │   ├── _chars.py                # Unicode classification + punctuation frozensets
 │   │   ├── _normalize.py            # Language code normalization
 │   │   └── _availability.py         # Optional dependency guards (jieba/mecab/kiwi)
-│   └── splitter/
+│   └── chunk/
 │       ├── _pipeline.py             # ChunkPipeline (immutable, chainable)
 │       ├── _boundary.py             # Token-based boundary detection (sentences + clauses)
-│       └── _length.py               # Length-based splitter (uses Protocol for decoupling)
+│       ├── _length.py               # Length-based splitting (uses Protocol for decoupling)
+│       └── _merge.py                # Length-based merging (inverse of splitting)
 └── subtitle/                        # Subtitle data structures + word timing + segment building
     ├── __init__.py                  # Exports Word, Segment, SentenceRecord, SegmentBuilder, etc.
     ├── _types.py                    # Frozen dataclasses (Word, Segment, SentenceRecord)
@@ -66,7 +67,7 @@ src/
 
 **Immutability:** `ChunkPipeline` and `SegmentBuilder` return new instances per step. All `subtitle` dataclasses use `frozen=True`. `words.py` and `builder.py` use `dataclasses.replace()` instead of mutation.
 
-**Protocol decoupling:** `_length.py` defines `_HasSplitJoin` Protocol instead of importing `_BaseOps`, keeping the splitter independent from the ops layer.
+**Protocol decoupling:** `_length.py` and `_merge.py` define Protocol types instead of importing `_BaseOps`, keeping the chunk package independent from the ops layer.
 
 **Token-based boundary detection:** `_boundary.py` unifies sentence and clause splitting via `find_boundaries()` / `split_tokens_by_boundaries()`. Sentence splitting uses token-level boundary markers (terminators, abbreviations, ellipsis guards). Clause splitting (`split_clauses`) is sentence-aware — it splits at clause separators and sentence boundaries in one pass.
 
@@ -86,13 +87,13 @@ lang_ops                              ←  subtitle
 
 ```
 tests/
-├── lang_ops_tests/              # Token + splitter tests
+├── lang_ops_tests/              # Token + chunk tests
 │   ├── _base.py                 # TextOpsTestCase — shared assertion helpers
 │   ├── conftest.py              # Font path resolution, pixel length fixture
 │   ├── test_{language}.py       # Per-language token-level tests (10 files)
-│   ├── splitter/
+│   ├── chunk/
 │   │   ├── _base.py             # SplitterTestBase — reconstruction assertions
-│   │   └── test_{lang}.py       # Per-language splitter tests
+│   │   └── test_{lang}.py       # Per-language chunk tests
 │   └── _core/
 │       ├── test_mechanism.py    # Factory tests
 │       └── test_normalize.py    # Language code normalization
@@ -135,6 +136,7 @@ ops.restore_punc(text_a, text_b)
 ops.split_sentences(text) → list[str]
 ops.split_clauses(text)   → list[str]   # sentence-aware (splits at sentence boundaries too)
 ops.split_by_length(text, max_length) → list[str]
+ops.merge_by_length(chunks, max_length) → list[str]  # greedy merge (inverse of split)
 ops.chunk(text) → ChunkPipeline
 ```
 
@@ -145,6 +147,7 @@ ops.chunk(text)
   .sentences()
   .clauses()            # sentence-aware
   .by_length(50)        # token-boundary aware, uses ops.length()
+  .merge(80)            # greedy merge adjacent chunks
   .result()             → list[str]
   .segments(words)      → list[Segment]   # deferred import from subtitle.words
 ```
