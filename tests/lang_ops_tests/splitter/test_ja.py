@@ -1,6 +1,6 @@
 """Japanese (ja) splitter tests."""
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
@@ -8,7 +8,7 @@ TEXT_SAMPLE: str = '日本の伝統文化と現代テクノロジーは、一見
 
 PARAGRAPH_TEXT: str = '日本の伝統文化と現代テクノロジーは密接な関係にある。\n\n新しい表現方法が注目を集めている。\n\n伝統を守ることが大切だ。'
 
-_ops = TextOps.for_language("ja")
+_ops = LangOps.for_language("ja")
 
 
 class TestJapaneseSplitter(SplitterTestBase):

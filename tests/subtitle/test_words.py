@@ -283,8 +283,8 @@ class TestAlignSegments:
 class TestPipelineSegments:
     def test_sentences_segments(self):
         """Pipeline .sentences().segments(words) end-to-end."""
-        from lang_ops import TextOps
-        ops = TextOps.for_language("en")
+        from lang_ops import LangOps
+        ops = LangOps.for_language("en")
         words = [
             Word("Hello", 0.0, 0.5),
             Word("world.", 0.6, 1.0),
@@ -304,8 +304,8 @@ class TestPipelineSegments:
 
     def test_clauses_segments(self):
         """Pipeline .clauses().segments(words) end-to-end."""
-        from lang_ops import TextOps
-        ops = TextOps.for_language("en")
+        from lang_ops import LangOps
+        ops = LangOps.for_language("en")
         words = [
             Word("Well,", 0.0, 0.5),
             Word("hello", 0.6, 1.0),

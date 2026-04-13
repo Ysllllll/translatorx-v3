@@ -3,8 +3,8 @@ import unittest
 from .conftest import TEST_FONT_PATH, expected_pixel_length
 
 
-class TextOpsTestCase(unittest.TestCase):
-    """Base class for per-language TextOps tests.
+class LangOpsTestCase(unittest.TestCase):
+    """Base class for per-language LangOps tests.
 
     Organization:
     - Roundtrip helpers: split/join/length/plength roundtrip testing

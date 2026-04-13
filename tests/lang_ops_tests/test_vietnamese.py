@@ -1,11 +1,11 @@
-from lang_ops import TextOps
+from lang_ops import LangOps
 
-from tests.lang_ops_tests._base import TextOpsTestCase
+from tests.lang_ops_tests._base import LangOpsTestCase
 
 
-class VietnameseTextTest(TextOpsTestCase):
+class VietnameseTextTest(LangOpsTestCase):
     def setUp(self) -> None:
-        self.ops = TextOps.for_language("vi")
+        self.ops = LangOps.for_language("vi")
         return super().setUp()
 
     # -- split, length and join --

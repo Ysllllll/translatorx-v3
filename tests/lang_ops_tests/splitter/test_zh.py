@@ -1,6 +1,6 @@
 """Chinese (zh) splitter tests."""
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
@@ -8,7 +8,7 @@ TEXT_SAMPLE: str = '近年来，人工智能技术在中国蓬勃发展：从语
 
 PARAGRAPH_TEXT: str = '近年来，人工智能技术在中国蓬勃发展：从语音识别到自动驾驶、从智能制造到智慧城市，各个领域都取得了令人瞩目的进步。\n\n专家们普遍认为，这一趋势将在未来十年持续加速；然而，也有不少学者对此表达了深切的担忧。\n\n《未来科技》杂志最近刊登了一篇深度报道，标题是"人工智能的利与弊"，引发了学术界和产业界的广泛讨论。'
 
-_ops = TextOps.for_language("zh")
+_ops = LangOps.for_language("zh")
 
 
 

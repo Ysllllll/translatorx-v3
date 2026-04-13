@@ -6,7 +6,7 @@ the token array.  No redundant re-tokenization across chained calls.
 
 from __future__ import annotations
 
-from lang_ops import TextOps
+from lang_ops import LangOps
 from lang_ops._core._base_ops import _BaseOps
 
 from lang_ops.splitter._paragraph import split_paragraphs
@@ -27,7 +27,7 @@ class ChunkPipeline:
         if ops is not None:
             self._ops = ops
         elif language is not None:
-            self._ops = TextOps.for_language(language)
+            self._ops = LangOps.for_language(language)
         else:
             raise TypeError("ChunkPipeline requires either language or ops")
 

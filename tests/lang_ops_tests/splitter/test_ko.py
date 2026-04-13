@@ -1,6 +1,6 @@
 """Korean (ko) splitter tests."""
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
@@ -8,7 +8,7 @@ TEXT_SAMPLE: str = '한국의 대중문화는 최근 수십 년간 전 세계적
 
 PARAGRAPH_TEXT: str = '한국의 대중문화가 세계적으로 성장했다.\n\nK-pop은 전 세계적인 팬덤을 형성했다.\n\n전통과 현대의 조화가 중요하다.'
 
-_ops = TextOps.for_language("ko")
+_ops = LangOps.for_language("ko")
 
 
 class TestKoreanSplitter(SplitterTestBase):
@@ -22,7 +22,7 @@ class TestKoreanSplitter(SplitterTestBase):
     # hold with any single separator.
 
     def test_sentence_reconstruction(self) -> None:
-        ops = TextOps.for_language(self.LANGUAGE)
+        ops = LangOps.for_language(self.LANGUAGE)
         normalized = ops.join(ops.split(self.TEXT_SAMPLE))
         assert " ".join(self._split_sentences()) == normalized
 

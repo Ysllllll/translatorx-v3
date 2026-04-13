@@ -1,4 +1,4 @@
-"""TextOps factory."""
+"""LangOps factory."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ _EN_TYPE_LANGUAGES = {"en", "ru", "es", "fr", "de", "pt", "vi"}
 _CJK_LANGUAGES = {"zh": ChineseOps, "ja": JapaneseOps, "ko": KoreanOps}
 
 
-class TextOps:
+class LangOps:
     """Factory for language-specific text operations."""
 
     @staticmethod
@@ -30,4 +30,3 @@ class TextOps:
         if cls is not None:
             return cls()
         raise ValueError(f"Unsupported language: {code!r}")
-

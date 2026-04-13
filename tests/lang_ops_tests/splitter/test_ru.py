@@ -1,6 +1,6 @@
 """Russian (ru) splitter tests."""
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
@@ -8,7 +8,7 @@ TEXT_SAMPLE: str = 'Доктор Иванов живёт на ул. Пушкин
 
 PARAGRAPH_TEXT: str = 'Первый абзац. Два предложения.\n\nВторой абзац. С тремя. Короткими фразами.\n\nТретий и последний абзац.'
 
-_ops = TextOps.for_language("ru")
+_ops = LangOps.for_language("ru")
 
 
 class TestRussianSplitter(SplitterTestBase):

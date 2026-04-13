@@ -10,7 +10,7 @@ pytest does *not* try to collect it directly.
 from __future__ import annotations
 
 from subtitle import Segment, Word, SentenceRecord, SegmentBuilder
-from lang_ops import TextOps
+from lang_ops import LangOps
 
 
 # ---------------------------------------------------------------------------
@@ -45,12 +45,12 @@ class BuilderTestBase:
     LANGUAGE: str = ""
 
     # Cached ops — set once per subclass
-    _ops: TextOps | None = None
+    _ops: LangOps | None = None
 
     @classmethod
-    def ops(cls) -> TextOps:
+    def ops(cls) -> LangOps:
         if cls._ops is None:
-            cls._ops = TextOps.for_language(cls.LANGUAGE)
+            cls._ops = LangOps.for_language(cls.LANGUAGE)
         return cls._ops
 
     # ------------------------------------------------------------------

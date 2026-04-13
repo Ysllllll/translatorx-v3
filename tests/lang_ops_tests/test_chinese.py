@@ -1,13 +1,13 @@
-from lang_ops import TextOps, jieba_is_available
+from lang_ops import LangOps, jieba_is_available
 
 from .conftest import TEST_FONT_PATH, expected_pixel_length
-from tests.lang_ops_tests._base import TextOpsTestCase
+from tests.lang_ops_tests._base import LangOpsTestCase
 
 
-class ChineseTextTest(TextOpsTestCase):
+class ChineseTextTest(LangOpsTestCase):
     def setUp(self) -> None:
         self.assertTrue(jieba_is_available())
-        self.ops = TextOps.for_language("zh")
+        self.ops = LangOps.for_language("zh")
         return super().setUp()
 
     def test_chinese(self) -> None:
@@ -66,6 +66,7 @@ class ChineseTextTest(TextOpsTestCase):
         self.assertEqual(o.length("AI 引擎OK", cjk_width=1), 6)
         self.assertEqual(o.length("AI引擎OK", cjk_width=2), 4)
         self.assertEqual(o.length("AI 引擎 OK", cjk_width=2), 4)
+        self.assertEqual(o.length("AI 引擎   OK", cjk_width=2), 4)
 
         # join()
         self.assertEqual(o.join(['你好', '世界']), '你好世界')

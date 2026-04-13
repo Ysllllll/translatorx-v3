@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import pytest
 from subtitle import Segment, Word, SentenceRecord, SegmentBuilder
-from lang_ops import TextOps
+from lang_ops import LangOps
 from ._base import BuilderTestBase, W, S
 
 
-_ops = TextOps.for_language("en")
+_ops = LangOps.for_language("en")
 
 
 # ---------------------------------------------------------------------------

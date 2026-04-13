@@ -1,6 +1,6 @@
 """Vietnamese (vi) splitter tests."""
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
@@ -8,7 +8,7 @@ TEXT_SAMPLE: str = 'GS. Nguyễn và TS. Trần làm việc tại TP. Hà Nội.
 
 PARAGRAPH_TEXT: str = 'Đoạn đầu tiên. Hai câu.\n\nĐoạn thứ hai. Với ba. Câu ngắn.\n\nĐoạn thứ ba và cuối cùng.'
 
-_ops = TextOps.for_language("vi")
+_ops = LangOps.for_language("vi")
 
 
 class TestVietnameseSplitter(SplitterTestBase):

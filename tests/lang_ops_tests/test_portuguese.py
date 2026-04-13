@@ -1,11 +1,11 @@
-from lang_ops import TextOps
+from lang_ops import LangOps
 
-from tests.lang_ops_tests._base import TextOpsTestCase
+from tests.lang_ops_tests._base import LangOpsTestCase
 
 
-class PortugueseTextTest(TextOpsTestCase):
+class PortugueseTextTest(LangOpsTestCase):
     def setUp(self) -> None:
-        self.ops = TextOps.for_language("pt")
+        self.ops = LangOps.for_language("pt")
         return super().setUp()
 
     def test_portuguese(self) -> None:

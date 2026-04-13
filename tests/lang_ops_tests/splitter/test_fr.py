@@ -1,6 +1,6 @@
 """French (fr) splitter tests."""
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
@@ -8,7 +8,7 @@ TEXT_SAMPLE: str = "Mme. Dupont habite au 15 av. des Champs-Élysées à Paris. 
 
 PARAGRAPH_TEXT: str = 'Premier paragraphe. Deux phrases.\n\nDeuxième paragraphe. Avec trois. Phrases courtes.\n\nTroisième et dernier paragraphe.'
 
-_ops = TextOps.for_language("fr")
+_ops = LangOps.for_language("fr")
 
 
 class TestFrenchSplitter(SplitterTestBase):

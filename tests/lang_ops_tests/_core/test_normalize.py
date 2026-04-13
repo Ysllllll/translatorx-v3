@@ -2,10 +2,10 @@ import unittest
 
 from lang_ops import normalize_language
 
-from .._base import TextOpsTestCase
+from .._base import LangOpsTestCase
 
 
-class NormalizeLanguageTest(TextOpsTestCase):
+class NormalizeLanguageTest(LangOpsTestCase):
     def test_normalize_aliases(self) -> None:
         cases = {
             "zh": ["zh", "ZH", " chinese ", "CN", "中文", "汉语"],

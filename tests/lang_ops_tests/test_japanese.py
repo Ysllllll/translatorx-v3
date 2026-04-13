@@ -1,13 +1,13 @@
-from lang_ops import TextOps, mecab_is_available
+from lang_ops import LangOps, mecab_is_available
 
 from .conftest import TEST_FONT_PATH, expected_pixel_length
-from tests.lang_ops_tests._base import TextOpsTestCase
+from tests.lang_ops_tests._base import LangOpsTestCase
 
 
-class JapaneseTextTest(TextOpsTestCase):
+class JapaneseTextTest(LangOpsTestCase):
     def setUp(self) -> None:
         self.assertTrue(mecab_is_available())
-        self.ops = TextOps.for_language("ja")
+        self.ops = LangOps.for_language("ja")
         return super().setUp()
 
     def test_japanese(self) -> None:

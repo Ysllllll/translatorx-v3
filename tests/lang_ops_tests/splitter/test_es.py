@@ -1,6 +1,6 @@
 """Spanish (es) splitter tests."""
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
@@ -8,7 +8,7 @@ TEXT_SAMPLE: str = 'Dra. García y la Sra. López caminan por la av. Reforma en 
 
 PARAGRAPH_TEXT: str = 'Primer párrafo. Dos frases.\n\nSegundo párrafo. Con tres. Frases cortas.\n\nTercer y último párrafo.'
 
-_ops = TextOps.for_language("es")
+_ops = LangOps.for_language("es")
 
 
 class TestSpanishSplitter(SplitterTestBase):

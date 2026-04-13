@@ -7,11 +7,11 @@ punctuation as separate tokens, sentences split across segment boundaries.
 from __future__ import annotations
 
 from subtitle import Segment, SegmentBuilder
-from lang_ops import TextOps
+from lang_ops import LangOps
 from ._base import BuilderTestBase, S, W
 
 
-_ops = TextOps.for_language("zh")
+_ops = LangOps.for_language("zh")
 
 
 # ---------------------------------------------------------------------------

@@ -1,13 +1,13 @@
-from lang_ops import TextOps,  kiwi_is_available
+from lang_ops import LangOps,  kiwi_is_available
 
 from .conftest import TEST_FONT_PATH, expected_pixel_length
-from tests.lang_ops_tests._base import TextOpsTestCase
+from tests.lang_ops_tests._base import LangOpsTestCase
 
 
-class KoreanTextTest(TextOpsTestCase):
+class KoreanTextTest(LangOpsTestCase):
     def setUp(self) -> None:
         self.assertTrue(kiwi_is_available())
-        self.ops = TextOps.for_language("ko")
+        self.ops = LangOps.for_language("ko")
         return super().setUp()
 
     def test_korean(self) -> None:

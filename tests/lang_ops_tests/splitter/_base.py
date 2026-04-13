@@ -9,7 +9,7 @@ pytest does *not* try to collect it directly.
 
 from __future__ import annotations
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 
 
 class SplitterTestBase:
@@ -33,7 +33,7 @@ class SplitterTestBase:
 
     def test_sentence_reconstruction(self) -> None:
         """Joining split sentences must reconstruct the normalized text."""
-        ops = TextOps.for_language(self.LANGUAGE)
+        ops = LangOps.for_language(self.LANGUAGE)
         normalized = ops.join(ops.split(self.TEXT_SAMPLE))
         # strip_spaces: True for zh/ja (no inter-sentence spaces), False for ko/en-type
         sep = "" if ops.strip_spaces else " "
@@ -41,7 +41,7 @@ class SplitterTestBase:
 
     def test_clause_reconstruction(self) -> None:
         """Joining split clauses must reconstruct the normalized text."""
-        ops = TextOps.for_language(self.LANGUAGE)
+        ops = LangOps.for_language(self.LANGUAGE)
         normalized = ops.join(ops.split(self.TEXT_SAMPLE))
         sep = "" if ops.strip_spaces else " "
         assert sep.join(self._split_clauses()) == normalized
@@ -51,11 +51,11 @@ class SplitterTestBase:
     # ------------------------------------------------------------------
 
     def _split_sentences(self) -> list[str]:
-        ops = TextOps.for_language(self.LANGUAGE)
+        ops = LangOps.for_language(self.LANGUAGE)
         return ops.split_sentences(self.TEXT_SAMPLE)
 
     def _split_clauses(self) -> list[str]:
-        ops = TextOps.for_language(self.LANGUAGE)
+        ops = LangOps.for_language(self.LANGUAGE)
         return ops.split_clauses(self.TEXT_SAMPLE)
 
     def _pipeline_sentences_clauses(self) -> list[str]:

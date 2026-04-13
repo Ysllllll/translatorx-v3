@@ -1,6 +1,6 @@
 """German (de) splitter tests."""
 
-from lang_ops import TextOps, ChunkPipeline
+from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
@@ -8,7 +8,7 @@ TEXT_SAMPLE: str = 'Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.
 
 PARAGRAPH_TEXT: str = 'Erster Absatz. Zwei Sätze.\n\nZweiter Absatz. Mit drei. Kurzen Sätzen.\n\nDritter und letzter Absatz.'
 
-_ops = TextOps.for_language("de")
+_ops = LangOps.for_language("de")
 
 
 class TestGermanSplitter(SplitterTestBase):
