@@ -6,10 +6,9 @@ punctuation as separate tokens, sentences split across segment boundaries.
 
 from __future__ import annotations
 
-import pytest
-from subtitle import Segment, Word, SentenceRecord, SegmentBuilder
+from subtitle import Segment, SegmentBuilder
 from lang_ops import TextOps
-from ._base import BuilderTestBase, W, S
+from ._base import BuilderTestBase, S, W
 
 
 _ops = TextOps.for_language("zh")
@@ -222,10 +221,8 @@ class TestChineseBuilder(BuilderTestBase):
 class TestChineseJoin:
 
     def test_segments_joined_without_spaces(self) -> None:
-        """CJK segments are joined with empty string, not spaces."""
         result = SegmentBuilder(_short_segments(), _ops).build()
-        expected = ["你好世界。今天天气不错！"]
-        assert [s.text for s in result] == expected
+        assert [s.text for s in result] == ["你好世界。今天天气不错！"]
 
     def test_three_segments_joined(self) -> None:
         segments = [
@@ -234,8 +231,7 @@ class TestChineseJoin:
             S("再见", 2.0, 3.0, words=[W("再", 2.0, 2.5), W("见", 2.5, 3.0)]),
         ]
         result = SegmentBuilder(segments, _ops).build()
-        expected = ["你好世界再见"]
-        assert [s.text for s in result] == expected
+        assert [s.text for s in result] == ["你好世界再见"]
 
 
 # ---------------------------------------------------------------------------
@@ -246,17 +242,15 @@ class TestChineseSentences:
 
     def test_two_sentences(self) -> None:
         result = SegmentBuilder(_short_segments(), _ops).sentences().build()
-        expected = ["你好世界。", "今天天气不错！"]
-        assert [s.text for s in result] == expected
+        assert [s.text for s in result] == ["你好世界。", "今天天气不错！"]
 
     def test_sentences_across_boundaries(self) -> None:
         result = SegmentBuilder(_asr_news_segments(), _ops).sentences().build()
-        expected = [
+        assert [s.text for s in result] == [
             "近年来，人工智能技术蓬勃发展。",
             "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。",
             "我们需要审慎评估新技术的风险。",
         ]
-        assert [s.text for s in result] == expected
 
     def test_sentence_timing(self) -> None:
         result = SegmentBuilder(_asr_news_segments(), _ops).sentences().build()
@@ -266,24 +260,16 @@ class TestChineseSentences:
         assert result[-1].end == 18.0
 
     def test_char_level_words_preserved(self) -> None:
-        """Single-character ASR words are correctly distributed."""
         result = SegmentBuilder(_short_segments(), _ops).sentences().build()
-        # "你好世界。" → 5 words (你/好/世/界/。)
-        expected_words = ["你", "好", "世", "界", "。"]
-        actual_words = [w.word for w in result[0].words]
-        assert actual_words == expected_words
+        assert [w.word for w in result[0].words] == ["你", "好", "世", "界", "。"]
 
     def test_abnormal_punctuation_sentences(self) -> None:
-        """Test how sentences are split when multiple punctuations or spaces exist."""
         result = SegmentBuilder(_abnormal_punctuation_segments(), _ops).sentences().build()
-        expected = ["等等！！！", "你确定吗？？？", "这  是  空 格 测试"]
-        assert [s.text for s in result] == expected
+        assert [s.text for s in result] == ["等等！！！", "你确定吗？？？", "这  是  空 格 测试"]
 
     def test_extreme_short_sentences(self) -> None:
-        """Test sentences with only one character or punctuation."""
         result = SegmentBuilder(_extreme_short_segment(), _ops).sentences().build()
-        expected = ["啊？"]
-        assert [s.text for s in result] == expected
+        assert [s.text for s in result] == ["啊？"]
 
 
 # ---------------------------------------------------------------------------
@@ -294,20 +280,17 @@ class TestChineseClauses:
 
     def test_clause_split(self) -> None:
         result = SegmentBuilder(_clause_rich_segment(), _ops).clauses().build()
-        expected = [
+        assert [s.text for s in result] == [
             "苹果、", "香蕉、", "橘子，",
             "都是水果；",
             "牛奶、", "面包，",
             "都是早餐。",
         ]
-        assert [s.text for s in result] == expected
 
     def test_clause_timing(self) -> None:
         result = SegmentBuilder(_clause_rich_segment(), _ops).clauses().build()
-        # "苹果、" — starts at 0.0 (苹), ends at 0.6 (、)
         assert result[0].start == 0.0
         assert result[0].end == 0.6
-        # "都是早餐。" — starts at 5.7 (都), ends at 10.0 (。)
         assert result[-1].start == 5.7
         assert result[-1].end == 10.0
 
@@ -316,7 +299,7 @@ class TestChineseClauses:
                   .sentences()
                   .clauses()
                   .build())
-        expected = [
+        assert [s.text for s in result] == [
             "近年来，",
             "人工智能技术蓬勃发展。",
             "专家认为，",
@@ -325,7 +308,6 @@ class TestChineseClauses:
             "也有学者表达了担忧。",
             "我们需要审慎评估新技术的风险。",
         ]
-        assert [s.text for s in result] == expected
 
 
 # ---------------------------------------------------------------------------
@@ -334,90 +316,135 @@ class TestChineseClauses:
 
 class TestChineseByLength:
 
-    def test_length_constraint(self) -> None:
+    def test_sentences_then_by_length(self) -> None:
         result = (SegmentBuilder(_asr_news_segments(), _ops)
                   .sentences()
                   .by_length(10)
                   .build())
-        
-        # Verify length constraints manually for clearer intention
-        expected_lengths_valid = []
-        for seg in result:
-            is_valid = _ops.length(seg.text) <= 10 or len(_ops.split(seg.text)) == 1
-            expected_lengths_valid.append(is_valid)
-            
-        assert all(expected_lengths_valid)
+        assert [s.text for s in result] == [
+            "近年来，人工智能技术",
+            "蓬勃发展。",
+            "专家认为，这一趋势将",
+            "持续加速；然而，也有",
+            "学者表达了担忧。",
+            "我们需要审慎评估新",
+            "技术的风险。",
+        ]
 
-    def test_text_preserved(self) -> None:
-        result = (SegmentBuilder(_asr_news_segments(), _ops)
-                  .sentences()
-                  .by_length(10)
-                  .build())
-        
-        expected = "".join(s.text for s in _asr_news_segments())
-        actual = "".join(s.text for s in result)
-        assert actual == expected
-
-    def test_full_chain(self) -> None:
-        """sentences → clauses → by_length."""
+    def test_sentences_then_clauses_then_by_length(self) -> None:
         result = (SegmentBuilder(_asr_news_segments(), _ops)
                   .sentences()
                   .clauses()
                   .by_length(8)
                   .build())
-        
-        expected_lengths_valid = []
-        for seg in result:
-            is_valid = _ops.length(seg.text) <= 8 or len(_ops.split(seg.text)) == 1
-            expected_lengths_valid.append(is_valid)
-            
-        assert all(expected_lengths_valid)
+        assert [s.text for s in result] == [
+            "近年来，",
+            "人工智能技术",
+            "蓬勃发展。",
+            "专家认为，",
+            "这一趋势将持续",
+            "加速；",
+            "然而，",
+            "也有学者表达了",
+            "担忧。",
+            "我们需要审慎评估",
+            "新技术的风险。",
+        ]
 
     def test_short_text_no_split(self) -> None:
         result = SegmentBuilder(_short_segments(), _ops).by_length(50).build()
-        expected = ["你好世界。今天天气不错！"]
-        assert [s.text for s in result] == expected
+        assert [s.text for s in result] == ["你好世界。今天天气不错！"]
 
     def test_mixed_language_split(self) -> None:
-        """Test splitting segments containing both Chinese and English words."""
         result = (SegmentBuilder(_mixed_language_segments(), _ops)
                   .sentences()
                   .by_length(10)
                   .build())
-        
-        expected_lengths_valid = []
-        for seg in result:
-            is_valid = _ops.length(seg.text) <= 10 or len(_ops.split(seg.text)) == 1
-            expected_lengths_valid.append(is_valid)
-            
-        assert all(expected_lengths_valid)
-        
-        actual = "".join(s.text for s in result)
-        # ops.join adds a space between Latin and CJK characters
-        expected = "我正在学习Python 编程。This 是混合测试！"
-        assert actual == expected
+        assert [s.text for s in result] == [
+            "我正在学习",
+            "Python 编程。",
+            "This 是混合测试！",
+        ]
 
     def test_extreme_length_word_fallback(self) -> None:
-        """Test fallback when a single word exceeds the length limit."""
         result = (SegmentBuilder(_extreme_length_segment(), _ops)
                   .sentences()
                   .by_length(15)
                   .build())
-        
-        # The long word "supercalifragilisticexpialidocious" cannot be split by word boundary
-        # It will be hard split by character length if the logic allows, or kept as a single token.
-        expected_lengths_valid = []
+        assert [s.text for s in result] == [
+            "这是一个超级长的英文单词",
+            "supercalifragilisticexpialidocious",
+            "测试",
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Merge (greedy bin-packing)
+# ---------------------------------------------------------------------------
+
+class TestChineseMerge:
+
+    def test_merge_clauses_back(self) -> None:
+        """clauses → merge: small clauses recombined under max_length."""
+        clause_result = (SegmentBuilder(_asr_news_segments(), _ops)
+                         .sentences().clauses().build())
+        merged_result = (SegmentBuilder(_asr_news_segments(), _ops)
+                         .sentences().clauses().merge(15).build())
+        for seg in merged_result:
+            assert _ops.length(seg.text) <= 15, \
+                f"Segment too long: {seg.text!r} ({_ops.length(seg.text)})"
+        assert len(merged_result) <= len(clause_result)
+
+    def test_merge_preserves_text(self) -> None:
+        result = (SegmentBuilder(_asr_news_segments(), _ops)
+                  .sentences().clauses().merge(20).build())
+        merged_text = "".join(s.text for s in result)
+        original_text = "".join(s.text for s in _asr_news_segments())
+        assert merged_text == original_text
+
+    def test_merge_exact_results(self) -> None:
+        """Clause-rich segment → clauses → merge with known output."""
+        # "苹果、香蕉、橘子，都是水果；牛奶、面包，都是早餐。"
+        # clauses → ["苹果、香蕉、橘子，", "都是水果；", "牛奶、面包，", "都是早餐。"]
+        # merge(12): "苹果、香蕉、橘子，" len=9, +"都是水果；"=13>12 → flush
+        #   "都是水果；" len=5, +"牛奶、面包，"=10, +"都是早餐。"=15>12 → flush
+        #   "都是水果；牛奶、面包，" len=10, → try +"都是早餐。"=15>12 → flush
+        result = (SegmentBuilder(_clause_rich_segment(), _ops)
+                  .sentences().clauses().merge(12).build())
+        assert [s.text for s in result] == [
+            "苹果、香蕉、橘子，",
+            "都是水果；牛奶、面包，",
+            "都是早餐。",
+        ]
+
+    def test_merge_all_fit(self) -> None:
+        result = (SegmentBuilder(_short_segments(), _ops)
+                  .sentences().merge(100).build())
+        assert len(result) == 1
+        assert result[0].text == "你好世界。今天天气不错！"
+
+    def test_merge_nothing_fits(self) -> None:
+        result = (SegmentBuilder(_short_segments(), _ops)
+                  .sentences().merge(3).build())
+        assert len(result) == 2
+
+    def test_merge_words_timing(self) -> None:
+        result = (SegmentBuilder(_short_segments(), _ops)
+                  .sentences().merge(100).build())
+        assert len(result) == 1
+        assert result[0].start == 0.0
+        assert result[0].end == 5.0
+        assert len(result[0].words) == 12  # all words from both segments
+
+    def test_merge_chain_full(self) -> None:
+        """Full chain: sentences → clauses → by_length → merge."""
+        result = (SegmentBuilder(_asr_news_segments(), _ops)
+                  .sentences().clauses().by_length(8).merge(15).build())
         for seg in result:
-            is_valid = _ops.length(seg.text) <= 15 or len(_ops.split(seg.text)) == 1
-            expected_lengths_valid.append(is_valid)
-            
-        assert all(expected_lengths_valid)
-            
-        actual = "".join(s.text for s in result)
-        # Because the long English word forms its own chunk, ops.join doesn't insert a space
-        # between it and the adjacent Chinese words during chunking.
-        expected = "".join(s.text for s in _extreme_length_segment())
-        assert actual == expected
+            assert _ops.length(seg.text) <= 15, f"Too long: {seg.text!r}"
+        merged_text = "".join(s.text for s in result)
+        original_text = "".join(s.text for s in _asr_news_segments())
+        assert merged_text == original_text
 
 
 # ---------------------------------------------------------------------------
@@ -436,20 +463,17 @@ class TestChineseRecords:
 
     def test_records_with_max_length(self) -> None:
         records = SegmentBuilder(_asr_news_segments(), _ops).records(max_length=8)
-        for rec in records:
-            for seg in rec.segments:
-                assert _ops.length(seg.text) <= 8 or len(_ops.split(seg.text)) == 1, \
-                    f"Sub-segment too long: {seg.text!r}"
-            # Sub-segments have words
-            for seg in rec.segments:
-                assert len(seg.words) >= 1
-
-    def test_records_sub_segments_cover_sentence(self) -> None:
-        records = SegmentBuilder(_asr_news_segments(), _ops).records(max_length=8)
-        for rec in records:
-            merged = "".join(s.text for s in rec.segments)
-            assert merged == rec.src_text, \
-                f"Sub-segments don't cover sentence: {merged!r} != {rec.src_text!r}"
+        assert [rec.src_text for rec in records] == [
+            "近年来，人工智能技术蓬勃发展。",
+            "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。",
+            "我们需要审慎评估新技术的风险。",
+        ]
+        assert [[seg.text for seg in rec.segments] for rec in records] == [
+            ["近年来，", "人工智能技术", "蓬勃发展。"],
+            ["专家认为，", "这一趋势将持续", "加速；", "然而，", "也有学者表达了", "担忧。"],
+            ["我们需要审慎评估", "新技术的风险。"],
+        ]
+        assert all(len(seg.words) >= 1 for rec in records for seg in rec.segments)
 
 
 # ---------------------------------------------------------------------------
@@ -459,15 +483,10 @@ class TestChineseRecords:
 class TestChineseSpeaker:
 
     def test_speaker_change_creates_boundary(self) -> None:
-        result = (SegmentBuilder(_multi_speaker_segments(), _ops,
-                                 split_by_speaker=True)
+        result = (SegmentBuilder(_multi_speaker_segments(), _ops, split_by_speaker=True)
                   .sentences()
                   .build())
-        texts = [s.text for s in result]
-        # Speaker A: "你觉得怎么样？", Speaker B: "我觉得非常好！",
-        # Speaker A: "真的吗？", Speaker B: "当然是真的。"
-        expected = ["你觉得怎么样？", "我觉得非常好！", "真的吗？", "当然是真的。"]
-        assert texts == expected
+        assert [s.text for s in result] == ["你觉得怎么样？", "我觉得非常好！", "真的吗？", "当然是真的。"]
 
     def test_same_speaker_no_extra_splits(self) -> None:
         segments = [S("你好世界。今天不错！", 0.0, 5.0, words=[
@@ -478,11 +497,11 @@ class TestChineseSpeaker:
             W("不", 2.6, 3.0, speaker="A"), W("错", 3.0, 4.0, speaker="A"),
             W("！", 4.0, 5.0, speaker="A"),
         ])]
-        r_with = SegmentBuilder(segments, _ops, split_by_speaker=True).sentences().build()
-        r_without = SegmentBuilder(segments, _ops).sentences().build()
+        result_with = SegmentBuilder(segments, _ops, split_by_speaker=True).sentences().build()
+        result_without = SegmentBuilder(segments, _ops).sentences().build()
         expected = ["你好世界。", "今天不错！"]
-        assert [s.text for s in r_with] == expected
-        assert [s.text for s in r_without] == expected
+        assert [s.text for s in result_with] == expected
+        assert [s.text for s in result_without] == expected
 
 
 # ---------------------------------------------------------------------------
@@ -497,8 +516,7 @@ class TestChineseAutoFill:
             S("今天天气好。", 2.0, 5.0),
         ]
         result = SegmentBuilder(segments, _ops).sentences().build()
-        expected = ["你好世界。", "今天天气好。"]
-        assert [s.text for s in result] == expected
+        assert [s.text for s in result] == ["你好世界。", "今天天气好。"]
         assert len(result[0].words) >= 1
         assert len(result[1].words) >= 1
 
@@ -515,10 +533,11 @@ class TestChineseStream:
         for seg in _asr_news_segments():
             all_done.extend(stream.feed(seg))
         all_done.extend(stream.flush())
-
-        actual = "".join(s.text for s in all_done)
-        expected = "".join(s.text for s in _asr_news_segments())
-        assert actual == expected
+        assert [s.text for s in all_done] == [
+            "近年来，人工智能技术蓬勃发展。",
+            "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。",
+            "我们需要审慎评估新技术的风险。",
+        ]
 
     def test_stream_flush_empty(self) -> None:
         stream = SegmentBuilder.stream(_ops)
@@ -532,9 +551,7 @@ class TestChineseStream:
             W("世", 0.8, 1.3), W("界", 1.3, 1.8),
             W("。", 1.8, 2.0),
         ]))
-        expected_done = []
-        assert done == expected_done
+        assert done == []
 
         rest = stream.flush()
-        expected_rest = ["你好世界。"]
-        assert [s.text for s in rest] == expected_rest
+        assert [s.text for s in rest] == ["你好世界。"]

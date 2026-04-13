@@ -292,6 +292,96 @@ class TestEnglishByLength:
 
 
 # ---------------------------------------------------------------------------
+# Merge (greedy bin-packing)
+# ---------------------------------------------------------------------------
+
+class TestEnglishMerge:
+
+    def test_merge_clauses_back(self) -> None:
+        """sentences → clauses → merge: small clauses are recombined."""
+        clause_result = (SegmentBuilder(_asr_interview_segments(), _ops)
+                         .sentences().clauses().build())
+        merged_result = (SegmentBuilder(_asr_interview_segments(), _ops)
+                         .sentences().clauses().merge(60).build())
+        # Merge only combines, never splits — so result count ≤ clause count
+        assert len(merged_result) <= len(clause_result)
+        # Text content is preserved
+        merged_words = " ".join(s.text for s in merged_result).split()
+        clause_words = " ".join(s.text for s in clause_result).split()
+        assert merged_words == clause_words
+
+    def test_merge_preserves_text(self) -> None:
+        """Merged text matches original content."""
+        result = (SegmentBuilder(_asr_interview_segments(), _ops)
+                  .sentences()
+                  .clauses()
+                  .merge(80)
+                  .build())
+        result_words = " ".join(s.text for s in result).split()
+        original_words = " ".join(s.text for s in _asr_interview_segments()).split()
+        assert result_words == original_words
+
+    def test_merge_exact_results(self) -> None:
+        """Known input → known output for merge."""
+        segs = [S("one two three four five six seven", 0.0, 7.0, words=[
+            W("one", 0.0, 1.0), W("two", 1.0, 2.0), W("three", 2.0, 3.0),
+            W("four", 3.0, 4.0), W("five", 4.0, 5.0), W("six", 5.0, 6.0),
+            W("seven", 6.0, 7.0),
+        ])]
+        # by_length(8) → ["one two", "three", "four", "five six", "seven"]
+        # merge(12): "one two"(7) +"three"→13>12 flush; "three"(5)+"four"→10≤12;
+        #   "three four"(10)+"five six"→18>12 flush; "five six"(8)+"seven"→14>12 flush
+        result = SegmentBuilder(segs, _ops).by_length(8).merge(12).build()
+        assert [s.text for s in result] == [
+            "one two",
+            "three four",
+            "five six",
+            "seven",
+        ]
+
+    def test_merge_all_fit_single(self) -> None:
+        """When max_length fits everything, merge into one segment."""
+        result = (SegmentBuilder(_short_segments(), _ops)
+                  .sentences()
+                  .merge(100)
+                  .build())
+        assert len(result) == 1
+        assert "Hello world." in result[0].text
+        assert "How are you?" in result[0].text
+
+    def test_merge_nothing_fits(self) -> None:
+        """When max_length is smaller than each chunk, no merging occurs."""
+        result = (SegmentBuilder(_short_segments(), _ops)
+                  .sentences()
+                  .merge(5)
+                  .build())
+        # Each sentence is > 5 chars, so nothing merges
+        assert len(result) == 2
+
+    def test_merge_words_timing(self) -> None:
+        """Merged segments have correct word timing."""
+        result = (SegmentBuilder(_short_segments(), _ops)
+                  .sentences()
+                  .merge(100)
+                  .build())
+        assert len(result) == 1
+        assert result[0].start == 0.0
+        assert result[0].end == 5.0
+        assert len(result[0].words) == 5  # all words from both segments
+
+    def test_merge_chain_full(self) -> None:
+        """Full chain: sentences → clauses → by_length → merge."""
+        result = (SegmentBuilder(_single_long_segment(), _ops)
+                  .sentences()
+                  .clauses()
+                  .by_length(20)
+                  .merge(40)
+                  .build())
+        for seg in result:
+            assert _ops.length(seg.text.strip()) <= 40 or len(_ops.split(seg.text.strip())) == 1
+
+
+# ---------------------------------------------------------------------------
 # Records (SentenceRecord output)
 # ---------------------------------------------------------------------------
 

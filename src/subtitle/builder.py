@@ -7,6 +7,7 @@ Typical usage::
     builder = SegmentBuilder(segments, ops)
     sentences = builder.sentences()                    # sentence-level
     chunks = builder.sentences().by_length(40)         # sentence → length
+    merged = builder.sentences().clauses().merge(60)   # split then merge back
     records = builder.records(max_length=40)           # SentenceRecord wrappers
 
 Stream usage::
@@ -170,6 +171,37 @@ class SegmentBuilder:
         for chunk in self._chunks:
             result.extend(self._ops.split_by_length(chunk, max_length))
         return self._with_chunks(result)
+
+    def merge(self, max_length: int) -> SegmentBuilder:
+        """Greedily merge adjacent chunks to minimise segment count.
+
+        Iterates through chunks left-to-right.  Each chunk is appended
+        to the current accumulator; if adding it would exceed *max_length*,
+        the accumulator is flushed and a new one starts.  Uses
+        ``ops.length()`` for measurement so CJK width rules apply.
+        """
+        if not self._chunks:
+            return self._with_chunks([])
+
+        sep = "" if self._ops.is_cjk else " "
+        merged: list[str] = []
+        current_parts: list[str] = []
+        current_text = ""
+
+        for chunk in self._chunks:
+            candidate = (current_text + sep + chunk) if current_parts else chunk
+            if current_parts and self._ops.length(candidate) > max_length:
+                merged.append(current_text)
+                current_parts = [chunk]
+                current_text = chunk
+            else:
+                current_parts.append(chunk)
+                current_text = candidate
+
+        if current_parts:
+            merged.append(current_text)
+
+        return self._with_chunks(merged)
 
     # ---- output ------------------------------------------------------
 
