@@ -1,4 +1,9 @@
-"""Sentence splitter with language-adapted rules."""
+"""Sentence splitter with language-adapted rules.
+
+.. deprecated::
+    Char-level scanning replaced by token-based ``_boundary.py``.
+    Use ``_BaseOps.split_sentences()`` or ``ChunkPipeline.sentences()`` instead.
+"""
 
 from __future__ import annotations
 

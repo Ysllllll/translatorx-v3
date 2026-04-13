@@ -15,6 +15,49 @@ class _HasSplitJoin(Protocol):
     def length(self, text: str, **kwargs: int) -> int: ...
 
 
+def split_tokens_by_length(
+    tokens: list[str],
+    ops: _HasSplitJoin,
+    max_length: int,
+) -> list[list[str]]:
+    """Split a token array into groups whose joined length ≤ *max_length*.
+
+    Accumulates tokens until ``ops.length(ops.join(chunk))`` would exceed
+    the limit.  A single token exceeding *max_length* is emitted as-is
+    (minimum unit = one token, never break a token).
+
+    Args:
+        tokens: Pre-tokenized array from ``ops.split()``.
+        ops: Language ops providing ``join()`` and ``length()``.
+        max_length: Upper bound on ``ops.length()`` per chunk.
+
+    Returns:
+        List of token groups.
+    """
+    if max_length <= 0:
+        raise ValueError(f"max_length must be positive, got {max_length}")
+
+    if not tokens:
+        return []
+
+    result: list[list[str]] = []
+    chunk: list[str] = []
+
+    for token in tokens:
+        if chunk:
+            joined_len = ops.length(ops.join(chunk + [token]))
+            if joined_len > max_length:
+                result.append(chunk)
+                chunk = []
+
+        chunk.append(token)
+
+    if chunk:
+        result.append(chunk)
+
+    return result
+
+
 def split_by_length(
     text: str,
     ops: _HasSplitJoin,
@@ -22,10 +65,12 @@ def split_by_length(
 ) -> list[Span]:
     """Split *text* into chunks whose ``ops.length()`` ≤ *max_length*.
 
-    Always tokenises with ``ops.split()`` (word mode) and accumulates
-    tokens until the joined length would exceed the limit.  If a single
-    token already exceeds *max_length* it is emitted as-is (the minimum
-    unit is one token — we never break a token to preserve readability).
+    Convenience wrapper that tokenizes *text* first, then delegates to
+    :func:`split_tokens_by_length`.
+
+    .. deprecated::
+        Prefer :func:`split_tokens_by_length` for pipeline use to avoid
+        redundant tokenization.
 
     Returns Span objects with ``start=-1, end=-1`` because tokenise+join
     may alter whitespace, making character offsets unreliable.
@@ -33,26 +78,10 @@ def split_by_length(
     if not text:
         return []
 
-    if max_length <= 0:
-        raise ValueError(f"max_length must be positive, got {max_length}")
-
     tokens = ops.split(text)
     if not tokens:
         return []
 
-    result: list[Span] = []
-    chunk_tokens: list[str] = []
+    groups = split_tokens_by_length(tokens, ops, max_length)
+    return [Span(ops.join(g), -1, -1) for g in groups]
 
-    for token in tokens:
-        if chunk_tokens:
-            joined_len = ops.length(ops.join(chunk_tokens + [token]))
-            if joined_len > max_length:
-                result.append(Span(ops.join(chunk_tokens), -1, -1))
-                chunk_tokens = []
-
-        chunk_tokens.append(token)
-
-    if chunk_tokens:
-        result.append(Span(ops.join(chunk_tokens), -1, -1))
-
-    return result

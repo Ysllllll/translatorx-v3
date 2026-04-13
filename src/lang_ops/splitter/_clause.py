@@ -1,4 +1,9 @@
-"""Clause splitter — splits at comma/pause punctuation and sentence terminators."""
+"""Clause splitter — splits at comma/pause punctuation and sentence terminators.
+
+.. deprecated::
+    Char-level scanning replaced by token-based ``_boundary.py``.
+    Use ``_BaseOps.split_clauses()`` or ``ChunkPipeline.clauses()`` instead.
+"""
 
 from __future__ import annotations
 

@@ -144,7 +144,7 @@ class TestEnglishSentences:
         result = SegmentBuilder(_short_segments(), _ops).sentences().build()
         assert [s.text for s in result] == [
             "Hello world.",
-            " How are you?",
+            "How are you?",
         ]
         assert result[0].start == 0.0
         assert result[0].end == 2.0
@@ -163,10 +163,10 @@ class TestEnglishSentences:
 
         assert texts == [
             "Welcome to the show.",
-            " Today we're discussing artificial intelligence and its impact on society.",
-            " Dr. Smith, what are your thoughts?",
-            " Well, I believe AI will transform healthcare, education, and transportation.",
-            " However, we must proceed with caution.",
+            "Today we're discussing artificial intelligence and its impact on society.",
+            "Dr. Smith, what are your thoughts?",
+            "Well, I believe AI will transform healthcare, education, and transportation.",
+            "However, we must proceed with caution.",
         ]
 
     def test_sentence_timing_from_words(self) -> None:
@@ -183,8 +183,8 @@ class TestEnglishSentences:
         texts = [s.text for s in result]
         assert texts == [
             "The quick brown fox jumped over the lazy dog.",
-            " Meanwhile, the cat sat on the mat; it was very comfortable.",
-            " What a day!",
+            "Meanwhile, the cat sat on the mat; it was very comfortable.",
+            "What a day!",
         ]
         assert result[0].start == 0.0
         assert result[0].end == 3.0
@@ -203,10 +203,10 @@ class TestEnglishClauses:
         texts = [s.text for s in result]
         assert texts == [
             "The quick brown fox jumped over the lazy dog.",
-            " Meanwhile,",
-            " the cat sat on the mat;",
-            " it was very comfortable.",
-            " What a day!",
+            "Meanwhile,",
+            "the cat sat on the mat;",
+            "it was very comfortable.",
+            "What a day!",
         ]
 
     def test_sentences_then_clauses(self) -> None:
@@ -218,16 +218,16 @@ class TestEnglishClauses:
         texts = [s.text for s in result]
         assert texts == [
             "The quick brown fox jumped over the lazy dog.",
-            " Meanwhile,",
-            " the cat sat on the mat;",
-            " it was very comfortable.",
-            " What a day!",
+            "Meanwhile,",
+            "the cat sat on the mat;",
+            "it was very comfortable.",
+            "What a day!",
         ]
 
     def test_clause_timing(self) -> None:
         result = SegmentBuilder(_single_long_segment(), _ops).clauses().build()
         # "Meanwhile," — Word("Meanwhile,", 3.5, 4.2)
-        assert result[1].text == " Meanwhile,"
+        assert result[1].text == "Meanwhile,"
         assert result[1].start == 3.5
         assert result[1].end == 4.2
 
@@ -349,7 +349,7 @@ class TestEnglishMerge:
         # Two sentences → two groups → merge won't cross
         assert len(result) == 2
         assert result[0].text == "Hello world."
-        assert result[1].text == " How are you?"
+        assert result[1].text == "How are you?"
 
     def test_merge_nothing_fits(self) -> None:
         """When max_length is smaller than each chunk, no merging occurs."""
@@ -422,7 +422,7 @@ class TestEnglishRecords:
         assert len(records) == 2
         assert isinstance(records[0], SentenceRecord)
         assert records[0].src_text == "Hello world."
-        assert records[1].src_text == " How are you?"
+        assert records[1].src_text == "How are you?"
         # Each record has exactly 1 segment (the sentence itself)
         assert len(records[0].segments) == 1
         assert records[0].segments[0].text == "Hello world."
@@ -466,7 +466,7 @@ class TestEnglishAutoFill:
         result = SegmentBuilder(segments, _ops).sentences().build()
         assert [s.text for s in result] == [
             "Hello world.",
-            " How are you?",
+            "How are you?",
         ]
         # Words interpolated
         assert len(result[0].words) >= 1
@@ -581,6 +581,6 @@ class TestEnglishStream:
             all_done.extend(stream.feed(seg))
         all_done.extend(stream.flush())
 
-        merged = "".join(s.text for s in all_done)
+        merged = " ".join(s.text for s in all_done)
         original = " ".join(s.text for s in _asr_interview_segments())
         assert merged == original

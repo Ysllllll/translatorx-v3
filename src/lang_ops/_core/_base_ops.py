@@ -106,20 +106,26 @@ class _BaseOps(ABC):
     # -- Segment-level shortcuts --------------------------------------------
 
     def split_sentences(self, text: str) -> list[str]:
-        """Split text into sentences."""
-        from lang_ops.splitter._sentence import split_sentences as _split
-        return Span.to_texts(_split(
-            text, self.sentence_terminators, self.abbreviations,
-            is_cjk=self.is_cjk, strip_spaces=self.strip_spaces,
-        ))
+        """Split text into sentences (token-based)."""
+        from lang_ops.splitter._boundary import find_boundaries, split_tokens_by_boundaries
+        tokens = self.split(text)
+        if not tokens:
+            return []
+        boundaries = find_boundaries(tokens, self.sentence_terminators, self.abbreviations)
+        groups = split_tokens_by_boundaries(tokens, boundaries)
+        return [self.join(g) for g in groups]
 
     def split_clauses(self, text: str) -> list[str]:
-        """Split text into clauses (sentence boundaries are also clause boundaries)."""
-        from lang_ops.splitter._clause import split_clauses_full as _split
-        return Span.to_texts(_split(
-            text, self.clause_separators, self.sentence_terminators,
-            self.abbreviations, is_cjk=self.is_cjk, strip_spaces=self.strip_spaces,
-        ))
+        """Split text into clauses (sentence boundaries included, token-based)."""
+        from lang_ops.splitter._boundary import find_boundaries, split_tokens_by_boundaries
+        tokens = self.split(text)
+        if not tokens:
+            return []
+        boundaries = find_boundaries(
+            tokens, self.sentence_terminators, self.abbreviations, self.clause_separators,
+        )
+        groups = split_tokens_by_boundaries(tokens, boundaries)
+        return [self.join(g) for g in groups]
 
     def split_paragraphs(self, text: str) -> list[str]:
         """Split text into paragraphs."""
@@ -127,9 +133,13 @@ class _BaseOps(ABC):
         return Span.to_texts(_split(text))
 
     def split_by_length(self, text: str, max_length: int) -> list[str]:
-        """Split text into chunks whose length ≤ *max_length*."""
-        from lang_ops.splitter._length import split_by_length as _split
-        return Span.to_texts(_split(text, self, max_length))
+        """Split text into chunks whose length ≤ *max_length* (token-based)."""
+        from lang_ops.splitter._length import split_tokens_by_length
+        tokens = self.split(text)
+        if not tokens:
+            return []
+        groups = split_tokens_by_length(tokens, self, max_length)
+        return [self.join(g) for g in groups]
 
     def chunk(self, text: str) -> "ChunkPipeline":
         """Create a ChunkPipeline for chainable splitting."""

@@ -1,9 +1,6 @@
 """Vietnamese (vi) splitter tests."""
 
 from lang_ops import TextOps, ChunkPipeline
-from lang_ops._core._types import Span
-from lang_ops.splitter._sentence import split_sentences
-from lang_ops.splitter._clause import split_clauses
 from ._base import SplitterTestBase
 
 
@@ -21,11 +18,11 @@ class TestVietnameseSplitter(SplitterTestBase):
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
-        assert _ops.split_sentences("Xin chào. Bạn khỏe không?") == ["Xin chào.", " Bạn khỏe không?"]
-        assert _ops.split_sentences("Tuyệt vời! Thật sao? Vâng.") == ["Tuyệt vời!", " Thật sao?", " Vâng."]
+        assert _ops.split_sentences("Xin chào. Bạn khỏe không?") == ["Xin chào.", "Bạn khỏe không?"]
+        assert _ops.split_sentences("Tuyệt vời! Thật sao? Vâng.") == ["Tuyệt vời!", "Thật sao?", "Vâng."]
 
         # Consecutive terminators
-        assert _ops.split_sentences("Đợi!! Thật sao???") == ["Đợi!!", " Thật sao???"]
+        assert _ops.split_sentences("Đợi!! Thật sao???") == ["Đợi!!", "Thật sao???"]
 
         # Abbreviation
         assert _ops.split_sentences("GS. Nguyễn đã đi.") == ["GS. Nguyễn đã đi."]
@@ -39,8 +36,8 @@ class TestVietnameseSplitter(SplitterTestBase):
 
     def test_split_clauses(self) -> None:
         # Basic clause splitting
-        assert _ops.split_clauses("Xin chào, thế giới.") == ["Xin chào,", " thế giới."]
-        assert _ops.split_clauses("Thứ nhất; thứ hai: thứ ba.") == ["Thứ nhất;", " thứ hai:", " thứ ba."]
+        assert _ops.split_clauses("Xin chào, thế giới.") == ["Xin chào,", "thế giới."]
+        assert _ops.split_clauses("Thứ nhất; thứ hai: thứ ba.") == ["Thứ nhất;", "thứ hai:", "thứ ba."]
 
         # Consecutive separators
         assert _ops.split_clauses(",,,") == [",,,"]
@@ -79,25 +76,25 @@ class TestVietnameseSplitter(SplitterTestBase):
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'GS. Nguyễn và TS. Trần làm việc tại TP. Hà Nội.',
-            ' ThS. Lê cùng KS. Phạm đã phát triển một dự án trị giá 2.8 triệu đô la VN... Dr. Vũ gọi điện qua ĐT. để kiểm tra tiến độ.',
-            ' Dự án đã hoàn thành xong?',
-            ' Thật tuyệt vời!',
-            ' Prof. Đình cho biết kết quả nghiên cứu đã được công bố trên toàn đất nước.',
-            ' Khoa học thay đổi thế giới!',
-            ' Đây không phải là một tương lai tươi sáng?',
-            ' Công nghệ Việt Nam tiếp tục phát triển.',
+            'ThS. Lê cùng KS. Phạm đã phát triển một dự án trị giá 2.8 triệu đô la VN... Dr. Vũ gọi điện qua ĐT. để kiểm tra tiến độ.',
+            'Dự án đã hoàn thành xong?',
+            'Thật tuyệt vời!',
+            'Prof. Đình cho biết kết quả nghiên cứu đã được công bố trên toàn đất nước.',
+            'Khoa học thay đổi thế giới!',
+            'Đây không phải là một tương lai tươi sáng?',
+            'Công nghệ Việt Nam tiếp tục phát triển.',
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
             'GS. Nguyễn và TS. Trần làm việc tại TP. Hà Nội.',
-            ' ThS. Lê cùng KS. Phạm đã phát triển một dự án trị giá 2.8 triệu đô la VN... Dr. Vũ gọi điện qua ĐT. để kiểm tra tiến độ.',
-            ' Dự án đã hoàn thành xong?',
-            ' Thật tuyệt vời!',
-            ' Prof. Đình cho biết kết quả nghiên cứu đã được công bố trên toàn đất nước.',
-            ' Khoa học thay đổi thế giới!',
-            ' Đây không phải là một tương lai tươi sáng?',
-            ' Công nghệ Việt Nam tiếp tục phát triển.',
+            'ThS. Lê cùng KS. Phạm đã phát triển một dự án trị giá 2.8 triệu đô la VN... Dr. Vũ gọi điện qua ĐT. để kiểm tra tiến độ.',
+            'Dự án đã hoàn thành xong?',
+            'Thật tuyệt vời!',
+            'Prof. Đình cho biết kết quả nghiên cứu đã được công bố trên toàn đất nước.',
+            'Khoa học thay đổi thế giới!',
+            'Đây không phải là một tương lai tươi sáng?',
+            'Công nghệ Việt Nam tiếp tục phát triển.',
         ]
 
         # long text chunk chain equivalence
@@ -108,9 +105,9 @@ class TestVietnameseSplitter(SplitterTestBase):
         # long text pipeline_paragraphs_sentences()
         assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
             'Đoạn đầu tiên.',
-            ' Hai câu.',
+            'Hai câu.',
             'Đoạn thứ hai.',
-            ' Với ba.',
-            ' Câu ngắn.',
+            'Với ba.',
+            'Câu ngắn.',
             'Đoạn thứ ba và cuối cùng.',
         ]

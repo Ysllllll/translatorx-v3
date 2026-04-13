@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import unicodedata
+
 from ._core._cjk_common import (
     _BaseCjkOps,
     _parse_characters,
@@ -83,4 +85,5 @@ class KoreanOps(_BaseCjkOps):
         if current:
             groups.append(_cjk_join_tokens(current))
 
-        return _SPACE_MARKER.join(groups)
+        # NFC-normalize: kiwi may return NFD jamo sequences
+        return unicodedata.normalize("NFC", _SPACE_MARKER.join(groups))

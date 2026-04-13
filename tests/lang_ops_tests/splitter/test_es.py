@@ -1,9 +1,6 @@
 """Spanish (es) splitter tests."""
 
 from lang_ops import TextOps, ChunkPipeline
-from lang_ops._core._types import Span
-from lang_ops.splitter._sentence import split_sentences
-from lang_ops.splitter._clause import split_clauses
 from ._base import SplitterTestBase
 
 
@@ -21,11 +18,11 @@ class TestSpanishSplitter(SplitterTestBase):
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
-        assert _ops.split_sentences("Hola mundo. ¿Cómo estás?") == ["Hola mundo.", " ¿Cómo estás?"]
-        assert _ops.split_sentences("¡Increíble! ¿De verdad? Sí.") == ["¡Increíble!", " ¿De verdad?", " Sí."]
+        assert _ops.split_sentences("Hola mundo. ¿Cómo estás?") == ["Hola mundo.", "¿Cómo estás?"]
+        assert _ops.split_sentences("¡Increíble! ¿De verdad? Sí.") == ["¡Increíble!", "¿De verdad?", "Sí."]
 
         # Consecutive terminators
-        assert _ops.split_sentences("¡¡Espera!! ¿¿¿De verdad???") == ["¡¡Espera!!", " ¿¿¿De verdad???"]
+        assert _ops.split_sentences("¡¡Espera!! ¿¿¿De verdad???") == ["¡¡Espera!!", "¿¿¿De verdad???"]
 
         # Abbreviation
         assert _ops.split_sentences("Dra. García se fue.") == ["Dra. García se fue."]
@@ -39,8 +36,8 @@ class TestSpanishSplitter(SplitterTestBase):
 
     def test_split_clauses(self) -> None:
         # Basic clause splitting
-        assert _ops.split_clauses("Hola, mundo.") == ["Hola,", " mundo."]
-        assert _ops.split_clauses("Primero; segundo: tercero.") == ["Primero;", " segundo:", " tercero."]
+        assert _ops.split_clauses("Hola, mundo.") == ["Hola,", "mundo."]
+        assert _ops.split_clauses("Primero; segundo: tercero.") == ["Primero;", "segundo:", "tercero."]
 
         # Consecutive separators
         assert _ops.split_clauses(",,,") == [",,,"]
@@ -79,30 +76,30 @@ class TestSpanishSplitter(SplitterTestBase):
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'Dra. García y la Sra. López caminan por la av. Reforma en Madrid.',
-            ' En pág. 42 del informe, tel. +34-91-555-0100, se documenta un proyecto de aprox. 4.8 millones... Los resultados incluyen arte, ciencia, música, etc. ¿Ha terminado?',
-            ' ¡Es increíble!',
-            ' La Profa. Ruiz preguntó si Ud. conoce la exposición de arte.',
-            ' Cultura y ciencia transforman el mundo.',
-            ' ¡Qué maravilloso!',
-            ' No es un gran futuro?',
-            ' La tradición española lo promete.',
+            'En pág. 42 del informe, tel. +34-91-555-0100, se documenta un proyecto de aprox. 4.8 millones... Los resultados incluyen arte, ciencia, música, etc. ¿Ha terminado?',
+            '¡Es increíble!',
+            'La Profa. Ruiz preguntó si Ud. conoce la exposición de arte.',
+            'Cultura y ciencia transforman el mundo.',
+            '¡Qué maravilloso!',
+            'No es un gran futuro?',
+            'La tradición española lo promete.',
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
             'Dra. García y la Sra. López caminan por la av. Reforma en Madrid.',
-            ' En pág. 42 del informe,',
-            ' tel. +34-91-555-0100,',
-            ' se documenta un proyecto de aprox. 4.8 millones... Los resultados incluyen arte,',
-            ' ciencia,',
-            ' música,',
-            ' etc. ¿Ha terminado?',
-            ' ¡Es increíble!',
-            ' La Profa. Ruiz preguntó si Ud. conoce la exposición de arte.',
-            ' Cultura y ciencia transforman el mundo.',
-            ' ¡Qué maravilloso!',
-            ' No es un gran futuro?',
-            ' La tradición española lo promete.',
+            'En pág. 42 del informe,',
+            'tel. +34-91-555-0100,',
+            'se documenta un proyecto de aprox. 4.8 millones... Los resultados incluyen arte,',
+            'ciencia,',
+            'música,',
+            'etc. ¿Ha terminado?',
+            '¡Es increíble!',
+            'La Profa. Ruiz preguntó si Ud. conoce la exposición de arte.',
+            'Cultura y ciencia transforman el mundo.',
+            '¡Qué maravilloso!',
+            'No es un gran futuro?',
+            'La tradición española lo promete.',
         ]
 
         # long text chunk chain equivalence
@@ -113,9 +110,9 @@ class TestSpanishSplitter(SplitterTestBase):
         # long text pipeline_paragraphs_sentences()
         assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
             'Primer párrafo.',
-            ' Dos frases.',
+            'Dos frases.',
             'Segundo párrafo.',
-            ' Con tres.',
-            ' Frases cortas.',
+            'Con tres.',
+            'Frases cortas.',
             'Tercer y último párrafo.',
         ]

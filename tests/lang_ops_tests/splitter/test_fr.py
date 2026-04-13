@@ -1,9 +1,6 @@
 """French (fr) splitter tests."""
 
 from lang_ops import TextOps, ChunkPipeline
-from lang_ops._core._types import Span
-from lang_ops.splitter._sentence import split_sentences
-from lang_ops.splitter._clause import split_clauses
 from ._base import SplitterTestBase
 
 
@@ -21,11 +18,11 @@ class TestFrenchSplitter(SplitterTestBase):
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
-        assert _ops.split_sentences("Bonjour monde. Comment vas-tu?") == ["Bonjour monde.", " Comment vas-tu?"]
-        assert _ops.split_sentences("Incroyable! Vraiment? Oui.") == ["Incroyable!", " Vraiment?", " Oui."]
+        assert _ops.split_sentences("Bonjour monde. Comment vas-tu?") == ["Bonjour monde.", "Comment vas-tu?"]
+        assert _ops.split_sentences("Incroyable! Vraiment? Oui.") == ["Incroyable!", "Vraiment?", "Oui."]
 
         # Consecutive terminators
-        assert _ops.split_sentences("Attends!! Vraiment???") == ["Attends!!", " Vraiment???"]
+        assert _ops.split_sentences("Attends!! Vraiment???") == ["Attends!!", "Vraiment???"]
 
         # Abbreviation
         assert _ops.split_sentences("Mme. Dupont est partie.") == ["Mme. Dupont est partie."]
@@ -39,8 +36,8 @@ class TestFrenchSplitter(SplitterTestBase):
 
     def test_split_clauses(self) -> None:
         # Basic clause splitting
-        assert _ops.split_clauses("Bonjour, monde.") == ["Bonjour,", " monde."]
-        assert _ops.split_clauses("Premier; deuxième: troisième.") == ["Premier;", " deuxième:", " troisième."]
+        assert _ops.split_clauses("Bonjour, monde.") == ["Bonjour,", "monde."]
+        assert _ops.split_clauses("Premier; deuxième: troisième.") == ["Premier;", "deuxième:", "troisième."]
 
         # Consecutive separators
         assert _ops.split_clauses(",,,") == [",,,"]
@@ -79,35 +76,35 @@ class TestFrenchSplitter(SplitterTestBase):
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.',
-            " Elle se promène souvent sur le bd. Haussmann; elle adore l'architecture haussmannienne, éd. originaire du XIXe siècle, réf. classée depuis 3.2 décennies.",
-            " C'est vraiment superbe!",
-            ' Les marchés, les cafés, les librairies etc. rendent la ville unique.',
-            ' Avez-vous visité le no. 1 de la Place cette année?',
-            ' Chaque quartier offre des perspectives fascinantes sur les villes cités.',
-            ' En janv., les lumières illuminent le monde.',
-            ' Quel merveilleux!',
-            " N'est-ce pas un bel avenir?",
-            ' La culture française le promet.',
+            "Elle se promène souvent sur le bd. Haussmann; elle adore l'architecture haussmannienne, éd. originaire du XIXe siècle, réf. classée depuis 3.2 décennies.",
+            "C'est vraiment superbe!",
+            'Les marchés, les cafés, les librairies etc. rendent la ville unique.',
+            'Avez-vous visité le no. 1 de la Place cette année?',
+            'Chaque quartier offre des perspectives fascinantes sur les villes cités.',
+            'En janv., les lumières illuminent le monde.',
+            'Quel merveilleux!',
+            "N'est-ce pas un bel avenir?",
+            'La culture française le promet.',
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
             'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.',
-            ' Elle se promène souvent sur le bd. Haussmann;',
-            " elle adore l'architecture haussmannienne,",
-            ' éd. originaire du XIXe siècle,',
-            ' réf. classée depuis 3.2 décennies.',
-            " C'est vraiment superbe!",
-            ' Les marchés,',
-            ' les cafés,',
-            ' les librairies etc. rendent la ville unique.',
-            ' Avez-vous visité le no. 1 de la Place cette année?',
-            ' Chaque quartier offre des perspectives fascinantes sur les villes cités.',
-            ' En janv.,',
-            ' les lumières illuminent le monde.',
-            ' Quel merveilleux!',
-            " N'est-ce pas un bel avenir?",
-            ' La culture française le promet.',
+            'Elle se promène souvent sur le bd. Haussmann;',
+            "elle adore l'architecture haussmannienne,",
+            'éd. originaire du XIXe siècle,',
+            'réf. classée depuis 3.2 décennies.',
+            "C'est vraiment superbe!",
+            'Les marchés,',
+            'les cafés,',
+            'les librairies etc. rendent la ville unique.',
+            'Avez-vous visité le no. 1 de la Place cette année?',
+            'Chaque quartier offre des perspectives fascinantes sur les villes cités.',
+            'En janv.,',
+            'les lumières illuminent le monde.',
+            'Quel merveilleux!',
+            "N'est-ce pas un bel avenir?",
+            'La culture française le promet.',
         ]
 
         # long text chunk chain equivalence
@@ -118,9 +115,9 @@ class TestFrenchSplitter(SplitterTestBase):
         # long text pipeline_paragraphs_sentences()
         assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
             'Premier paragraphe.',
-            ' Deux phrases.',
+            'Deux phrases.',
             'Deuxième paragraphe.',
-            ' Avec trois.',
-            ' Phrases courtes.',
+            'Avec trois.',
+            'Phrases courtes.',
             'Troisième et dernier paragraphe.',
         ]

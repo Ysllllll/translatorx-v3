@@ -1,9 +1,6 @@
 """Portuguese (pt) splitter tests."""
 
 from lang_ops import TextOps, ChunkPipeline
-from lang_ops._core._types import Span
-from lang_ops.splitter._sentence import split_sentences
-from lang_ops.splitter._clause import split_clauses
 from ._base import SplitterTestBase
 
 
@@ -21,11 +18,11 @@ class TestPortugueseSplitter(SplitterTestBase):
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
-        assert _ops.split_sentences("Olá mundo. Como vai?") == ["Olá mundo.", " Como vai?"]
-        assert _ops.split_sentences("Incrível! Mesmo? Sim.") == ["Incrível!", " Mesmo?", " Sim."]
+        assert _ops.split_sentences("Olá mundo. Como vai?") == ["Olá mundo.", "Como vai?"]
+        assert _ops.split_sentences("Incrível! Mesmo? Sim.") == ["Incrível!", "Mesmo?", "Sim."]
 
         # Consecutive terminators
-        assert _ops.split_sentences("Espere!! Mesmo???") == ["Espere!!", " Mesmo???"]
+        assert _ops.split_sentences("Espere!! Mesmo???") == ["Espere!!", "Mesmo???"]
 
         # Abbreviation
         assert _ops.split_sentences("Dra. Santos saiu.") == ["Dra. Santos saiu."]
@@ -39,8 +36,8 @@ class TestPortugueseSplitter(SplitterTestBase):
 
     def test_split_clauses(self) -> None:
         # Basic clause splitting
-        assert _ops.split_clauses("Olá, mundo.") == ["Olá,", " mundo."]
-        assert _ops.split_clauses("Primeiro; segundo: terceiro.") == ["Primeiro;", " segundo:", " terceiro."]
+        assert _ops.split_clauses("Olá, mundo.") == ["Olá,", "mundo."]
+        assert _ops.split_clauses("Primeiro; segundo: terceiro.") == ["Primeiro;", "segundo:", "terceiro."]
 
         # Consecutive separators
         assert _ops.split_clauses(",,,") == [",,,"]
@@ -79,30 +76,30 @@ class TestPortugueseSplitter(SplitterTestBase):
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo.',
-            ' Na pág. 87 do relatório, tel. +55-11-98765-4321, descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte, ciência, música, etc. O projeto está pronto?',
-            ' É simplesmente incrível!',
-            ' A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.',
-            ' A ciência transforma o mundo.',
-            ' Que futuro maravilhoso!',
-            ' Não é um grande futuro?',
-            ' A inovação brasileira promete.',
+            'Na pág. 87 do relatório, tel. +55-11-98765-4321, descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte, ciência, música, etc. O projeto está pronto?',
+            'É simplesmente incrível!',
+            'A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.',
+            'A ciência transforma o mundo.',
+            'Que futuro maravilhoso!',
+            'Não é um grande futuro?',
+            'A inovação brasileira promete.',
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
             'Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo.',
-            ' Na pág. 87 do relatório,',
-            ' tel. +55-11-98765-4321,',
-            ' descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte,',
-            ' ciência,',
-            ' música,',
-            ' etc. O projeto está pronto?',
-            ' É simplesmente incrível!',
-            ' A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.',
-            ' A ciência transforma o mundo.',
-            ' Que futuro maravilhoso!',
-            ' Não é um grande futuro?',
-            ' A inovação brasileira promete.',
+            'Na pág. 87 do relatório,',
+            'tel. +55-11-98765-4321,',
+            'descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte,',
+            'ciência,',
+            'música,',
+            'etc. O projeto está pronto?',
+            'É simplesmente incrível!',
+            'A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.',
+            'A ciência transforma o mundo.',
+            'Que futuro maravilhoso!',
+            'Não é um grande futuro?',
+            'A inovação brasileira promete.',
         ]
 
         # long text chunk chain equivalence
@@ -113,9 +110,9 @@ class TestPortugueseSplitter(SplitterTestBase):
         # long text pipeline_paragraphs_sentences()
         assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
             'Primeiro parágrafo.',
-            ' Duas frases.',
+            'Duas frases.',
             'Segundo parágrafo.',
-            ' Com três.',
-            ' Frases curtas.',
+            'Com três.',
+            'Frases curtas.',
             'Terceiro e último parágrafo.',
         ]

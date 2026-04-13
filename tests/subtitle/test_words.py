@@ -298,7 +298,7 @@ class TestPipelineSegments:
         assert segs[0].text == "Hello world."
         assert segs[0].start == pytest.approx(0.0)
         assert segs[0].end == pytest.approx(1.0)
-        assert segs[1].text == " How are you?"
+        assert segs[1].text == "How are you?"
         assert segs[1].start == pytest.approx(1.1)
         assert segs[1].end == pytest.approx(2.0)
 
@@ -320,9 +320,9 @@ class TestPipelineSegments:
         assert segs[0].text == "Well,"
         assert segs[0].start == pytest.approx(0.0)
         assert segs[0].end == pytest.approx(0.5)
-        assert segs[1].text == " hello world."
+        assert segs[1].text == "hello world."
         assert segs[1].start == pytest.approx(0.6)
         assert segs[1].end == pytest.approx(1.5)
-        assert segs[2].text == " How are you?"
+        assert segs[2].text == "How are you?"
         assert segs[2].start == pytest.approx(1.6)
         assert segs[2].end == pytest.approx(2.5)

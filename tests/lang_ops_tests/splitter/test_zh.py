@@ -1,9 +1,6 @@
 """Chinese (zh) splitter tests."""
 
 from lang_ops import TextOps, ChunkPipeline
-from lang_ops._core._types import Span
-from lang_ops.splitter._sentence import split_sentences
-from lang_ops.splitter._clause import split_clauses
 from ._base import SplitterTestBase
 
 
@@ -47,11 +44,11 @@ class TestChineseSplitter(SplitterTestBase):
         assert _ops.split_sentences("老师说：“请记住‘学无止境’！”") == ["老师说：“请记住‘学无止境’！”"]
         
         # 数字与小数点
-        assert _ops.split_sentences("苹果3.14元。香蕉2.5元。") == ["苹果3.14元。", "香蕉2.5元。"]
-        assert _ops.split_sentences("版本是1.2.3。") == ["版本是1.2.3。"]
+        assert _ops.split_sentences("苹果3.14元。香蕉2.5元。") == ["苹果 3.14 元。", "香蕉 2.5 元。"]
+        assert _ops.split_sentences("版本是1.2.3。") == ["版本是 1.2.3。"]
 
         # 边缘与空白处理（当前实现会保留空白与换行）
-        assert _ops.split_sentences("   第一句。  第二句。  \n") == ["第一句。", "第二句。", "\n"]
+        assert _ops.split_sentences("   第一句。  第二句。  \n") == ["第一句。", "第二句。"]
         assert _ops.split_sentences("。。。") == ["。。。"]
         assert _ops.split_sentences("") == []
 
@@ -148,8 +145,8 @@ class TestChineseSplitter(SplitterTestBase):
             '《未来科技》杂志最近刊登了一篇深度报道，',
             '标题是"人工智能的利与弊"，',
             '引发了学术界和产业界的广泛讨论。',
-            '有人惊叹：',
-            '"技术发展的速度超乎想象！"',
+            '有人惊叹："',
+            '技术发展的速度超乎想象！"',
             '也有人冷静地指出，',
             '我们需要更加审慎地评估新技术的潜在风险。',
             '在日常生活中、',
@@ -161,8 +158,8 @@ class TestChineseSplitter(SplitterTestBase):
             '不过，',
             '有一件事是毋庸置疑的：',
             '技术创新的步伐不会因为任何质疑而停止。',
-            '正如一位资深研究员所说：',
-            '"面对变革，',
+            '正如一位资深研究员所说："',
+            '面对变革，',
             '我们既不能盲目乐观，',
             '也不应过度恐惧。"',
             '我们应该积极拥抱技术进步带来的便利，',

@@ -1,9 +1,6 @@
 """Russian (ru) splitter tests."""
 
 from lang_ops import TextOps, ChunkPipeline
-from lang_ops._core._types import Span
-from lang_ops.splitter._sentence import split_sentences
-from lang_ops.splitter._clause import split_clauses
 from ._base import SplitterTestBase
 
 
@@ -21,12 +18,12 @@ class TestRussianSplitter(SplitterTestBase):
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
-        assert _ops.split_sentences("Привет мир. Как дела?") == ["Привет мир.", " Как дела?"]
-        assert _ops.split_sentences("Ура! Правда? Да.") == ["Ура!", " Правда?", " Да."]
+        assert _ops.split_sentences("Привет мир. Как дела?") == ["Привет мир.", "Как дела?"]
+        assert _ops.split_sentences("Ура! Правда? Да.") == ["Ура!", "Правда?", "Да."]
 
         # Consecutive terminators
-        assert _ops.split_sentences("Подожди!! Правда???") == ["Подожди!!", " Правда???"]
-        assert _ops.split_sentences("Что?! Да.") == ["Что?!", " Да."]
+        assert _ops.split_sentences("Подожди!! Правда???") == ["Подожди!!", "Правда???"]
+        assert _ops.split_sentences("Что?! Да.") == ["Что?!", "Да."]
 
         # Abbreviation
         assert _ops.split_sentences("Доктор Иванов ушёл.") == ["Доктор Иванов ушёл."]
@@ -43,12 +40,12 @@ class TestRussianSplitter(SplitterTestBase):
 
     def test_split_clauses(self) -> None:
         # Basic clause splitting
-        assert _ops.split_clauses("Привет, мир.") == ["Привет,", " мир."]
-        assert _ops.split_clauses("Первый; второй: третий.") == ["Первый;", " второй:", " третий."]
+        assert _ops.split_clauses("Привет, мир.") == ["Привет,", "мир."]
+        assert _ops.split_clauses("Первый; второй: третий.") == ["Первый;", "второй:", "третий."]
 
         # Consecutive separators
         assert _ops.split_clauses(",,,") == [",,,"]
-        assert _ops.split_clauses("Привет,,, мир") == ["Привет,,,", " мир"]
+        assert _ops.split_clauses("Привет,,, мир") == ["Привет,,,", "мир"]
 
         # Edge cases
         assert _ops.split_clauses("") == []
@@ -83,27 +80,25 @@ class TestRussianSplitter(SplitterTestBase):
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'Доктор Иванов живёт на ул. Пушкина; его оклад составляет ок. 95 тыс. руб. в месяц.',
-            ' Он работает в НИИ, который получил 3.7 млн. рублей на исследование... Dr. Петров спросил: «Где хранятся данные?',
-            '» Как удивительно!',
-            ' Команда из пятнадцати человек завершила работу в декабре.',
-            ' Это выдающийся результат!',
-            ' Просто невероятно?',
-            ' Да, технологии меняют мир.',
+            'Он работает в НИИ, который получил 3.7 млн. рублей на исследование... Dr. Петров спросил: «Где хранятся данные?» Как удивительно!',
+            'Команда из пятнадцати человек завершила работу в декабре.',
+            'Это выдающийся результат!',
+            'Просто невероятно?',
+            'Да, технологии меняют мир.',
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
             'Доктор Иванов живёт на ул. Пушкина;',
-            ' его оклад составляет ок. 95 тыс. руб. в месяц.',
-            ' Он работает в НИИ,',
-            ' который получил 3.7 млн. рублей на исследование... Dr. Петров спросил:',
-            ' «Где хранятся данные?',
-            '» Как удивительно!',
-            ' Команда из пятнадцати человек завершила работу в декабре.',
-            ' Это выдающийся результат!',
-            ' Просто невероятно?',
-            ' Да,',
-            ' технологии меняют мир.',
+            'его оклад составляет ок. 95 тыс. руб. в месяц.',
+            'Он работает в НИИ,',
+            'который получил 3.7 млн. рублей на исследование... Dr. Петров спросил:',
+            '«Где хранятся данные?» Как удивительно!',
+            'Команда из пятнадцати человек завершила работу в декабре.',
+            'Это выдающийся результат!',
+            'Просто невероятно?',
+            'Да,',
+            'технологии меняют мир.',
         ]
 
         # long text chunk chain equivalence
@@ -114,9 +109,9 @@ class TestRussianSplitter(SplitterTestBase):
         # long text pipeline_paragraphs_sentences()
         assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
             'Первый абзац.',
-            ' Два предложения.',
+            'Два предложения.',
             'Второй абзац.',
-            ' С тремя.',
-            ' Короткими фразами.',
+            'С тремя.',
+            'Короткими фразами.',
             'Третий и последний абзац.',
         ]

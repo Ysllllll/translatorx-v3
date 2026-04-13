@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+# ----------------- language character -----------------
 
 def is_cjk_ideograph(ch: str) -> bool:
     """Check if the character is a CJK Unified Ideograph.
@@ -60,6 +61,8 @@ def is_east_asian(ch: str) -> bool:
     """
     return is_cjk_ideograph(ch) or is_hangul(ch) or is_hiragana(ch) or is_katakana(ch)
 
+
+# ----------------- punctuation -----------------
 
 # Punctuation sets for CJK attachment
 # 尾部标点（通常附着在前面词汇的末尾，如逗号、句号）

@@ -265,7 +265,7 @@ class TestChineseSentences:
 
     def test_abnormal_punctuation_sentences(self) -> None:
         result = SegmentBuilder(_abnormal_punctuation_segments(), _ops).sentences().build()
-        assert [s.text for s in result] == ["等等！！！", "你确定吗？？？", "这  是  空 格 测试"]
+        assert [s.text for s in result] == ["等等！！！", "你确定吗？？？", "这是空格测试"]
 
     def test_extreme_short_sentences(self) -> None:
         result = SegmentBuilder(_extreme_short_segment(), _ops).sentences().build()
