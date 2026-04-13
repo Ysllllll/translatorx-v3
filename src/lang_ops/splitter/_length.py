@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from lang_ops._core._types import Span
-
 
 class _HasSplitJoin(Protocol):
     """Protocol for the lang_ops methods we need."""
@@ -57,31 +55,4 @@ def split_tokens_by_length(
 
     return result
 
-
-def split_by_length(
-    text: str,
-    ops: _HasSplitJoin,
-    max_length: int,
-) -> list[Span]:
-    """Split *text* into chunks whose ``ops.length()`` ≤ *max_length*.
-
-    Convenience wrapper that tokenizes *text* first, then delegates to
-    :func:`split_tokens_by_length`.
-
-    .. deprecated::
-        Prefer :func:`split_tokens_by_length` for pipeline use to avoid
-        redundant tokenization.
-
-    Returns Span objects with ``start=-1, end=-1`` because tokenise+join
-    may alter whitespace, making character offsets unreliable.
-    """
-    if not text:
-        return []
-
-    tokens = ops.split(text)
-    if not tokens:
-        return []
-
-    groups = split_tokens_by_length(tokens, ops, max_length)
-    return [Span(ops.join(g), -1, -1) for g in groups]
 
