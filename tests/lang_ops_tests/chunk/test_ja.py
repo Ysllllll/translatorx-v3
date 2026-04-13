@@ -76,10 +76,10 @@ class TestJapaneseSplitter(SplitterTestBase):
             _ops.split_by_length("テスト", max_length=5, unit="sentence")
 
         # チャンクチェーン
-        assert _ops.chunk("これはテストです。次の文です。").sentences().by_length(8).result() == [
+        assert _ops.chunk("これはテストです。次の文です。").sentences().max_length(8).result() == [
             "これはテスト", "です。", "次の文です。",
         ]
-        assert _ops.chunk("最初、次、最後。").clauses().by_length(4).result() == [
+        assert _ops.chunk("最初、次、最後。").clauses().max_length(4).result() == [
             "最初、", "次、", "最後。",
         ]
 

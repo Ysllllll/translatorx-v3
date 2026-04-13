@@ -106,10 +106,10 @@ class TestChineseSplitter(SplitterTestBase):
 
         # chunk chain
         assert _ops.chunk("你好。世界！").sentences().result() == ["你好。", "世界！"]
-        assert _ops.chunk("这是第一句。这是一个比较长的第二句话需要被切分。").sentences().by_length(10).result() == [
+        assert _ops.chunk("这是第一句。这是一个比较长的第二句话需要被切分。").sentences().max_length(10).result() == [
             "这是第一句。", "这是一个比较长的", "第二句话需要被切分。",
         ]
-        assert _ops.chunk("近年来，人工智能技术在中国蓬勃发展。").clauses().by_length(8).result() == [
+        assert _ops.chunk("近年来，人工智能技术在中国蓬勃发展。").clauses().max_length(8).result() == [
             "近年来，", "人工智能技术在", "中国蓬勃发展。",
         ]
 

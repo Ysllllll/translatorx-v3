@@ -62,10 +62,10 @@ class TestPortugueseSplitter(SplitterTestBase):
             _ops.split_by_length("Olá", max_length=5, unit="sentence")
 
         # Chunk chains
-        assert _ops.chunk("Hello world. This is a test. Another one.").sentences().by_length(20).result() == [
+        assert _ops.chunk("Hello world. This is a test. Another one.").sentences().max_length(20).result() == [
             "Hello world.", "This is a test.", "Another one.",
         ]
-        assert _ops.chunk("First clause, second clause, and third.").clauses().by_length(20).result() == [
+        assert _ops.chunk("First clause, second clause, and third.").clauses().max_length(20).result() == [
             "First clause,", "second clause,", "and third.",
         ]
 

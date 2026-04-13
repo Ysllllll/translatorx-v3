@@ -69,7 +69,7 @@ class ChunkPipeline:
             result.extend(split_tokens_by_boundaries(group, boundaries))
         return self._with_groups(result)
 
-    def by_length(self, max_length: int) -> ChunkPipeline:
+    def max_length(self, max_length: int) -> ChunkPipeline:
         """Split each group by length."""
         result: list[list[str]] = []
         for group in self._groups:

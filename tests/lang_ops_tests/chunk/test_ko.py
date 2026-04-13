@@ -60,8 +60,8 @@ class TestKoreanSplitter(SplitterTestBase):
         with pytest.raises(TypeError):
             _ops.split_by_length("테스트", max_length=5, unit="sentence")
 
-        assert _ops.chunk("안녕하세요. 반갑습니다!").sentences().by_length(8).result() == ['안녕하세요.', '반갑습니다!']
-        assert _ops.chunk("첫째, 둘째, 셋째.").clauses().by_length(5).result() == ['첫째,', '둘째,', '셋째.']
+        assert _ops.chunk("안녕하세요. 반갑습니다!").sentences().max_length(8).result() == ['안녕하세요.', '반갑습니다!']
+        assert _ops.chunk("첫째, 둘째, 셋째.").clauses().max_length(5).result() == ['첫째,', '둘째,', '셋째.']
 
     def test_split_long_text(self) -> None:
         # long text split_sentences()

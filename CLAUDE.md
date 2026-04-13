@@ -146,7 +146,7 @@ ops.chunk(text) → ChunkPipeline
 ops.chunk(text)
   .sentences()
   .clauses()            # sentence-aware
-  .by_length(50)        # token-boundary aware, uses ops.length()
+  .max_length(50)       # token-boundary aware, uses ops.length()
   .merge(80)            # greedy merge adjacent chunks
   .result()             → list[str]
   .segments(words)      → list[Segment]   # deferred import from subtitle.words

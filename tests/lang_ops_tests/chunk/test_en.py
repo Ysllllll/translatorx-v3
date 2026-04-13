@@ -97,12 +97,15 @@ class TestEnglishSplitter(SplitterTestBase):
             _ops.split_by_length("Hello", max_length=5, unit="sentence")
 
         # Chunk chains
-        assert _ops.chunk("Hello world. This is a test sentence.").sentences().by_length(25).result() == [
+        assert _ops.chunk("Hello world. This is a test sentence.").sentences().max_length(25).result() == [
             "Hello world.", "This is a test sentence.",
         ]
-        assert _ops.chunk("First clause, second clause, and a third one.").clauses().by_length(20).result() == [
+        assert _ops.chunk("First clause, second clause, and a third one.").clauses().max_length(20).result() == [
             "First clause,", "second clause,", "and a third one.",
         ]
+
+        with pytest.raises(AttributeError):
+            _ops.chunk("Hello world.").by_length(25)
 
     def test_split_long_text(self) -> None:
         # Long text split_sentences()
