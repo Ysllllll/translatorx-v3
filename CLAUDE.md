@@ -11,6 +11,7 @@ pytest tests/ -v
 # Run a single test file
 pytest tests/lang_ops_tests/test_chinese.py -v
 pytest tests/lang_ops_tests/splitter/test_en.py -v
+pytest tests/subtitle/builder_tests/test_en.py -v
 
 # Run via the venv explicitly (if pytest not on PATH)
 /home/ysl/workspace/.venv/bin/pytest tests/ -v
@@ -30,46 +31,46 @@ A subtitle processing toolkit with two top-level packages under `src/`.
 ```
 src/
 ├── lang_ops/                        # Language-adapted text operations
-│   ├── __init__.py                  # Public API: TextOps, ChunkPipeline, Span, normalize_language
+│   ├── __init__.py                  # Public API: LangOps, ChunkPipeline, Span, normalize_language
 │   ├── en_type.py                   # EnTypeOps (shared by 7 space-delimited languages)
 │   ├── chinese.py / japanese.py / korean.py  # CJK language ops
 │   ├── _core/
 │   │   ├── _base_ops.py             # _BaseOps ABC — abstract interface + shared concrete methods
-│   │   ├── _mechanism.py            # TextOps factory (cached via lru_cache)
+│   │   ├── _mechanism.py            # LangOps factory (cached via lru_cache)
 │   │   ├── _cjk_common.py           # _BaseCjkOps + token parsing/attachment/join helpers
 │   │   ├── _chars.py                # Unicode classification + punctuation frozensets
 │   │   ├── _normalize.py            # Language code normalization
-│   │   ├── _availability.py         # Optional dependency guards
+│   │   ├── _availability.py         # Optional dependency guards (jieba/mecab/kiwi)
 │   │   └── _types.py                # Span dataclass
 │   └── splitter/
 │       ├── _pipeline.py             # ChunkPipeline (immutable, chainable)
-│       ├── _sentence.py             # Sentence splitter (abbreviation/ellipsis guards)
-│       ├── _clause.py               # split_clauses + split_clauses_full (sentence-aware)
+│       ├── _boundary.py             # Token-based boundary detection (sentences + clauses)
 │       ├── _paragraph.py            # Paragraph splitter
 │       └── _length.py               # Length-based splitter (uses Protocol for decoupling)
-└── subtitle/                        # Subtitle data structures + word timing
-    ├── __init__.py                  # Exports Word, Segment, SentenceRecord, fill_words, find_words, distribute_words, align_segments
+└── subtitle/                        # Subtitle data structures + word timing + segment building
+    ├── __init__.py                  # Exports Word, Segment, SentenceRecord, SegmentBuilder, etc.
     ├── _types.py                    # Frozen dataclasses (Word, Segment, SentenceRecord)
     ├── words.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
+    ├── builder.py                   # SegmentBuilder — chainable segment restructuring + streaming
     └── readers/
         └── srt.py                   # SRT file parser
 ```
 
 ### Key design decisions
 
-**Factory pattern:** `TextOps.for_language(code)` returns a cached `_BaseOps` subclass. Uses `functools.lru_cache` — thread-safe, no manual cache management.
+**Factory pattern:** `LangOps.for_language(code)` returns a cached `_BaseOps` subclass. Uses `functools.lru_cache` — thread-safe, no manual cache management.
 
 **Two language families:**
 - **EnType** (`en_type.py`): Space-delimited languages (en, ru, es, fr, de, pt, vi). `split()` uses `str.split()`. Per-language abbreviation sets. French `normalize()` has special spacing rules.
 - **CJK** (`_cjk_common.py` base): Character-based. `split()` uses external tokenizers (jieba/MeCab/Kiwi). Korean overrides `split()`/`join()` to preserve eojeol boundaries. CJK terminators include both full-width and half-width punctuation (e.g. `"。", "！", "？", "!", "?"`).
 
-**strip_spaces property:** `_BaseOps.strip_spaces` controls whether `split_sentences`/`split_clauses_full` strip leading spaces from chunks. Defaults to `self.is_cjk` (True for Chinese/Japanese, since CJK doesn't use inter-sentence spaces). Korean overrides to `False` because it uses spaces between eojeols.
+**strip_spaces property:** `_BaseOps.strip_spaces` controls whether `split_sentences`/`split_clauses` strip leading spaces from chunks. Defaults to `self.is_cjk` (True for Chinese/Japanese, since CJK doesn't use inter-sentence spaces). Korean overrides to `False` because it uses spaces between eojeols.
 
-**Immutability:** `ChunkPipeline` returns new instances per step. All `subtitle` dataclasses use `frozen=True`. `words.py` uses `dataclasses.replace()` instead of mutation.
+**Immutability:** `ChunkPipeline` and `SegmentBuilder` return new instances per step. All `subtitle` dataclasses use `frozen=True`. `words.py` and `builder.py` use `dataclasses.replace()` instead of mutation.
 
 **Protocol decoupling:** `_length.py` defines `_HasSplitJoin` Protocol instead of importing `_BaseOps`, keeping the splitter independent from the ops layer.
 
-**Sentence-aware clause splitting:** `split_clauses_full()` splits at both clause separators and sentence terminators in one pass. `split_clauses()` (lower-level) only uses clause separators. The pipeline and shortcuts use the full version.
+**Token-based boundary detection:** `_boundary.py` unifies sentence and clause splitting via `find_boundaries()` / `split_tokens_by_boundaries()`. Sentence splitting uses token-level boundary markers (terminators, abbreviations, ellipsis guards). Clause splitting (`split_clauses`) is sentence-aware — it splits at clause separators and sentence boundaries in one pass.
 
 ### Layer relationship
 
@@ -77,11 +78,11 @@ src/
 lang_ops                              ←  subtitle
   token: split/join/length/normalize       _types (frozen dataclasses)
   segment: sentences/clauses/paragraphs    words (fill/find/distribute/align)
-  pipeline: ChunkPipeline                  readers (SRT)
-  shortcuts: ops.split_sentences() etc.
+  pipeline: ChunkPipeline                  builder (SegmentBuilder, _StreamBuilder)
+  shortcuts: ops.split_sentences() etc.    readers (SRT)
 ```
 
-`subtitle` is independent of `lang_ops` except `ChunkPipeline.segments()` which does a deferred import of `subtitle.words.align_segments`.
+`subtitle` is independent of `lang_ops` except `ChunkPipeline.segments()` (deferred import of `subtitle.words.align_segments`) and `SegmentBuilder` which takes an `ops` parameter.
 
 ### Test structure
 
@@ -99,6 +100,11 @@ tests/
 │       └── test_normalize.py    # Language code normalization
 └── subtitle/
     ├── test_words.py            # fill_words, find_words, distribute_words, align_segments
+    ├── test_types.py            # Data type display/pretty tests
+    ├── builder_tests/           # SegmentBuilder tests
+    │   ├── _base.py             # BuilderTestBase
+    │   ├── test_en.py
+    │   └── test_zh.py
     └── readers/
         └── test_srt.py          # SRT parser tests
 ```
@@ -111,12 +117,14 @@ Test directory is `lang_ops_tests` (not `lang_ops`) to prevent Python from impor
 - **Pillow** — pixel length via `plength()`
 - **jieba** / **MeCab** / **kiwipiepy** — CJK tokenizers (conditional, tests skip if missing)
 
+Check availability at runtime: `jieba_is_available()`, `mecab_is_available()`, `kiwi_is_available()` (exported from `lang_ops`).
+
 ## API quick reference
 
 ### Language operations
 
 ```
-ops = TextOps.for_language("en")     # Factory — cached, returns _BaseOps subclass
+ops = LangOps.for_language("en")     # Factory — cached, returns _BaseOps subclass
 
 # Token-level
 ops.split(text, mode="word")         # "word" | "character" ("w" | "c")
@@ -146,6 +154,27 @@ ops.chunk(text)
   .segments(words)      → list[Segment]   # deferred import from subtitle.words
 ```
 
+### SegmentBuilder (chainable, immutable)
+
+```
+from subtitle import SegmentBuilder
+
+builder = SegmentBuilder(segments, ops, split_by_speaker=False)
+builder.sentences()                    → SegmentBuilder
+builder.clauses()                      → SegmentBuilder  # sentence-aware
+builder.by_length(40)                  → SegmentBuilder
+builder.merge(60)                      → SegmentBuilder  # greedy merge within groups
+builder.build()                        → list[Segment]
+builder.records(max_length=40)         → list[SentenceRecord]
+
+# Streaming mode
+stream = SegmentBuilder.stream(ops)
+done = stream.feed(segment)            → list[Segment]  # completed sentences
+remaining = stream.flush()             → list[Segment]
+```
+
+Group boundaries (set by `sentences()`) are respected by `merge()` — sentences never merge across boundaries.
+
 ### Subtitle word timing
 
 ```
@@ -159,7 +188,7 @@ align_segments(chunks, words) → list[Segment]    # text chunks + timed words �
 
 - `Word(word, start, end, speaker=None, extra={})`
 - `Segment(start, end, text, speaker=None, words=[], extra={})`
-- `SentenceRecord(src_text, start, end, segments=[], ...)`
+- `SentenceRecord(src_text, start, end, segments=[], ...)` — also has `chunk_cache`, `translations`, `alignment`
 - `Span(text, start, end)` — positional text fragment
 
 ## Fonts
