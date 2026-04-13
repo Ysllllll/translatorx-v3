@@ -43,6 +43,13 @@ class ChineseTextTest(TextOpsTestCase):
         expect_text2 = '[旁白]：突然天边飘来了一朵乌云，那乌云之中...他说：“突然天边飘来了一朵乌云，那乌云之中...”《三体》很好看。“AI”上线了！（测试）……开始这是 English subtitle，你知道吗？'
         self._assert_text_join_case(text2, expect_text2)
 
+        mixed_text = "这是I'm的例子，访问deeplearning.ai，地址是https://www.com。"
+        self._assert_preserved_fragments(
+            mixed_text,
+            ["I'm", "deeplearning.ai", "https://www.com"],
+            modes=("word", "character"),
+        )
+
         # split()
         self.assertEqual(o.split('你好世界'), ['你好', '世界'])
 

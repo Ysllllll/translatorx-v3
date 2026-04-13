@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from ._chars import (
     is_east_asian,
     is_cjk_ideograph,
@@ -14,6 +16,16 @@ from ._chars import (
     CONTENT_LIKE_CHARS,
 )
 from ._base_ops import _BaseOps, normalize_mode, _VALID_MODES
+
+
+_PROTECTED_LATIN_FRAGMENT_RE = re.compile(
+    r"""
+    https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+
+    | [A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+
+    | [A-Za-z]+(?:'[A-Za-z]+)+
+    """,
+    re.VERBOSE,
+)
 
 
 def _is_cjk_or_kana(ch: str) -> bool:
@@ -56,6 +68,47 @@ def _cjk_length(text: str, cjk_width: int = 1) -> int:
     return total
 
 
+def _encode_placeholder_index(index: int) -> str:
+    chars: list[str] = []
+    current = index
+    while True:
+        current, remainder = divmod(current, 26)
+        chars.append(chr(ord("A") + remainder))
+        if current == 0:
+            break
+        current -= 1
+    return "".join(reversed(chars))
+
+
+def _make_protected_placeholder(index: int) -> str:
+    return f"PROTECTEDTOKEN{_encode_placeholder_index(index)}"
+
+
+def _protect_latin_fragments(text: str) -> tuple[str, dict[str, str]]:
+    parts: list[str] = []
+    mapping: dict[str, str] = {}
+    last = 0
+
+    for index, match in enumerate(_PROTECTED_LATIN_FRAGMENT_RE.finditer(text)):
+        parts.append(text[last:match.start()])
+        placeholder = _make_protected_placeholder(index)
+        mapping[placeholder] = match.group(0)
+        parts.append(placeholder)
+        last = match.end()
+
+    if not mapping:
+        return text, {}
+
+    parts.append(text[last:])
+    return "".join(parts), mapping
+
+
+def _restore_protected_tokens(tokens: list[str], mapping: dict[str, str]) -> list[str]:
+    if not mapping:
+        return tokens
+    return [mapping.get(token, token) for token in tokens]
+
+
 def _parse_characters(text: str) -> list[str]:
     tokens: list[str] = []
     i = 0
@@ -63,8 +116,12 @@ def _parse_characters(text: str) -> list[str]:
 
     while i < n:
         ch = text[i]
+        protected = _PROTECTED_LATIN_FRAGMENT_RE.match(text, i)
 
-        if ch in CONTENT_LIKE_CHARS:
+        if protected:
+            tokens.append(protected.group(0))
+            i = protected.end()
+        elif ch in CONTENT_LIKE_CHARS:
             tokens.append(ch)
             i += 1
         elif _is_cjk_or_kana(ch):
@@ -186,7 +243,8 @@ class _BaseCjkOps(_BaseOps):
         if mode == "character":
             raw = _parse_characters(text)
         else:
-            raw = self._word_tokenize(text)
+            protected_text, mapping = _protect_latin_fragments(text)
+            raw = _restore_protected_tokens(self._word_tokenize(protected_text), mapping)
 
         if attach_punctuation:
             return _attach_tokens(raw, multi_dot_attaches=(mode == "character"))

@@ -89,8 +89,12 @@ class TestChineseSplitter(SplitterTestBase):
         ]
         
         # 中英文混合、带网址与特殊符号的长度切分
-        # (观察引擎在切分长文本时可能自动加入空格的行为，这里根据实际输出进行断言匹配)
-        assert _ops.split_by_length("访问https://example.com查看", max_length=15) == ["访问 https://", "example.com 查看"]
+        # URL 现在会作为单个 token 保留，长度切分不会再把它拆坏。
+        assert _ops.split_by_length("访问https://example.com查看", max_length=15) == [
+            "访问",
+            "https://example.com",
+            "查看",
+        ]
         assert _ops.split_by_length("你好😊世界", max_length=2) == ["你好", "😊", "世界"]
         
         assert _ops.split_by_length("你好", max_length=10) == ["你好"]
@@ -177,4 +181,3 @@ class TestChineseSplitter(SplitterTestBase):
             '专家们普遍认为，这一趋势将在未来十年持续加速；然而，也有不少学者对此表达了深切的担忧。',
             '《未来科技》杂志最近刊登了一篇深度报道，标题是"人工智能的利与弊"，引发了学术界和产业界的广泛讨论。',
         ]
-

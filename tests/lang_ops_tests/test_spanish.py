@@ -21,6 +21,12 @@ class SpanishTextTest(TextOpsTestCase):
         expect_join_text1 = "¡Hoy nuestro sistema organiza subtítulos en español, inglés y japonés para una película completa!"
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
+        mixed_text = "Mantén I'm deeplearning.ai y https://www.com juntos."
+        self._assert_preserved_fragments(
+            mixed_text,
+            ["I'm", "deeplearning.ai", "https://www.com"],
+        )
+
         # split()
         self.assertEqual(o.split("¡Hola mundo!"), ["¡Hola", "mundo!"])
 

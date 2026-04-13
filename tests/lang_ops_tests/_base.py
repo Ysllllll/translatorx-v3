@@ -59,6 +59,24 @@ class TextOpsTestCase(unittest.TestCase):
         self.assert_actual_vs_expect(actual_vs_expect)
         self._assert_text_join_case(text, expected_join_text)
 
+    def _assert_preserved_fragments(
+        self,
+        text: str,
+        fragments: list[str],
+        *,
+        modes: tuple[str, ...] = ("word",),
+        attach_punctuation: bool = False,
+    ) -> None:
+        """Assert protected Latin fragments survive tokenization as single tokens."""
+        for mode in modes:
+            tokens = self.ops.split(text, mode=mode, attach_punctuation=attach_punctuation)
+            for fragment in fragments:
+                self.assertIn(
+                    fragment,
+                    tokens,
+                    msg=f"{fragment!r} should stay whole in {mode=} for {text!r}, got {tokens!r}",
+                )
+
     # ── Composite helpers: EnType (en, ru, es, fr, de, pt, vi) ────────────
     # Call from test_edge / test_mode / test_normalize in EnType test files.
 

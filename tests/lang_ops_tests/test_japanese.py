@@ -32,6 +32,13 @@ class JapaneseTextTest(TextOpsTestCase):
         self.assert_actual_vs_expect(actual_vs_expect)
         self._assert_text_join_case(text0, expected_join_text0)
 
+        mixed_text = "これはI'mの例で、deeplearning.aiとhttps://www.comを使う。"
+        self._assert_preserved_fragments(
+            mixed_text,
+            ["I'm", "deeplearning.ai", "https://www.com"],
+            modes=("word", "character"),
+        )
+
         # split()
         self.assertEqual(o.split('こんにちは世界'), ['こんにちは', '世界'])
 

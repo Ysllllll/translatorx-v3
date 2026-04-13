@@ -21,6 +21,12 @@ class VietnameseTextTest(TextOpsTestCase):
         expect_join_text1 = "Hệ thống phụ đề đa ngôn ngữ của chúng tôi xử lý tiếng Việt, tiếng Anh và tiếng Nhật trong một lần chạy."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
+        mixed_text = "Giữ I'm deeplearning.ai và https://www.com nguyên vẹn."
+        self._assert_preserved_fragments(
+            mixed_text,
+            ["I'm", "deeplearning.ai", "https://www.com"],
+        )
+
         # split()
         self.assertEqual(o.split("Xin chào thế giới!"), ["Xin", "chào", "thế", "giới!"])
 

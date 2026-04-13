@@ -37,6 +37,13 @@ class KoreanTextTest(TextOpsTestCase):
         self.assertEqual(o.join(o.split(text0, mode="character")), expected_join_text0)
         self.assertEqual(o.join(o.split(text0, mode="character", attach_punctuation=False)), expected_join_text0)
 
+        mixed_text = "이건 I'm 예시고 deeplearning.ai와 https://www.com 을 쓴다."
+        self._assert_preserved_fragments(
+            mixed_text,
+            ["I'm", "deeplearning.ai", "https://www.com"],
+            modes=("word", "character"),
+        )
+
         # split()
         self.assertEqual(o.split('안녕하세요'), ['안녕', '하', '세요'])
 

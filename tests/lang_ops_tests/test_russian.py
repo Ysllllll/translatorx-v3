@@ -20,6 +20,12 @@ class RussianTextTest(TextOpsTestCase):
         expect_join_text1 = "Сегодня система синхронизирует русские, английские и японские субтитры для большого проекта."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
+        mixed_text = "Сохраните I'm deeplearning.ai и https://www.com целиком."
+        self._assert_preserved_fragments(
+            mixed_text,
+            ["I'm", "deeplearning.ai", "https://www.com"],
+        )
+
         # split()
         self.assertEqual(o.split("Привет, мир!"), ["Привет,", "мир!"])
 

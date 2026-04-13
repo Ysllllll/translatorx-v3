@@ -7,6 +7,8 @@ from ._core._cjk_common import (
     _parse_characters,
     _attach_tokens,
     _cjk_join_tokens,
+    _protect_latin_fragments,
+    _restore_protected_tokens,
 )
 from ._core._base_ops import normalize_mode, _VALID_MODES
 
@@ -52,7 +54,8 @@ class KoreanOps(_BaseCjkOps):
             if mode == "character":
                 raw = _parse_characters(eojeol)
             else:
-                raw = self._tokenize_eojeol(eojeol)
+                protected_eojeol, mapping = _protect_latin_fragments(eojeol)
+                raw = _restore_protected_tokens(self._tokenize_eojeol(protected_eojeol), mapping)
 
             if attach_punctuation:
                 tokens = _attach_tokens(raw, multi_dot_attaches=(mode == "character"))

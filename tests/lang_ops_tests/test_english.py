@@ -30,6 +30,12 @@ class EnglishTextTest(TextOpsTestCase):
         expect_join_text3 = "He said, \"It's AI.\" (Really?) [Yes.] {'OK.'} \"orphan 'solo tail) [loose {brace,"
         self._assert_entype_text_case(text3, expect_split_text, expect_join_text3)
 
+        mixed_text = "Keep I'm deeplearning.ai and https://www.com intact."
+        self._assert_preserved_fragments(
+            mixed_text,
+            ["I'm", "deeplearning.ai", "https://www.com"],
+        )
+
         # split()
         self.assertEqual(o.split("Hello, world!"), ["Hello,", "world!"])
         self.assertEqual(o.split("It's 2026."), ["It's", "2026."])

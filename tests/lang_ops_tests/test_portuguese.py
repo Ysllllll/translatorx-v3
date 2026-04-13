@@ -20,6 +20,12 @@ class PortugueseTextTest(TextOpsTestCase):
         expect_join_text1 = "Hoje o mecanismo organiza legendas em português, espanhol e inglês para uma série inteira."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
+        mixed_text = "Mantenha I'm deeplearning.ai e https://www.com juntos."
+        self._assert_preserved_fragments(
+            mixed_text,
+            ["I'm", "deeplearning.ai", "https://www.com"],
+        )
+
         # split()
         self.assertEqual(o.split("Olá, mundo!"), ["Olá,", "mundo!"])
 
