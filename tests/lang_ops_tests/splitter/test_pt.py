@@ -6,15 +6,12 @@ from ._base import SplitterTestBase
 
 TEXT_SAMPLE: str = 'Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo. Na pág. 87 do relatório, tel. +55-11-98765-4321, descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte, ciência, música, etc. O projeto está pronto? É simplesmente incrível! A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte. A ciência transforma o mundo. Que futuro maravilhoso! Não é um grande futuro? A inovação brasileira promete.'
 
-PARAGRAPH_TEXT: str = 'Primeiro parágrafo. Duas frases.\n\nSegundo parágrafo. Com três. Frases curtas.\n\nTerceiro e último parágrafo.'
-
 _ops = LangOps.for_language("pt")
 
 
 class TestPortugueseSplitter(SplitterTestBase):
     LANGUAGE = "pt"
     TEXT_SAMPLE = TEXT_SAMPLE
-    PARAGRAPH_TEXT = PARAGRAPH_TEXT
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
@@ -106,13 +103,3 @@ class TestPortugueseSplitter(SplitterTestBase):
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-
-        # long text pipeline_paragraphs_sentences()
-        assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
-            'Primeiro parágrafo.',
-            'Duas frases.',
-            'Segundo parágrafo.',
-            'Com três.',
-            'Frases curtas.',
-            'Terceiro e último parágrafo.',
-        ]

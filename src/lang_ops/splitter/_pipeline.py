@@ -9,7 +9,6 @@ from __future__ import annotations
 from lang_ops import LangOps
 from lang_ops._core._base_ops import _BaseOps
 
-from lang_ops.splitter._paragraph import split_paragraphs
 from lang_ops.splitter._boundary import find_boundaries, split_tokens_by_boundaries
 from lang_ops.splitter._length import split_tokens_by_length
 
@@ -43,22 +42,6 @@ class ChunkPipeline:
         new._ops = self._ops
         new._groups = groups
         return new
-
-    def paragraphs(self) -> ChunkPipeline:
-        """Split each group into paragraphs.
-
-        Paragraphs are detected by blank-line regex on joined text,
-        then each paragraph is re-tokenized into its own group.
-        """
-        result: list[list[str]] = []
-        for group in self._groups:
-            text = self._ops.join(group)
-            para_spans = split_paragraphs(text)
-            for span in para_spans:
-                tokens = self._ops.split(span.text)
-                if tokens:
-                    result.append(tokens)
-        return self._with_groups(result)
 
     def sentences(self) -> ChunkPipeline:
         """Split each group into sentences."""

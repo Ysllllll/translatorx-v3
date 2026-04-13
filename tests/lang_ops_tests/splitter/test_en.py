@@ -1,12 +1,12 @@
 """English (en) splitter tests."""
 
+import pytest
+
 from lang_ops import LangOps, ChunkPipeline
 from ._base import SplitterTestBase
 
 
 TEXT_SAMPLE: str = 'Dr. Smith works at Acme Inc. She earned a degree from MIT and published 3.2 million copies... Prof. Jones asked, "Is this the best we can do?" Yes! The company, founded in Jan. 2010, has offices in St. Petersburg, London, and New York. What a remarkable achievement! Revenue grew 4.5% in 2024, reaching $2.1 billion. Can you believe it? The future is bright.'
-
-PARAGRAPH_TEXT: str = 'First paragraph here. It has two sentences.\n\nSecond paragraph. With three. Short ones.\n\nThird and final paragraph.'
 
 _ops = LangOps.for_language("en")
 
@@ -14,7 +14,6 @@ _ops = LangOps.for_language("en")
 class TestEnglishSplitter(SplitterTestBase):
     LANGUAGE = "en"
     TEXT_SAMPLE = TEXT_SAMPLE
-    PARAGRAPH_TEXT = PARAGRAPH_TEXT
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
@@ -139,26 +138,6 @@ class TestEnglishSplitter(SplitterTestBase):
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
 
-        # Pipeline paragraphs + sentences
-        assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
-            'First paragraph here.',
-            'It has two sentences.',
-            'Second paragraph.',
-            'With three.',
-            'Short ones.',
-            'Third and final paragraph.',
-        ]
-
-        # Paragraphs basic tests
-        assert _ops.split_paragraphs("First paragraph.\n\nSecond paragraph.") == ["First paragraph.", "Second paragraph."]
-        assert _ops.split_paragraphs("Hello world.") == ["Hello world."]
-        assert _ops.split_paragraphs("  Hello.  \n\n  World.  ") == ["Hello.", "World."]
-        assert _ops.split_paragraphs("First.\n\n\n\nSecond.") == ["First.", "Second."]
-        assert _ops.split_paragraphs("First.\r\n\r\nSecond.") == ["First.", "Second."]
-        assert _ops.split_paragraphs("Line one.\nLine two.") == ["Line one.\nLine two."]
-        assert _ops.split_paragraphs("") == []
-        assert _ops.split_paragraphs("   \n\n   ") == []
-
         # Pipeline immutability
         p1 = ChunkPipeline("Hello. World.", language="en")
         p2 = p1.sentences()
@@ -170,3 +149,10 @@ class TestEnglishSplitter(SplitterTestBase):
         # Pipeline edge cases
         assert ChunkPipeline("", language="en").sentences().result() == []
         assert ChunkPipeline("No terminators", language="en").sentences().result() == ["No terminators"]
+
+    def test_paragraph_api_removed(self) -> None:
+        assert not hasattr(_ops, "split_paragraphs")
+
+        pipeline = ChunkPipeline("First.\n\nSecond.", language="en")
+        with pytest.raises(AttributeError):
+            pipeline.paragraphs()

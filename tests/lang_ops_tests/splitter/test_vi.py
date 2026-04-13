@@ -6,15 +6,12 @@ from ._base import SplitterTestBase
 
 TEXT_SAMPLE: str = 'GS. Nguyễn và TS. Trần làm việc tại TP. Hà Nội. ThS. Lê cùng KS. Phạm đã phát triển một dự án trị giá 2.8 triệu đô la VN... Dr. Vũ gọi điện qua ĐT. để kiểm tra tiến độ. Dự án đã hoàn thành xong? Thật tuyệt vời! Prof. Đình cho biết kết quả nghiên cứu đã được công bố trên toàn đất nước. Khoa học thay đổi thế giới! Đây không phải là một tương lai tươi sáng? Công nghệ Việt Nam tiếp tục phát triển.'
 
-PARAGRAPH_TEXT: str = 'Đoạn đầu tiên. Hai câu.\n\nĐoạn thứ hai. Với ba. Câu ngắn.\n\nĐoạn thứ ba và cuối cùng.'
-
 _ops = LangOps.for_language("vi")
 
 
 class TestVietnameseSplitter(SplitterTestBase):
     LANGUAGE = "vi"
     TEXT_SAMPLE = TEXT_SAMPLE
-    PARAGRAPH_TEXT = PARAGRAPH_TEXT
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
@@ -101,13 +98,3 @@ class TestVietnameseSplitter(SplitterTestBase):
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-
-        # long text pipeline_paragraphs_sentences()
-        assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
-            'Đoạn đầu tiên.',
-            'Hai câu.',
-            'Đoạn thứ hai.',
-            'Với ba.',
-            'Câu ngắn.',
-            'Đoạn thứ ba và cuối cùng.',
-        ]

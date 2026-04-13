@@ -6,15 +6,12 @@ from ._base import SplitterTestBase
 
 TEXT_SAMPLE: str = 'Доктор Иванов живёт на ул. Пушкина; его оклад составляет ок. 95 тыс. руб. в месяц. Он работает в НИИ, который получил 3.7 млн. рублей на исследование... Dr. Петров спросил: «Где хранятся данные?» Как удивительно! Команда из пятнадцати человек завершила работу в декабре. Это выдающийся результат! Просто невероятно? Да, технологии меняют мир.'
 
-PARAGRAPH_TEXT: str = 'Первый абзац. Два предложения.\n\nВторой абзац. С тремя. Короткими фразами.\n\nТретий и последний абзац.'
-
 _ops = LangOps.for_language("ru")
 
 
 class TestRussianSplitter(SplitterTestBase):
     LANGUAGE = "ru"
     TEXT_SAMPLE = TEXT_SAMPLE
-    PARAGRAPH_TEXT = PARAGRAPH_TEXT
 
     def test_split_sentences(self) -> None:
         # Basic sentence splitting
@@ -105,13 +102,3 @@ class TestRussianSplitter(SplitterTestBase):
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-
-        # long text pipeline_paragraphs_sentences()
-        assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
-            'Первый абзац.',
-            'Два предложения.',
-            'Второй абзац.',
-            'С тремя.',
-            'Короткими фразами.',
-            'Третий и последний абзац.',
-        ]

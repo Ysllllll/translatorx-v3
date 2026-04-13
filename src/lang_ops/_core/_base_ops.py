@@ -5,7 +5,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from ._chars import STRIP_PUNCT, decompose_token
-from ._types import Span
 
 
 # Mode shorthand: "c" = "character", "w" = "word"
@@ -126,11 +125,6 @@ class _BaseOps(ABC):
         )
         groups = split_tokens_by_boundaries(tokens, boundaries)
         return [self.join(g) for g in groups]
-
-    def split_paragraphs(self, text: str) -> list[str]:
-        """Split text into paragraphs."""
-        from lang_ops.splitter._paragraph import split_paragraphs as _split
-        return Span.to_texts(_split(text))
 
     def split_by_length(self, text: str, max_length: int) -> list[str]:
         """Split text into chunks whose length ≤ *max_length* (token-based)."""

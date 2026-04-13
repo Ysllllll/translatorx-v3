@@ -6,15 +6,12 @@ from ._base import SplitterTestBase
 
 TEXT_SAMPLE: str = '日本の伝統文化と現代テクノロジーは、一見すると相反するもののように思える。しかし実際には、両者は深い関係にあり、多くの場面で融合が進んでいる。例えば京都の古い寺院では、AIを活用した観光ガイドが導入されている；また、書道の世界でもデジタルペンを使った新しい表現方法が注目を集めている。ある書道家は次のように語った。「技術は人間の感性を拡張するものである！」この言葉は、多くのクリエイターの共感を呼んだ……伝統工芸の分野でも、3Dプリンターを活用した新しい技法が開発されつつある。果たしてテクノロジーは伝統を破壊するのか、それとも新たな可能性を切り開くのか？専門家の意見は大きく分かれている。ある人類学者は「デジタルとアナログの融合は避けられない」と主張している！他方で、ある伝統工芸の職人は「手仕事の温もりは機械には出せない」と強く訴えている。しかし両者の対話を通じて、予想もしなかった革新的な作品が生まれることもある。例えば和紙とLED技術を融合した照明器具は、国内外で非常に高い評価を得ている。伝統を守りながら革新を取り入れる、この絶妙なバランスこそが日本文化の真髄ではないだろうか。'
 
-PARAGRAPH_TEXT: str = '日本の伝統文化と現代テクノロジーは密接な関係にある。\n\n新しい表現方法が注目を集めている。\n\n伝統を守ることが大切だ。'
-
 _ops = LangOps.for_language("ja")
 
 
 class TestJapaneseSplitter(SplitterTestBase):
     LANGUAGE = "ja"
     TEXT_SAMPLE = TEXT_SAMPLE
-    PARAGRAPH_TEXT = PARAGRAPH_TEXT
 
     def test_split_sentences(self) -> None:
         # 基本的な文分割
@@ -138,10 +135,3 @@ class TestJapaneseSplitter(SplitterTestBase):
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
         assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-
-        # long text pipeline_paragraphs_sentences()
-        assert ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE).paragraphs().sentences().result() == [
-            '日本の伝統文化と現代テクノロジーは密接な関係にある。',
-            '新しい表現方法が注目を集めている。',
-            '伝統を守ることが大切だ。',
-        ]

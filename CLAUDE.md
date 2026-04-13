@@ -31,7 +31,7 @@ A subtitle processing toolkit with two top-level packages under `src/`.
 ```
 src/
 ├── lang_ops/                        # Language-adapted text operations
-│   ├── __init__.py                  # Public API: LangOps, ChunkPipeline, Span, normalize_language
+│   ├── __init__.py                  # Public API: LangOps, ChunkPipeline, normalize_language
 │   ├── en_type.py                   # EnTypeOps (shared by 7 space-delimited languages)
 │   ├── chinese.py / japanese.py / korean.py  # CJK language ops
 │   ├── _core/
@@ -40,12 +40,10 @@ src/
 │   │   ├── _cjk_common.py           # _BaseCjkOps + token parsing/attachment/join helpers
 │   │   ├── _chars.py                # Unicode classification + punctuation frozensets
 │   │   ├── _normalize.py            # Language code normalization
-│   │   ├── _availability.py         # Optional dependency guards (jieba/mecab/kiwi)
-│   │   └── _types.py                # Span dataclass
+│   │   └── _availability.py         # Optional dependency guards (jieba/mecab/kiwi)
 │   └── splitter/
 │       ├── _pipeline.py             # ChunkPipeline (immutable, chainable)
 │       ├── _boundary.py             # Token-based boundary detection (sentences + clauses)
-│       ├── _paragraph.py            # Paragraph splitter
 │       └── _length.py               # Length-based splitter (uses Protocol for decoupling)
 └── subtitle/                        # Subtitle data structures + word timing + segment building
     ├── __init__.py                  # Exports Word, Segment, SentenceRecord, SegmentBuilder, etc.
@@ -77,7 +75,7 @@ src/
 ```
 lang_ops                              ←  subtitle
   token: split/join/length/normalize       _types (frozen dataclasses)
-  segment: sentences/clauses/paragraphs    words (fill/find/distribute/align)
+  segment: sentences/clauses               words (fill/find/distribute/align)
   pipeline: ChunkPipeline                  builder (SegmentBuilder, _StreamBuilder)
   shortcuts: ops.split_sentences() etc.    readers (SRT)
 ```
@@ -136,7 +134,6 @@ ops.restore_punc(text_a, text_b)
 # Segment-level shortcuts
 ops.split_sentences(text) → list[str]
 ops.split_clauses(text)   → list[str]   # sentence-aware (splits at sentence boundaries too)
-ops.split_paragraphs(text) → list[str]
 ops.split_by_length(text, max_length) → list[str]
 ops.chunk(text) → ChunkPipeline
 ```
@@ -145,12 +142,10 @@ ops.chunk(text) → ChunkPipeline
 
 ```
 ops.chunk(text)
-  .paragraphs()
   .sentences()
   .clauses()            # sentence-aware
   .by_length(50)        # token-boundary aware, uses ops.length()
   .result()             → list[str]
-  .spans()              → list[Span]
   .segments(words)      → list[Segment]   # deferred import from subtitle.words
 ```
 
@@ -189,7 +184,6 @@ align_segments(chunks, words) → list[Segment]    # text chunks + timed words �
 - `Word(word, start, end, speaker=None, extra={})`
 - `Segment(start, end, text, speaker=None, words=[], extra={})`
 - `SentenceRecord(src_text, start, end, segments=[], ...)` — also has `chunk_cache`, `translations`, `alignment`
-- `Span(text, start, end)` — positional text fragment
 
 ## Fonts
 

@@ -1,7 +1,7 @@
 """Shared base class for per-language splitter tests.
 
-Subclasses set LANGUAGE, TEXT_SAMPLE, and PARAGRAPH_TEXT as class
-attributes; the base provides helper methods for calling each API.
+Subclasses set LANGUAGE and TEXT_SAMPLE as class attributes; the base
+provides helper methods for calling each API.
 
 Convention: base class name intentionally omits the ``Test`` prefix so
 pytest does *not* try to collect it directly.
@@ -18,12 +18,10 @@ class SplitterTestBase:
     Required class attributes:
         LANGUAGE       — ISO language code (e.g. "en", "zh")
         TEXT_SAMPLE    — realistic paragraph (400+ chars)
-        PARAGRAPH_TEXT — 3-paragraph text separated by blank lines
     """
 
     LANGUAGE: str = ""
     TEXT_SAMPLE: str = ""
-    PARAGRAPH_TEXT: str = ""
 
     # ------------------------------------------------------------------
     # Reconstruction: separator.join(split) == ops.join(ops.split(text))
@@ -63,13 +61,5 @@ class SplitterTestBase:
             ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE)
             .sentences()
             .clauses()
-            .result()
-        )
-
-    def _pipeline_paragraphs_sentences(self) -> list[str]:
-        return (
-            ChunkPipeline(self.PARAGRAPH_TEXT, language=self.LANGUAGE)
-            .paragraphs()
-            .sentences()
             .result()
         )
