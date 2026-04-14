@@ -28,7 +28,7 @@ from collections.abc import Callable, MutableMapping
 from typing import TYPE_CHECKING
 
 from .model import Segment, SentenceRecord, Word
-from .align import fill_words, align_segments
+from .align import fill_words, align_segments, distribute_words
 
 if TYPE_CHECKING:
     from lang_ops._core._base_ops import _BaseOps
@@ -77,15 +77,17 @@ def _speaker_chunks(all_words: list[Word], ops: _BaseOps) -> list[str]:
 class Subtitle:
     """Immutable chainable processor for restructuring subtitle segments.
 
-    Holds ``(all_words, pipeline)`` — each method returns a **new**
-    instance so calls can be chained without mutating prior state.
+    After ``sentences()``, the instance holds one pipeline per sentence
+    with its corresponding words.  Subsequent operations (``clauses``,
+    ``max_length``, ``apply``) are applied per-sentence, so they never
+    cross sentence boundaries.
 
     All text operations are delegated to
     :class:`~lang_ops.chunk.ChunkPipeline` which tokenizes once and
     operates on the token array.
     """
 
-    __slots__ = ("_ops", "_all_words", "_pipeline")
+    __slots__ = ("_ops", "_pipelines", "_words")
 
     # ---- construction ------------------------------------------------
 
@@ -108,13 +110,15 @@ class Subtitle:
             raise TypeError("Subtitle requires either ops or language")
 
         all_words, full_text = _extract(segments, self._ops)
-        self._all_words = all_words
 
         if split_by_speaker:
             chunks = _speaker_chunks(all_words, self._ops)
-            self._pipeline = ChunkPipeline.from_chunks(chunks, ops=self._ops)
+            pipeline = ChunkPipeline.from_chunks(chunks, ops=self._ops)
         else:
-            self._pipeline = ChunkPipeline(full_text, ops=self._ops)
+            pipeline = ChunkPipeline(full_text, ops=self._ops)
+
+        self._pipelines: list[ChunkPipeline] = [pipeline]
+        self._words: list[list[Word]] = [all_words]
 
     @classmethod
     def from_words(
@@ -138,41 +142,80 @@ class Subtitle:
             return cls([seg], ops=ops)
         return cls([seg], language=language)
 
-    def _with_pipeline(self, pipeline: object) -> Subtitle:
-        """Create a new Subtitle sharing the same words."""
-        new = object.__new__(Subtitle)
-        new._ops = self._ops
-        new._all_words = self._all_words
-        new._pipeline = pipeline
-        return new
-
-    def _with_words_and_pipeline(
-        self, words: list[Word], pipeline: object,
+    def _with_pipelines(
+        self,
+        pipelines: list[object],
+        words: list[list[Word]] | None = None,
     ) -> Subtitle:
-        """Create a new Subtitle with updated words and pipeline."""
+        """Create a new Subtitle with updated pipelines (and optionally words)."""
         new = object.__new__(Subtitle)
         new._ops = self._ops
-        new._all_words = words
-        new._pipeline = pipeline
+        new._pipelines = pipelines
+        new._words = words if words is not None else self._words
         return new
 
     # ---- text operations (delegated to ChunkPipeline) ----------------
 
     def sentences(self) -> Subtitle:
-        """Split each chunk into sentences."""
-        return self._with_pipeline(self._pipeline.sentences())
+        """Split each chunk into sentences.
 
-    def clauses(self) -> Subtitle:
-        """Split each chunk into clauses (sentence-aware)."""
-        return self._with_pipeline(self._pipeline.clauses())
+        After this call, each pipeline holds exactly one sentence and
+        words are distributed to their respective sentences (early
+        alignment).  Subsequent operations are per-sentence.
+        """
+        from lang_ops.chunk._pipeline import ChunkPipeline
 
-    def max_length(self, max_length: int) -> Subtitle:
-        """Split each chunk by length."""
-        return self._with_pipeline(self._pipeline.max_length(max_length))
+        new_pipelines: list[ChunkPipeline] = []
+        new_words: list[list[Word]] = []
+
+        for pipeline, words in zip(self._pipelines, self._words):
+            sent_pipeline = pipeline.sentences()
+            sent_texts = sent_pipeline.result()
+
+            if len(sent_texts) <= 1:
+                # No actual split — keep original pipeline and words
+                new_pipelines.append(sent_pipeline)
+                new_words.append(words)
+            else:
+                word_groups = distribute_words(words, sent_texts)
+                # Each sentence gets its own pipeline from pre-tokenized groups
+                for group, wg in zip(sent_pipeline._groups, word_groups):  # noqa: SLF001
+                    new_pipelines.append(
+                        ChunkPipeline._from_groups([group], self._ops)  # noqa: SLF001
+                    )
+                    new_words.append(wg)
+
+        return self._with_pipelines(new_pipelines, new_words)
+
+    def clauses(self, min_length: int | None = None) -> Subtitle:
+        """Split each chunk into clauses (sentence-aware).
+
+        Args:
+            min_length: If given, merge back clauses shorter than this.
+        """
+        return self._with_pipelines(
+            [p.clauses(min_length=min_length) for p in self._pipelines]
+        )
+
+    def max_length(self, max_length: int, min_length: int | None = None) -> Subtitle:
+        """Split each chunk by length.
+
+        Args:
+            max_length: Upper bound on chunk length.
+            min_length: If given, merge back groups shorter than this.
+        """
+        return self._with_pipelines(
+            [p.max_length(max_length, min_length=min_length) for p in self._pipelines]
+        )
 
     def merge(self, max_length: int) -> Subtitle:
-        """Greedily merge adjacent chunks whose combined length ≤ *max_length*."""
-        return self._with_pipeline(self._pipeline.merge(max_length))
+        """Greedily merge adjacent chunks within each pipeline.
+
+        Merging is per-pipeline (i.e. per-sentence after ``sentences()``).
+        """
+        return self._with_pipelines(
+            [p.merge(max_length) for p in self._pipelines]
+        )
 
     def apply(
         self,
@@ -191,58 +234,112 @@ class Subtitle:
         - ``["part1", "part2"]`` → 1:N splitting (e.g. NLP/LLM splitting)
         - ``[]`` → deletion
 
+        Texts from all pipelines are collected and dispatched to *fn*
+        together (respecting *batch_size*), then results are distributed
+        back to their respective pipelines.
+
         See :meth:`ChunkPipeline.apply` for full parameter docs.
         """
-        return self._with_pipeline(
-            self._pipeline.apply(fn, cache=cache,
-                                 batch_size=batch_size, workers=workers,
-                                 skip_if=skip_if)
-        )
+        from lang_ops.chunk._pipeline import ChunkPipeline, _call_apply_fn
+
+        # Collect all texts across pipelines
+        pipeline_texts: list[list[str]] = [p.result() for p in self._pipelines]
+        all_texts: list[str] = []
+        for texts in pipeline_texts:
+            all_texts.extend(texts)
+
+        if not all_texts:
+            return self
+
+        # --- resolve from cache and skip_if ---
+        all_results: list[list[str] | None] = [None] * len(all_texts)
+        miss_indices: list[int] = []
+        miss_texts: list[str] = []
+
+        for idx, text in enumerate(all_texts):
+            if skip_if is not None and skip_if(text):
+                all_results[idx] = [text]
+            elif cache is not None and text in cache:
+                all_results[idx] = cache[text]
+            else:
+                miss_indices.append(idx)
+                miss_texts.append(text)
+
+        # --- call fn for cache misses ---
+        if miss_texts:
+            miss_results = _call_apply_fn(fn, miss_texts, batch_size, workers)
+            for mi, result_list in zip(miss_indices, miss_results):
+                all_results[mi] = result_list
+                if cache is not None:
+                    cache[all_texts[mi]] = result_list
+
+        # --- distribute results back to per-pipeline groups ---
+        new_pipelines: list[ChunkPipeline] = []
+        offset = 0
+        for i, texts in enumerate(pipeline_texts):
+            n = len(texts)
+            pipeline_results = all_results[offset:offset + n]
+            offset += n
+
+            new_groups: list[list[str]] = []
+            ops = self._pipelines[i]._ops  # noqa: SLF001
+            for parts in pipeline_results:
+                assert parts is not None
+                for part in parts:
+                    tokens = ops.split(part)
+                    if tokens:
+                        new_groups.append(tokens)
+
+            new_pipelines.append(ChunkPipeline._from_groups(new_groups, ops))  # noqa: SLF001
+
+        return self._with_pipelines(new_pipelines)
 
     # ---- output ------------------------------------------------------
 
     def build(self) -> list[Segment]:
         """Align current chunks with words and return Segments."""
-        return align_segments(self._pipeline.result(), self._all_words)
+        result: list[Segment] = []
+        for pipeline, words in zip(self._pipelines, self._words):
+            chunks = pipeline.result()
+            result.extend(align_segments(chunks, words))
+        return result
 
     def records(self, max_length: int | None = None) -> list[SentenceRecord]:
         """Return SentenceRecords: one per sentence, with sub-segments.
 
+        If ``sentences()`` has not been called, it is done automatically.
+
         Each record's ``src_text`` is a full sentence.  If *max_length*
         is given, sentences are further split by ``clauses → max_length``
         to produce the record's ``segments``.
-
-        Efficient: operates on existing token groups without re-tokenizing.
         """
-        sent_pipeline = self._pipeline.sentences()
-        sentence_chunks = sent_pipeline.result()
-        sentence_segments = align_segments(sentence_chunks, self._all_words)
+        # Ensure we're at sentence granularity
+        sub = self if len(self._pipelines) > 1 or not self._pipelines else self.sentences()
 
-        if max_length is None:
-            return [
-                SentenceRecord(
-                    src_text=seg.text,
-                    start=seg.start, end=seg.end,
-                    segments=[seg],
-                )
-                for seg in sentence_segments
-            ]
-
-        # Operate on existing token groups — no re-tokenization
-        sent_groups = sent_pipeline._groups  # noqa: SLF001
         records: list[SentenceRecord] = []
-        for sent_seg, group in zip(sentence_segments, sent_groups):
-            sub_pipeline = sent_pipeline._with_groups([group])  # noqa: SLF001
-            sub_chunks = (sub_pipeline
-                          .clauses()
-                          .max_length(max_length)
-                          .result())
-            sub_segments = align_segments(sub_chunks, sent_seg.words)
-            records.append(SentenceRecord(
-                src_text=sent_seg.text,
-                start=sent_seg.start, end=sent_seg.end,
-                segments=sub_segments,
-            ))
+        for pipeline, words in zip(sub._pipelines, sub._words):
+            src_text = sub._ops.join(
+                [sub._ops.join(g) for g in pipeline._groups]  # noqa: SLF001
+            )
+            if not src_text.strip():
+                continue
+
+            if max_length is not None:
+                sub_chunks = (pipeline
+                              .clauses()
+                              .max_length(max_length)
+                              .result())
+            else:
+                sub_chunks = pipeline.result()
+
+            sub_segments = align_segments(sub_chunks, words)
+            if sub_segments:
+                records.append(SentenceRecord(
+                    src_text=src_text,
+                    start=sub_segments[0].start,
+                    end=sub_segments[-1].end,
+                    segments=sub_segments,
+                ))
 
         return records
 

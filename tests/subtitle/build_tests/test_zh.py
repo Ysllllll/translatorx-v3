@@ -418,13 +418,13 @@ class TestChineseMerge:
         ]
 
     def test_merge_all_fit(self) -> None:
-        """When max_length fits everything, merge combines all chunks."""
+        """After sentences(), merge(100) merges within each sentence only."""
         result = (Subtitle(_short_segments(), _ops)
                   .sentences().merge(100).build())
-        # No group boundaries → merges into 1
-        assert len(result) == 1
+        # Each sentence is its own pipeline — merge can't cross sentences
+        assert len(result) == 2
         assert "你好世界。" in result[0].text
-        assert "今天天气不错！" in result[0].text
+        assert "今天天气不错！" in result[1].text
 
     def test_merge_nothing_fits(self) -> None:
         result = (Subtitle(_short_segments(), _ops)
@@ -434,10 +434,11 @@ class TestChineseMerge:
     def test_merge_words_timing(self) -> None:
         result = (Subtitle(_short_segments(), _ops)
                   .sentences().merge(100).build())
-        # Merges into 1 segment spanning all words
-        assert len(result) == 1
+        assert len(result) == 2
         assert result[0].start == 0.0
-        assert result[0].end == 5.0
+        assert result[0].end == 2.0
+        assert result[1].start == 2.0
+        assert result[1].end == 5.0
 
     def test_merge_chain_full(self) -> None:
         """Full chain: sentences → clauses → max_length → merge."""

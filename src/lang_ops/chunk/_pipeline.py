@@ -3,27 +3,27 @@
 Fully token-based: tokenizes once at init, all operations work on
 the token array.  No redundant re-tokenization across chained calls.
 
-**Parent-aware merge:** each splitting operation (``sentences``,
-``clauses``, ``max_length``) records which pre-split group each new
-sub-group came from via ``_parent_ids``.  ``merge()`` only combines
-groups that share the same parent, so it never crosses the boundary
-set by the previous split.
+Each splitting operation (``sentences``, ``clauses``, ``max_length``)
+subdivides existing groups and returns a new pipeline instance.
+``merge()`` greedily combines all adjacent groups — use it when there
+are no structural boundaries to preserve (e.g. after ``max_length``).
+
+For boundary-respecting merging, use ``min_length`` parameters on
+``clauses()`` and ``max_length()`` — they skip boundaries that would
+create chunks shorter than the threshold.
 
 Example::
 
-    pipeline.sentences().clauses().merge(60)
+    pipeline.sentences().clauses(min_length=60)
     #  sentences() splits into sentence groups
-    #  clauses() splits each sentence, tagging each clause with its
-    #            sentence index as parent
-    #  merge(60) only merges clauses within the same sentence
+    #  clauses() splits each sentence by clause boundaries, then
+    #            merges back any clause shorter than 60 chars
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, MutableMapping
 from concurrent.futures import ThreadPoolExecutor
-from itertools import groupby
-from math import ceil
 from typing import Any
 
 from lang_ops import LangOps
@@ -47,12 +47,9 @@ class ChunkPipeline:
 
     Stores a token array and groups.  Each operation subdivides (or
     merges) groups and returns a new pipeline instance.
-
-    ``_parent_ids`` tracks which pre-split group each current group
-    originated from.  Only ``merge()`` reads this; splitting ops write it.
     """
 
-    __slots__ = ("_ops", "_groups", "_parent_ids")
+    __slots__ = ("_ops", "_groups")
 
     def __init__(self, text: str, *, language: str | None = None, ops: _BaseOps | None = None) -> None:
         if ops is not None:
@@ -67,7 +64,6 @@ class ChunkPipeline:
             self._groups: list[list[str]] = [tokens] if tokens else []
         else:
             self._groups = []
-        self._parent_ids: list[int] = list(range(len(self._groups)))
 
     @classmethod
     def from_chunks(cls, chunks: list[str], ops: _BaseOps) -> ChunkPipeline:
@@ -79,42 +75,32 @@ class ChunkPipeline:
         new = object.__new__(cls)
         new._ops = ops
         new._groups = [ops.split(c) for c in chunks if c]
-        new._parent_ids = list(range(len(new._groups)))
         return new
 
-    def _with_groups(self, groups: list[list[str]]) -> ChunkPipeline:
-        """Create a new pipeline with independent groups (parent reset)."""
-        new = object.__new__(ChunkPipeline)
-        new._ops = self._ops
+    @classmethod
+    def _from_groups(cls, groups: list[list[str]], ops: _BaseOps) -> ChunkPipeline:
+        """Create from pre-tokenized groups (no re-tokenization)."""
+        new = object.__new__(cls)
+        new._ops = ops
         new._groups = groups
-        new._parent_ids = list(range(len(groups)))
         return new
 
     def _split(self, split_fn) -> ChunkPipeline:
-        """Apply *split_fn* to each group, tracking parent lineage.
-
-        Each sub-group inherits the **index** of the group it was split
-        from, so a subsequent ``merge()`` will not cross that boundary.
+        """Apply *split_fn* to each group.
 
         Idempotent: if no group is actually split (every group → 1
-        sub-group), returns ``self`` to preserve existing parent_ids.
+        sub-group), returns ``self``.
         """
         result: list[list[str]] = []
-        parent_ids: list[int] = []
         changed = False
-        for i, group in enumerate(self._groups):
+        for group in self._groups:
             sub_groups = split_fn(group)
             if len(sub_groups) != 1:
                 changed = True
             result.extend(sub_groups)
-            parent_ids.extend([i] * len(sub_groups))
         if not changed:
             return self
-        new = object.__new__(ChunkPipeline)
-        new._ops = self._ops
-        new._groups = result
-        new._parent_ids = parent_ids
-        return new
+        return ChunkPipeline._from_groups(result, self._ops)
 
     def sentences(self) -> ChunkPipeline:
         """Split each group into sentences."""
@@ -127,8 +113,13 @@ class ChunkPipeline:
             return split_tokens_by_boundaries(group, boundaries)
         return self._split(_split_fn)
 
-    def clauses(self) -> ChunkPipeline:
-        """Split each group into clauses (sentence boundaries included)."""
+    def clauses(self, min_length: int | None = None) -> ChunkPipeline:
+        """Split each group into clauses (sentence boundaries included).
+
+        Args:
+            min_length: If given, merge back groups shorter than this
+                threshold after splitting.  Prevents overly short chunks.
+        """
         def _split_fn(group):
             boundaries = find_boundaries(
                 group,
@@ -136,34 +127,35 @@ class ChunkPipeline:
                 self._ops.abbreviations,
                 self._ops.clause_separators,
             )
-            return split_tokens_by_boundaries(group, boundaries)
+            sub_groups = split_tokens_by_boundaries(group, boundaries)
+            if min_length is not None and len(sub_groups) > 1:
+                sub_groups = _merge_short_groups(sub_groups, self._ops, min_length)
+            return sub_groups
         return self._split(_split_fn)
 
-    def max_length(self, max_length: int) -> ChunkPipeline:
-        """Split each group by length."""
+    def max_length(self, max_length: int, min_length: int | None = None) -> ChunkPipeline:
+        """Split each group by length.
+
+        Args:
+            max_length: Upper bound on chunk length.
+            min_length: If given, merge back groups shorter than this
+                threshold after splitting.
+        """
         def _split_fn(group):
-            return split_tokens_by_length(group, self._ops, max_length)
+            sub_groups = split_tokens_by_length(group, self._ops, max_length)
+            if min_length is not None and len(sub_groups) > 1:
+                sub_groups = _merge_short_groups(sub_groups, self._ops, min_length)
+            return sub_groups
         return self._split(_split_fn)
 
     def merge(self, max_length: int) -> ChunkPipeline:
-        """Greedily merge adjacent groups whose combined length ≤ *max_length*.
-
-        Only merges groups that share the same parent — never crosses the
-        boundary set by the previous splitting operation.
-        """
-        result: list[list[str]] = []
-        for _, block in groupby(
-            range(len(self._groups)),
-            key=lambda i: self._parent_ids[i],
-        ):
-            indices = list(block)
-            groups_to_merge = [self._groups[i] for i in indices]
-            result.extend(
-                merge_token_groups(groups_to_merge, self._ops, max_length)
-            )
-        # Reset parent_ids — each merged group is independent for the
-        # next operation.
-        return self._with_groups(result)
+        """Greedily merge all adjacent groups whose combined length ≤ *max_length*."""
+        if len(self._groups) <= 1:
+            return self
+        merged = merge_token_groups(self._groups, self._ops, max_length)
+        if len(merged) == len(self._groups):
+            return self
+        return ChunkPipeline._from_groups(merged, self._ops)
 
     def apply(
         self,
@@ -199,7 +191,7 @@ class ChunkPipeline:
                 skipping short texts that don't need processing.
 
         Returns:
-            A new pipeline with re-tokenized groups and parent lineage.
+            A new pipeline with re-tokenized groups.
         """
         texts = self.result()
         if not texts:
@@ -227,22 +219,16 @@ class ChunkPipeline:
                 if cache is not None:
                     cache[texts[mi]] = result_list
 
-        # --- rebuild groups and parent_ids ---
+        # --- rebuild groups ---
         new_groups: list[list[str]] = []
-        parent_ids: list[int] = []
-        for i, parts in enumerate(all_results):
+        for parts in all_results:
             assert parts is not None
             for part in parts:
                 tokens = self._ops.split(part)
                 if tokens:
                     new_groups.append(tokens)
-                    parent_ids.append(i)
 
-        new = object.__new__(ChunkPipeline)
-        new._ops = self._ops
-        new._groups = new_groups
-        new._parent_ids = parent_ids
-        return new
+        return ChunkPipeline._from_groups(new_groups, self._ops)
 
     def result(self) -> list[str]:
         """Return the current list of text fragments."""
@@ -267,6 +253,38 @@ class ChunkPipeline:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _merge_short_groups(
+    groups: list[list[str]],
+    ops: _BaseOps,
+    min_length: int,
+) -> list[list[str]]:
+    """Merge groups shorter than *min_length* into their neighbors.
+
+    Accumulates groups left-to-right until the accumulated length
+    reaches *min_length*, then starts a new accumulator.  Any trailing
+    short chunk is folded into the last full group.
+    """
+    if not groups:
+        return groups
+
+    result: list[list[str]] = []
+    acc: list[str] = []
+
+    for group in groups:
+        acc = acc + group if acc else list(group)
+        if ops.length(ops.join(acc)) >= min_length:
+            result.append(acc)
+            acc = []
+
+    if acc:
+        if result:
+            result[-1] = result[-1] + acc
+        else:
+            result.append(acc)
+
+    return result
+
 
 def _call_apply_fn(
     fn: ApplyFn,

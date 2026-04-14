@@ -155,29 +155,29 @@ ops.chunk(text) → ChunkPipeline
 ```
 ops.chunk(text)
   .sentences()
-  .clauses()            # sentence-aware
-  .max_length(50)       # token-boundary aware, uses ops.length()
-  .merge(80)            # greedy merge adjacent chunks (parent-aware)
-  .apply(fn)            # external fn: list[str] → list[list[str]] (unified split/apply/batch)
-  .result()             → list[str]
-  .segments(words)      → list[Segment]   # deferred import from subtitle.align
+  .clauses(min_length=60)   # sentence-aware; min_length merges back short clauses
+  .max_length(50, min_length=30)  # token-boundary aware; min_length avoids tiny fragments
+  .merge(80)                # greedy merge all adjacent chunks
+  .apply(fn)                # external fn: list[str] → list[list[str]] (unified split/apply/batch)
+  .result()                 → list[str]
+  .segments(words)          → list[Segment]   # deferred import from subtitle.align
 
 # Alternative construction
 ChunkPipeline.from_chunks(chunks, ops)  # from pre-split chunk list
 ```
 
-### Subtitle (chainable, immutable)
+### Subtitle (chainable, immutable — per-sentence pipelines)
 
 ```
 from subtitle import Subtitle
 
 sub = Subtitle(segments, language="zh")           # or ops=ops; split_by_speaker=True groups by speaker
 sub = Subtitle.from_words(words, language="zh")   # from flat word list
-sub.sentences()                        → Subtitle
-sub.clauses()                          → Subtitle  # sentence-aware
-sub.max_length(40)                     → Subtitle
-sub.merge(60)                          → Subtitle  # parent-aware greedy merge
-sub.apply(fn, cache, batch_size, workers)  → Subtitle  # unified external fn
+sub.sentences()                        → Subtitle  # splits into per-sentence pipelines (early word alignment)
+sub.clauses(min_length=60)             → Subtitle  # per-sentence clause splitting
+sub.max_length(40, min_length=20)      → Subtitle  # per-sentence length splitting
+sub.merge(60)                          → Subtitle  # per-sentence greedy merge
+sub.apply(fn, cache, batch_size, workers)  → Subtitle  # batched across all pipelines
 sub.build()                            → list[Segment]
 sub.records(max_length=40)             → list[SentenceRecord]
 
@@ -187,7 +187,7 @@ done = stream.feed(segment)            → list[Segment]  # completed sentences
 remaining = stream.flush()             → list[Segment]
 ```
 
-`Subtitle` delegates all text operations to `ChunkPipeline` — no redundant re-tokenization. `merge()` freely combines adjacent chunks; use `records()` for sentence-level grouping.
+After `sentences()`, each operation is implicitly per-sentence — it never crosses sentence boundaries. This replaces the old `_parent_ids` mechanism with structural isolation (separate pipeline instances per sentence).
 
 ### Subtitle word timing
 

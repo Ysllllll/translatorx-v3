@@ -340,15 +340,15 @@ class TestEnglishMerge:
         ]
 
     def test_merge_all_fit_single(self) -> None:
-        """When max_length fits everything, merge combines all chunks."""
+        """After sentences(), merge(100) merges within each sentence only."""
         result = (Subtitle(_short_segments(), _ops)
                   .sentences()
                   .merge(100)
                   .build())
-        # No group boundaries → merges into 1
-        assert len(result) == 1
-        assert "Hello world." in result[0].text
-        assert "How are you?" in result[0].text
+        # Each sentence is its own pipeline — merge can't cross sentences
+        assert len(result) == 2
+        assert result[0].text == "Hello world."
+        assert result[1].text == "How are you?"
 
     def test_merge_nothing_fits(self) -> None:
         """When max_length is smaller than each chunk, no merging occurs."""
@@ -360,15 +360,16 @@ class TestEnglishMerge:
         assert len(result) == 2
 
     def test_merge_words_timing(self) -> None:
-        """Merged segments have correct word timing."""
+        """After sentences(), merge preserves per-sentence timing."""
         result = (Subtitle(_short_segments(), _ops)
                   .sentences()
                   .merge(100)
                   .build())
-        # Merges into 1 segment spanning all words
-        assert len(result) == 1
+        assert len(result) == 2
         assert result[0].start == 0.0
-        assert result[0].end == 5.0
+        assert result[0].end == 2.0
+        assert result[1].start == 2.5
+        assert result[1].end == 5.0
 
     def test_merge_chain_full(self) -> None:
         """Full chain: sentences → clauses → max_length → merge."""
@@ -481,7 +482,7 @@ class TestEnglishApply:
         assert call_count == 0
         assert first_count > 0
 
-    def test_apply_respects_parent_ids(self) -> None:
+    def test_apply_respects_sentence_boundaries(self) -> None:
         """apply() after sentences → merge only within sentences."""
         def split_long(texts):
             result = []
