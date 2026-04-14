@@ -24,6 +24,14 @@ def split_tokens_by_length(
     the limit.  A single token exceeding *max_length* is emitted as-is
     (minimum unit = one token, never break a token).
 
+    .. note:: **Performance**
+       Each token addition calls ``ops.join(chunk + [token])`` which is
+       O(chunk_size).  For a group of N tokens this is O(N²).  This is
+       acceptable because this function operates on individual groups
+       (typically 10–30 tokens after sentence/clause splitting).  If
+       future workloads involve very long unsplit groups, consider
+       incremental length tracking instead of full re-join.
+
     Args:
         tokens: Pre-tokenized array from ``ops.split()``.
         ops: Language ops providing ``join()`` and ``length()``.

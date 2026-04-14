@@ -74,6 +74,15 @@ def merge_chunks_by_length(
     When a chunk already starts with the separator, no extra separator is
     added (avoids double spaces).
 
+    .. note:: **Design choice — hardcoded separator**
+       This function operates on already-joined text strings, not tokens.
+       ``ops.join()`` is designed for token arrays and includes context-
+       sensitive logic (e.g. quote handling in EnType) that would produce
+       incorrect results when applied to complete sentences.  The simple
+       ``"" / " "`` separator is correct for text-level merging.  For
+       token-level merging, use :func:`merge_token_groups` (which the
+       :class:`ChunkPipeline` uses internally via ``ops.join()``).
+
     Args:
         chunks: Text fragments to merge.
         ops: Language ops providing ``length()`` and ``is_cjk``.
