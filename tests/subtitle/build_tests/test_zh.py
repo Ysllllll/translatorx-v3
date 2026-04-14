@@ -449,12 +449,15 @@ class TestChineseMerge:
         original_text = "".join(s.text for s in _asr_news_segments())
         assert merged_text == original_text
 
-    def test_merge_can_cross_sentence_boundaries(self) -> None:
-        """Merge freely combines adjacent chunks (no group tracking)."""
+    def test_merge_respects_sentence_boundaries(self) -> None:
+        """sentences → clauses → merge: merge only within each sentence."""
         proc = Subtitle(_asr_news_segments(), _ops).sentences().clauses()
         merged = proc.merge(200).build()
-        # merge(200) merges all clauses into 1 chunk
-        assert len(merged) == 1
+        # Each sentence's clauses are merged, but sentences stay separate
+        sentence_count = len(
+            Subtitle(_asr_news_segments(), _ops).sentences().build()
+        )
+        assert len(merged) == sentence_count
 
 
 # ---------------------------------------------------------------------------

@@ -381,18 +381,22 @@ class TestEnglishMerge:
         for seg in result:
             assert _ops.length(seg.text.strip()) <= 40 or len(_ops.split(seg.text.strip())) == 1
 
-    def test_merge_can_cross_sentence_boundaries(self) -> None:
-        """Merge freely combines adjacent chunks (no group tracking)."""
+    def test_merge_respects_sentence_boundaries(self) -> None:
+        """sentences → clauses → merge: merge only within each sentence."""
         proc = (Subtitle(_asr_interview_segments(), _ops)
                 .sentences().clauses())
         clause_count = len(proc.build())
 
-        # merge(500) — huge limit merges everything
+        # merge(500) — huge limit, but respects sentence boundaries
         merged = proc.merge(500).build()
-        assert len(merged) == 1
+        # Each sentence's clauses are merged into 1, but sentences stay separate
+        sentence_count = len(
+            Subtitle(_asr_interview_segments(), _ops).sentences().build()
+        )
+        assert len(merged) == sentence_count
 
-    def test_merge_without_sentences_can_cross(self) -> None:
-        """Without sentences(), merge is free to combine all chunks."""
+    def test_merge_without_prior_split_can_combine_all(self) -> None:
+        """Without sentences(), max_length shares one parent — merge is free."""
         result = (Subtitle(_short_segments(), _ops)
                   .max_length(5)
                   .merge(100)
