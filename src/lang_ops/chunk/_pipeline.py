@@ -20,7 +20,11 @@ Example::
 
 from __future__ import annotations
 
+from collections.abc import Callable, MutableMapping
+from concurrent.futures import ThreadPoolExecutor
 from itertools import groupby
+from math import ceil
+from typing import Any
 
 from lang_ops import LangOps
 from lang_ops._core._base_ops import _BaseOps
@@ -28,6 +32,10 @@ from lang_ops._core._base_ops import _BaseOps
 from lang_ops.chunk._boundary import find_boundaries, split_tokens_by_boundaries
 from lang_ops.chunk._length import split_tokens_by_length
 from lang_ops.chunk._merge import merge_token_groups
+
+# Type alias for the split callback and cache protocol.
+SplitFn = Callable[[list[str]], list[list[str]]]
+SplitCache = MutableMapping[str, list[str]]
 
 
 class ChunkPipeline:
@@ -145,6 +153,73 @@ class ChunkPipeline:
         # next operation.
         return self._with_groups(result)
 
+    def split(
+        self,
+        fn: SplitFn,
+        cache: SplitCache | None = None,
+        batch_size: int = 1,
+        workers: int = 1,
+    ) -> ChunkPipeline:
+        """Split chunks using an external function.
+
+        *fn* receives a batch of texts and returns a list of split results
+        (one ``list[str]`` per input text).  Chunks that should not be
+        split are returned as ``[text]``.
+
+        Args:
+            fn: ``list[str] → list[list[str]]``.
+            cache: Optional dict-like mapping ``text → list[str]``.
+                Hits are reused; misses are computed by *fn* and stored.
+            batch_size: Number of texts per *fn* call.
+                ``0`` means pass all uncached texts in one call.
+                Default ``1`` (one text per call).
+            workers: Number of threads for concurrent *fn* calls.
+                Default ``1`` (sequential).
+
+        Returns:
+            A new pipeline with re-tokenized groups and parent lineage.
+        """
+        texts = self.result()
+        if not texts:
+            return self
+
+        # --- resolve from cache ---
+        all_results: list[list[str] | None] = [None] * len(texts)
+        miss_indices: list[int] = []
+        miss_texts: list[str] = []
+
+        for idx, text in enumerate(texts):
+            if cache is not None and text in cache:
+                all_results[idx] = cache[text]
+            else:
+                miss_indices.append(idx)
+                miss_texts.append(text)
+
+        # --- call fn for cache misses ---
+        if miss_texts:
+            miss_results = _call_split_fn(fn, miss_texts, batch_size, workers)
+            for mi, result_list in zip(miss_indices, miss_results):
+                all_results[mi] = result_list
+                if cache is not None:
+                    cache[texts[mi]] = result_list
+
+        # --- rebuild groups and parent_ids ---
+        new_groups: list[list[str]] = []
+        parent_ids: list[int] = []
+        for i, parts in enumerate(all_results):
+            assert parts is not None
+            for part in parts:
+                tokens = self._ops.split(part)
+                if tokens:
+                    new_groups.append(tokens)
+                    parent_ids.append(i)
+
+        new = object.__new__(ChunkPipeline)
+        new._ops = self._ops
+        new._groups = new_groups
+        new._parent_ids = parent_ids
+        return new
+
     def result(self) -> list[str]:
         """Return the current list of text fragments."""
         return [self._ops.join(g) for g in self._groups]
@@ -163,3 +238,40 @@ class ChunkPipeline:
         """
         from subtitle.align import align_segments
         return align_segments(self.result(), words)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _call_split_fn(
+    fn: SplitFn,
+    texts: list[str],
+    batch_size: int,
+    workers: int,
+) -> list[list[str]]:
+    """Dispatch *texts* to *fn* in batches, optionally in parallel."""
+    if batch_size == 0:
+        batches = [texts]
+    else:
+        batches = [
+            texts[i : i + batch_size]
+            for i in range(0, len(texts), batch_size)
+        ]
+
+    if workers <= 1 or len(batches) <= 1:
+        batch_results = [fn(b) for b in batches]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            batch_results = list(pool.map(fn, batches))
+
+    # Flatten batch results into a single list aligned with *texts*.
+    result: list[list[str]] = []
+    for br, batch in zip(batch_results, batches):
+        if len(br) != len(batch):
+            raise ValueError(
+                f"split fn returned {len(br)} results for a batch of "
+                f"{len(batch)} texts"
+            )
+        result.extend(br)
+    return result

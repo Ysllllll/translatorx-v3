@@ -97,15 +97,24 @@ tests/
 │   │   └── test_{lang}.py       # Per-language chunk tests
 │   └── _core/
 │       ├── test_mechanism.py    # Factory tests
-│       └── test_normalize.py    # Language code normalization
+│       ├── test_normalize.py    # Language code normalization
+│       └── test_punctuation.py  # Punctuation constants tests
 └── subtitle/
-    ├── test_align.py            # fill_words, find_words, distribute_words, align_segments
+    ├── align_tests/             # Word timing tests
+    │   ├── test_align.py        # align_segments
+    │   ├── test_attach_punct.py # attach_punct_words
+    │   ├── test_distribute.py   # distribute_words
+    │   ├── test_fill.py         # fill_words
+    │   ├── test_find.py         # find_words
+    │   ├── test_normalize.py    # normalize_words
+    │   └── test_pipeline.py     # Pipeline integration
     ├── test_model.py            # Data type display/pretty tests
     ├── build_tests/             # Subtitle tests
     │   ├── _base.py             # BuilderTestBase
     │   ├── test_en.py
+    │   ├── test_ko.py
     │   └── test_zh.py
-    └── io/
+    └── io_tests/
         └── test_srt.py          # SRT parser tests
 ```
 
@@ -180,6 +189,7 @@ remaining = stream.flush()             → list[Segment]
 ### Subtitle word timing
 
 ```
+normalize_words(words) → list[Word]              # normalize word.content for matching
 attach_punct_words(words) → list[Word]           # merge standalone punct into adjacent words
 fill_words(segment, split_fn=None) → Segment     # populate segment.words (auto-attaches punct)
 find_words(words, sub_text, start=0) → (start_idx, end_idx)

@@ -24,7 +24,7 @@ With external text transforms (e.g. punctuation restoration)::
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, MutableMapping
 from typing import TYPE_CHECKING
 
 from .model import Segment, SentenceRecord, Word
@@ -32,6 +32,7 @@ from .align import fill_words, align_segments
 
 if TYPE_CHECKING:
     from lang_ops._core._base_ops import _BaseOps
+    from lang_ops.chunk._pipeline import SplitFn, SplitCache
 
 
 def _extract(
@@ -172,6 +173,26 @@ class Subtitle:
     def merge(self, max_length: int) -> Subtitle:
         """Greedily merge adjacent chunks whose combined length ≤ *max_length*."""
         return self._with_pipeline(self._pipeline.merge(max_length))
+
+    def split(
+        self,
+        fn: SplitFn,
+        cache: SplitCache | None = None,
+        batch_size: int = 1,
+        workers: int = 1,
+    ) -> Subtitle:
+        """Split chunks using an external function.
+
+        *fn* receives a batch of texts and returns split results.
+        Useful for NLP tools, LLM-based splitting, or custom rules
+        that are smarter than :meth:`max_length`.
+
+        See :meth:`ChunkPipeline.split` for full parameter docs.
+        """
+        return self._with_pipeline(
+            self._pipeline.split(fn, cache=cache,
+                                 batch_size=batch_size, workers=workers)
+        )
 
     # ---- external text transforms ------------------------------------
 

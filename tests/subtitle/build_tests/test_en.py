@@ -405,6 +405,140 @@ class TestEnglishMerge:
 
 
 # ---------------------------------------------------------------------------
+# Split (external fn splitting)
+# ---------------------------------------------------------------------------
+
+class TestEnglishSplit:
+
+    def test_split_basic(self) -> None:
+        """split() with a simple rule-based fn."""
+        def rule_split(texts: list[str]) -> list[list[str]]:
+            result = []
+            for t in texts:
+                if len(t) > 20:
+                    mid = len(t) // 2
+                    # Find nearest space
+                    sp = t.rfind(" ", 0, mid)
+                    if sp > 0:
+                        result.append([t[:sp], t[sp + 1:]])
+                    else:
+                        result.append([t])
+                else:
+                    result.append([t])
+            return result
+
+        segs = _asr_interview_segments()
+        result = (Subtitle(segs, _ops)
+                  .sentences()
+                  .clauses()
+                  .merge(60)
+                  .split(rule_split)
+                  .build())
+        # Text is preserved
+        result_words = " ".join(s.text for s in result).split()
+        original_words = " ".join(s.text for s in segs).split()
+        assert result_words == original_words
+
+    def test_split_noop(self) -> None:
+        """split() with a fn that returns [text] — no change."""
+        def noop(texts):
+            return [[t] for t in texts]
+
+        segs = _short_segments()
+        before = Subtitle(segs, _ops).sentences().build()
+        after = Subtitle(segs, _ops).sentences().split(noop).build()
+        assert [s.text for s in before] == [s.text for s in after]
+
+    def test_split_with_cache(self) -> None:
+        """Cache is populated on first call, hit on second."""
+        call_count = 0
+
+        def counting_split(texts):
+            nonlocal call_count
+            call_count += len(texts)
+            return [[t] for t in texts]
+
+        cache: dict[str, list[str]] = {}
+        segs = _short_segments()
+
+        Subtitle(segs, _ops).sentences().split(counting_split, cache=cache).build()
+        first_count = call_count
+
+        call_count = 0
+        Subtitle(segs, _ops).sentences().split(counting_split, cache=cache).build()
+        # Second call should hit cache — fn not called
+        assert call_count == 0
+        assert first_count > 0
+
+    def test_split_respects_parent_ids(self) -> None:
+        """split() after sentences → merge only within sentences."""
+        def split_long(texts):
+            result = []
+            for t in texts:
+                if len(t) > 30:
+                    mid = t.find(" ", len(t) // 2)
+                    if mid > 0:
+                        result.append([t[:mid], t[mid + 1:]])
+                    else:
+                        result.append([t])
+                else:
+                    result.append([t])
+            return result
+
+        segs = _asr_interview_segments()
+        result = (Subtitle(segs, _ops)
+                  .sentences()
+                  .split(split_long)
+                  .merge(200)
+                  .build())
+        # merge(200) after split: merge only within each sentence
+        sentence_count = len(
+            Subtitle(segs, _ops).sentences().build()
+        )
+        assert len(result) == sentence_count
+
+    def test_split_batch_and_workers(self) -> None:
+        """batch_size and workers control fn dispatch."""
+        received_batches = []
+
+        def tracking_split(texts):
+            received_batches.append(len(texts))
+            return [[t] for t in texts]
+
+        segs = _asr_interview_segments()
+        Subtitle(segs, _ops).sentences().split(
+            tracking_split, batch_size=2, workers=1,
+        ).build()
+        # Each batch should have at most 2 texts
+        assert all(b <= 2 for b in received_batches)
+        assert len(received_batches) >= 1
+
+    def test_split_batch_size_zero(self) -> None:
+        """batch_size=0 passes all texts in one call."""
+        received_batches = []
+
+        def tracking_split(texts):
+            received_batches.append(len(texts))
+            return [[t] for t in texts]
+
+        segs = _asr_interview_segments()
+        sentences = Subtitle(segs, _ops).sentences().build()
+        Subtitle(segs, _ops).sentences().split(
+            tracking_split, batch_size=0,
+        ).build()
+        assert len(received_batches) == 1
+        assert received_batches[0] == len(sentences)
+
+    def test_split_fn_bad_count_raises(self) -> None:
+        """fn returning wrong count raises ValueError."""
+        def bad_fn(texts):
+            return [[t] for t in texts[:-1]]  # one fewer
+
+        with pytest.raises(ValueError, match="split fn returned"):
+            Subtitle(_short_segments(), _ops).sentences().split(bad_fn).build()
+
+
+# ---------------------------------------------------------------------------
 # Records (SentenceRecord output)
 # ---------------------------------------------------------------------------
 
