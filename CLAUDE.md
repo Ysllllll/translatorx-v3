@@ -157,7 +157,8 @@ ops.chunk(text)
   .sentences()
   .clauses()            # sentence-aware
   .max_length(50)       # token-boundary aware, uses ops.length()
-  .merge(80)            # greedy merge adjacent chunks
+  .merge(80)            # greedy merge adjacent chunks (parent-aware)
+  .apply(fn)            # external fn: list[str] → list[list[str]]
   .result()             → list[str]
   .segments(words)      → list[Segment]   # deferred import from subtitle.align
 ```
@@ -172,10 +173,8 @@ sub = Subtitle.from_words(words, language="zh")   # from flat word list
 sub.sentences()                        → Subtitle
 sub.clauses()                          → Subtitle  # sentence-aware
 sub.max_length(40)                     → Subtitle
-sub.merge(60)                          → Subtitle  # greedy merge adjacent chunks
-sub.split(fn)                          → Subtitle  # custom split via fn(str)→list[str]
-sub.apply(fn)                          → Subtitle  # fn(str)→str per chunk text
-sub.apply_batch(fn)                    → Subtitle  # fn(list[str])→list[str]
+sub.merge(60)                          → Subtitle  # parent-aware greedy merge
+sub.apply(fn, cache, batch_size, workers)  → Subtitle  # unified external fn
 sub.build()                            → list[Segment]
 sub.records(max_length=40)             → list[SentenceRecord]
 
@@ -212,6 +211,8 @@ from subtitle.io import parse_srt, read_srt
 parse_srt(content) → list[Segment]   # parse SRT string
 read_srt(path)     → list[Segment]   # parse SRT file
 ```
+
+## Fonts
 
 Pixel-length tests require system fonts. `conftest.py` tries in order:
 1. `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`

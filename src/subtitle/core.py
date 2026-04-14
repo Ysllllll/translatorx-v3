@@ -16,7 +16,7 @@ With external text transforms (e.g. punctuation restoration)::
 
     records = (sub
         .sentences()
-        .apply(restore_fn)       # fn(str) → str per chunk
+        .apply(restore_fn)       # fn: list[str] → list[list[str]]
         .sentences()             # re-split after text change
         .max_length(40)
         .records())
@@ -32,7 +32,7 @@ from .align import fill_words, align_segments
 
 if TYPE_CHECKING:
     from lang_ops._core._base_ops import _BaseOps
-    from lang_ops.chunk._pipeline import SplitFn, SplitCache
+    from lang_ops.chunk._pipeline import ApplyFn, ApplyCache
 
 
 def _extract(
@@ -174,61 +174,28 @@ class Subtitle:
         """Greedily merge adjacent chunks whose combined length ≤ *max_length*."""
         return self._with_pipeline(self._pipeline.merge(max_length))
 
-    def split(
+    def apply(
         self,
-        fn: SplitFn,
-        cache: SplitCache | None = None,
+        fn: ApplyFn,
+        cache: ApplyCache | None = None,
         batch_size: int = 1,
         workers: int = 1,
     ) -> Subtitle:
-        """Split chunks using an external function.
+        """Apply an external function to each chunk.
 
-        *fn* receives a batch of texts and returns split results.
-        Useful for NLP tools, LLM-based splitting, or custom rules
-        that are smarter than :meth:`max_length`.
+        *fn* receives a batch of texts and returns one ``list[str]`` per
+        input text:
 
-        See :meth:`ChunkPipeline.split` for full parameter docs.
+        - ``["new text"]`` → 1:1 replacement (e.g. punctuation restoration)
+        - ``["part1", "part2"]`` → 1:N splitting (e.g. NLP/LLM splitting)
+        - ``[]`` → deletion
+
+        See :meth:`ChunkPipeline.apply` for full parameter docs.
         """
         return self._with_pipeline(
-            self._pipeline.split(fn, cache=cache,
+            self._pipeline.apply(fn, cache=cache,
                                  batch_size=batch_size, workers=workers)
         )
-
-    # ---- external text transforms ------------------------------------
-
-    def apply(self, fn: Callable[[str], str]) -> Subtitle:
-        """Apply *fn* to each chunk's text and rebuild the pipeline.
-
-        Use when an external service modifies text (e.g. punctuation
-        restoration).  Follow with ``.sentences()`` if the transform
-        may change sentence boundaries.
-
-        Words are unchanged; alignment is re-computed at ``build()`` time.
-        """
-        from lang_ops.chunk._pipeline import ChunkPipeline
-
-        texts = self._pipeline.result()
-        new_texts = [fn(t) for t in texts]
-        new_pipeline = ChunkPipeline.from_chunks(new_texts, ops=self._ops)
-        return self._with_pipeline(new_pipeline)
-
-    def apply_batch(self, fn: Callable[[list[str]], list[str]]) -> Subtitle:
-        """Apply *fn* to the full list of chunk texts at once.
-
-        Like :meth:`apply` but *fn* receives and returns the entire
-        list, useful for batch API calls.
-        """
-        from lang_ops.chunk._pipeline import ChunkPipeline
-
-        texts = self._pipeline.result()
-        new_texts = fn(texts)
-        if len(new_texts) != len(texts):
-            raise ValueError(
-                f"apply_batch: fn returned {len(new_texts)} chunks, "
-                f"expected {len(texts)}"
-            )
-        new_pipeline = ChunkPipeline.from_chunks(new_texts, ops=self._ops)
-        return self._with_pipeline(new_pipeline)
 
     # ---- output ------------------------------------------------------
 

@@ -33,9 +33,13 @@ from lang_ops.chunk._boundary import find_boundaries, split_tokens_by_boundaries
 from lang_ops.chunk._length import split_tokens_by_length
 from lang_ops.chunk._merge import merge_token_groups
 
-# Type alias for the split callback and cache protocol.
-SplitFn = Callable[[list[str]], list[list[str]]]
-SplitCache = MutableMapping[str, list[str]]
+# Type alias for the apply callback and cache protocol.
+# fn receives a batch of texts, returns one list[str] per input:
+#   - ["new text"]         → 1:1 replacement (e.g. punct restoration)
+#   - ["part1", "part2"]   → 1:N splitting
+#   - []                   → deletion
+ApplyFn = Callable[[list[str]], list[list[str]]]
+ApplyCache = MutableMapping[str, list[str]]
 
 
 class ChunkPipeline:
@@ -161,18 +165,21 @@ class ChunkPipeline:
         # next operation.
         return self._with_groups(result)
 
-    def split(
+    def apply(
         self,
-        fn: SplitFn,
-        cache: SplitCache | None = None,
+        fn: ApplyFn,
+        cache: ApplyCache | None = None,
         batch_size: int = 1,
         workers: int = 1,
     ) -> ChunkPipeline:
-        """Split chunks using an external function.
+        """Apply an external function to each chunk.
 
-        *fn* receives a batch of texts and returns a list of split results
-        (one ``list[str]`` per input text).  Chunks that should not be
-        split are returned as ``[text]``.
+        *fn* receives a batch of texts and returns one ``list[str]`` per
+        input text.  The return value determines the operation:
+
+        - ``["new text"]`` → 1:1 replacement (e.g. punctuation restoration)
+        - ``["part1", "part2"]`` → 1:N splitting (e.g. NLP/LLM splitting)
+        - ``[]`` → deletion
 
         Args:
             fn: ``list[str] → list[list[str]]``.
@@ -205,7 +212,7 @@ class ChunkPipeline:
 
         # --- call fn for cache misses ---
         if miss_texts:
-            miss_results = _call_split_fn(fn, miss_texts, batch_size, workers)
+            miss_results = _call_apply_fn(fn, miss_texts, batch_size, workers)
             for mi, result_list in zip(miss_indices, miss_results):
                 all_results[mi] = result_list
                 if cache is not None:
@@ -252,8 +259,8 @@ class ChunkPipeline:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _call_split_fn(
-    fn: SplitFn,
+def _call_apply_fn(
+    fn: ApplyFn,
     texts: list[str],
     batch_size: int,
     workers: int,
@@ -278,7 +285,7 @@ def _call_split_fn(
     for br, batch in zip(batch_results, batches):
         if len(br) != len(batch):
             raise ValueError(
-                f"split fn returned {len(br)} results for a batch of "
+                f"apply fn returned {len(br)} results for a batch of "
                 f"{len(batch)} texts"
             )
         result.extend(br)
