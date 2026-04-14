@@ -173,6 +173,7 @@ sub.sentences()                        → Subtitle
 sub.clauses()                          → Subtitle  # sentence-aware
 sub.max_length(40)                     → Subtitle
 sub.merge(60)                          → Subtitle  # greedy merge adjacent chunks
+sub.split(fn)                          → Subtitle  # custom split via fn(str)→list[str]
 sub.apply(fn)                          → Subtitle  # fn(str)→str per chunk text
 sub.apply_batch(fn)                    → Subtitle  # fn(list[str])→list[str]
 sub.build()                            → list[Segment]
@@ -203,7 +204,14 @@ align_segments(chunks, words) → list[Segment]    # text chunks + timed words �
 - `Segment(start, end, text, speaker=None, words=[], extra={})`
 - `SentenceRecord(src_text, start, end, segments=[], ...)` — also has `chunk_cache`, `translations`, `alignment`
 
-## Fonts
+### SRT reader
+
+```
+from subtitle.io import parse_srt, read_srt
+
+parse_srt(content) → list[Segment]   # parse SRT string
+read_srt(path)     → list[Segment]   # parse SRT file
+```
 
 Pixel-length tests require system fonts. `conftest.py` tries in order:
 1. `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`

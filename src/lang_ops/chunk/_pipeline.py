@@ -91,13 +91,21 @@ class ChunkPipeline:
 
         Each sub-group inherits the **index** of the group it was split
         from, so a subsequent ``merge()`` will not cross that boundary.
+
+        Idempotent: if no group is actually split (every group → 1
+        sub-group), returns ``self`` to preserve existing parent_ids.
         """
         result: list[list[str]] = []
         parent_ids: list[int] = []
+        changed = False
         for i, group in enumerate(self._groups):
             sub_groups = split_fn(group)
+            if len(sub_groups) != 1:
+                changed = True
             result.extend(sub_groups)
             parent_ids.extend([i] * len(sub_groups))
+        if not changed:
+            return self
         new = object.__new__(ChunkPipeline)
         new._ops = self._ops
         new._groups = result
