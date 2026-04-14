@@ -48,7 +48,7 @@ src/
 │       ├── _length.py               # Length-based splitting (uses Protocol for decoupling)
 │       └── _merge.py                # Length-based merging (inverse of splitting)
 └── subtitle/                        # Subtitle data structures + timing alignment + segment building
-    ├── __init__.py                  # Exports Word, Segment, SentenceRecord, Subtitle, SubtitleStream
+    ├── __init__.py                  # Exports data types + Subtitle/Stream + alignment utilities (fill/find/distribute/align)
     ├── model.py                     # Frozen dataclasses (Word, Segment, SentenceRecord)
     ├── align.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
     ├── core.py                      # Subtitle — chainable segment restructuring
@@ -158,9 +158,12 @@ ops.chunk(text)
   .clauses()            # sentence-aware
   .max_length(50)       # token-boundary aware, uses ops.length()
   .merge(80)            # greedy merge adjacent chunks (parent-aware)
-  .apply(fn)            # external fn: list[str] → list[list[str]]
+  .apply(fn)            # external fn: list[str] → list[list[str]] (unified split/apply/batch)
   .result()             → list[str]
   .segments(words)      → list[Segment]   # deferred import from subtitle.align
+
+# Alternative construction
+ChunkPipeline.from_chunks(chunks, ops)  # from pre-split chunk list
 ```
 
 ### Subtitle (chainable, immutable)
@@ -168,7 +171,7 @@ ops.chunk(text)
 ```
 from subtitle import Subtitle
 
-sub = Subtitle(segments, language="zh")           # or ops=ops
+sub = Subtitle(segments, language="zh")           # or ops=ops; split_by_speaker=True groups by speaker
 sub = Subtitle.from_words(words, language="zh")   # from flat word list
 sub.sentences()                        → Subtitle
 sub.clauses()                          → Subtitle  # sentence-aware
@@ -178,7 +181,7 @@ sub.apply(fn, cache, batch_size, workers)  → Subtitle  # unified external fn
 sub.build()                            → list[Segment]
 sub.records(max_length=40)             → list[SentenceRecord]
 
-# Streaming mode
+# Streaming mode (split_by_speaker=True groups by speaker)
 stream = Subtitle.stream(language="zh")
 done = stream.feed(segment)            → list[Segment]  # completed sentences
 remaining = stream.flush()             → list[Segment]

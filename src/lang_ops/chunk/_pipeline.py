@@ -171,6 +171,7 @@ class ChunkPipeline:
         cache: ApplyCache | None = None,
         batch_size: int = 1,
         workers: int = 1,
+        skip_if: Callable[[str], bool] | None = None,
     ) -> ChunkPipeline:
         """Apply an external function to each chunk.
 
@@ -190,6 +191,10 @@ class ChunkPipeline:
                 Default ``1`` (one text per call).
             workers: Number of threads for concurrent *fn* calls.
                 Default ``1`` (sequential).
+            skip_if: Optional predicate ``str → bool``.
+                Chunks for which ``skip_if(text)`` returns ``True`` are
+                left unchanged (treated as ``[text]``).  Useful for
+                skipping short texts that don't need processing.
 
         Returns:
             A new pipeline with re-tokenized groups and parent lineage.
@@ -198,13 +203,15 @@ class ChunkPipeline:
         if not texts:
             return self
 
-        # --- resolve from cache ---
+        # --- resolve from cache and skip_if ---
         all_results: list[list[str] | None] = [None] * len(texts)
         miss_indices: list[int] = []
         miss_texts: list[str] = []
 
         for idx, text in enumerate(texts):
-            if cache is not None and text in cache:
+            if skip_if is not None and skip_if(text):
+                all_results[idx] = [text]
+            elif cache is not None and text in cache:
                 all_results[idx] = cache[text]
             else:
                 miss_indices.append(idx)

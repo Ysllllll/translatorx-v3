@@ -548,6 +548,35 @@ class TestEnglishApply:
         with pytest.raises(ValueError, match="apply fn returned"):
             Subtitle(_short_segments(), _ops).sentences().apply(bad_fn).build()
 
+    def test_apply_skip_if(self) -> None:
+        """skip_if prevents fn from being called on matching chunks."""
+        call_count = 0
+
+        def counting_fn(texts):
+            nonlocal call_count
+            call_count += len(texts)
+            return [[t.upper()] for t in texts]
+
+        segs = _asr_interview_segments()
+        sub = Subtitle(segs, _ops).sentences()
+        all_texts = sub.build()
+
+        # skip_if skips chunks with length ≤ 30
+        result = sub.apply(
+            counting_fn,
+            skip_if=lambda t: _ops.length(t) <= 30,
+        ).build()
+
+        # Count how many sentences are longer than 30
+        long_count = sum(1 for s in all_texts if _ops.length(s.text) > 30)
+        assert call_count == long_count
+        # Short chunks are unchanged, long chunks are uppercased
+        for seg in result:
+            original = next(
+                (s for s in all_texts if s.text == seg.text or s.text.upper() == seg.text), None
+            )
+            assert original is not None
+
 
 # ---------------------------------------------------------------------------
 # Records (SentenceRecord output)
