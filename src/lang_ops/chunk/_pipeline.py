@@ -37,6 +37,18 @@ class ChunkPipeline:
         else:
             self._groups = []
 
+    @classmethod
+    def from_chunks(cls, chunks: list[str], ops: _BaseOps) -> ChunkPipeline:
+        """Create a pipeline from pre-split text chunks.
+
+        Each chunk is tokenized and becomes its own group.
+        Useful when the initial text is already split (e.g. by speaker).
+        """
+        new = object.__new__(cls)
+        new._ops = ops
+        new._groups = [ops.split(c) for c in chunks if c]
+        return new
+
     def _with_groups(self, groups: list[list[str]]) -> ChunkPipeline:
         """Create a new pipeline with updated groups."""
         new = object.__new__(ChunkPipeline)

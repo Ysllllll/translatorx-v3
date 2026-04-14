@@ -3,7 +3,7 @@ from .align import (
     fill_words, find_words, distribute_words, align_segments,
     attach_punct_words, normalize_words,
 )
-from .build import SegmentBuilder
+from .process import SegmentProcessor
 
 __all__ = [
     "Word",
@@ -15,5 +15,5 @@ __all__ = [
     "align_segments",
     "attach_punct_words",
     "normalize_words",
-    "SegmentBuilder",
+    "SegmentProcessor",
 ]

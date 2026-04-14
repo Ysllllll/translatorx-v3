@@ -1,4 +1,4 @@
-"""Korean (ko) SegmentBuilder tests.
+"""Korean (ko) SegmentProcessor tests.
 
 Test data simulates real ASR output: eojeol-level words (space-separated
 morpheme groups), punctuation as separate tokens, sentences split across
@@ -7,7 +7,7 @@ segment boundaries.
 
 from __future__ import annotations
 
-from subtitle import Segment, SegmentBuilder
+from subtitle import Segment, SegmentProcessor
 from lang_ops import LangOps
 from ._base import BuilderTestBase, S, W
 
@@ -111,11 +111,11 @@ class TestKoreanBuilder(BuilderTestBase):
 class TestKoreanSentences:
 
     def test_two_sentences(self) -> None:
-        result = SegmentBuilder(_short_segments(), _ops).sentences().build()
+        result = SegmentProcessor(_short_segments(), _ops).sentences().build()
         assert [s.text for s in result] == ["안녕하세요.", "반갑습니다!"]
 
     def test_sentences_across_boundaries(self) -> None:
-        result = SegmentBuilder(_news_segments(), _ops).sentences().build()
+        result = SegmentProcessor(_news_segments(), _ops).sentences().build()
         texts = [s.text for s in result]
         assert len(texts) == 3
         assert "인공지능" in texts[0]
@@ -123,12 +123,12 @@ class TestKoreanSentences:
         assert "있습니다" in texts[2]
 
     def test_sentence_timing(self) -> None:
-        result = SegmentBuilder(_news_segments(), _ops).sentences().build()
+        result = SegmentProcessor(_news_segments(), _ops).sentences().build()
         assert result[0].start == 0.0
         assert result[-1].end == 13.0
 
     def test_words_preserved(self) -> None:
-        result = SegmentBuilder(_short_segments(), _ops).sentences().build()
+        result = SegmentProcessor(_short_segments(), _ops).sentences().build()
         for seg in result:
             assert len(seg.words) >= 1
 
@@ -140,16 +140,16 @@ class TestKoreanSentences:
 class TestKoreanClauses:
 
     def test_clause_split(self) -> None:
-        result = SegmentBuilder(_clause_segments(), _ops).clauses().build()
+        result = SegmentProcessor(_clause_segments(), _ops).clauses().build()
         assert len(result) >= 3  # at least comma + semicolon splits
 
     def test_clause_timing(self) -> None:
-        result = SegmentBuilder(_clause_segments(), _ops).clauses().build()
+        result = SegmentProcessor(_clause_segments(), _ops).clauses().build()
         assert result[0].start == 0.0
         assert result[-1].end == 8.0
 
     def test_sentences_then_clauses(self) -> None:
-        result = (SegmentBuilder(_news_segments(), _ops)
+        result = (SegmentProcessor(_news_segments(), _ops)
                   .sentences()
                   .clauses()
                   .build())
@@ -163,19 +163,19 @@ class TestKoreanClauses:
 
 class TestKoreanByLength:
 
-    def test_sentences_then_by_length(self) -> None:
-        result = (SegmentBuilder(_news_segments(), _ops)
+    def test_sentences_then_max_length(self) -> None:
+        result = (SegmentProcessor(_news_segments(), _ops)
                   .sentences()
-                  .by_length(15)
+                  .max_length(15)
                   .build())
         for seg in result:
             # Allow slight overshoot for indivisible eojeols
             assert _ops.length(seg.text) <= 20
 
     def test_text_preserved(self) -> None:
-        result = (SegmentBuilder(_news_segments(), _ops)
+        result = (SegmentProcessor(_news_segments(), _ops)
                   .sentences()
-                  .by_length(15)
+                  .max_length(15)
                   .build())
         joined = " ".join(s.text for s in result)
         # All content words present
@@ -190,18 +190,18 @@ class TestKoreanByLength:
 class TestKoreanMerge:
 
     def test_merge_clauses_back(self) -> None:
-        clauses = SegmentBuilder(_clause_segments(), _ops).clauses().build()
-        merged = SegmentBuilder(_clause_segments(), _ops).clauses().merge(30).build()
+        clauses = SegmentProcessor(_clause_segments(), _ops).clauses().build()
+        merged = SegmentProcessor(_clause_segments(), _ops).clauses().merge(30).build()
         assert len(merged) <= len(clauses)
 
     def test_merge_preserves_text(self) -> None:
-        result = SegmentBuilder(_clause_segments(), _ops).clauses().merge(30).build()
+        result = SegmentProcessor(_clause_segments(), _ops).clauses().merge(30).build()
         joined = " ".join(s.text for s in result)
         assert "사과" in joined
         assert "아침식사입니다" in joined
 
     def test_merge_words_timing(self) -> None:
-        result = SegmentBuilder(_clause_segments(), _ops).clauses().merge(30).build()
+        result = SegmentProcessor(_clause_segments(), _ops).clauses().merge(30).build()
         for seg in result:
             assert len(seg.words) >= 1
             assert seg.start <= seg.end
@@ -214,7 +214,7 @@ class TestKoreanMerge:
 class TestKoreanRecords:
 
     def test_records_structure(self) -> None:
-        records = SegmentBuilder(_news_segments(), _ops).records()
+        records = SegmentProcessor(_news_segments(), _ops).records()
         assert len(records) >= 1
         for rec in records:
             assert rec.src_text
@@ -222,7 +222,7 @@ class TestKoreanRecords:
             assert len(rec.segments) >= 1
 
     def test_records_with_max_length(self) -> None:
-        records = SegmentBuilder(_news_segments(), _ops).records(max_length=12)
+        records = SegmentProcessor(_news_segments(), _ops).records(max_length=12)
         for rec in records:
             for seg in rec.segments:
                 assert _ops.length(seg.text) <= 18  # some tolerance
@@ -235,7 +235,7 @@ class TestKoreanRecords:
 class TestKoreanSpeaker:
 
     def test_speaker_change_creates_boundary(self) -> None:
-        result = (SegmentBuilder(_multi_speaker_segments(), _ops,
+        result = (SegmentProcessor(_multi_speaker_segments(), _ops,
                                  split_by_speaker=True)
                   .sentences()
                   .build())
@@ -249,7 +249,7 @@ class TestKoreanSpeaker:
             W("반갑습니다", 1.2, 2.8, speaker="A"),
             W(".", 2.8, 3.0, speaker="A"),
         ])]
-        result = (SegmentBuilder(single, _ops, split_by_speaker=True)
+        result = (SegmentProcessor(single, _ops, split_by_speaker=True)
                   .sentences()
                   .build())
         assert len(result) == 2  # two sentences, no extra speaker splits
@@ -262,7 +262,7 @@ class TestKoreanSpeaker:
 class TestKoreanStream:
 
     def test_stream_incremental(self) -> None:
-        stream = SegmentBuilder.stream(_ops)
+        stream = SegmentProcessor.stream(_ops)
         segs = _news_segments()
         all_done: list[Segment] = []
         for seg in segs:
@@ -273,5 +273,5 @@ class TestKoreanStream:
         assert "인공지능" in joined
 
     def test_stream_flush_empty(self) -> None:
-        stream = SegmentBuilder.stream(_ops)
+        stream = SegmentProcessor.stream(_ops)
         assert stream.flush() == []

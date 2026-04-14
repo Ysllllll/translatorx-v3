@@ -48,10 +48,10 @@ src/
 │       ├── _length.py               # Length-based splitting (uses Protocol for decoupling)
 │       └── _merge.py                # Length-based merging (inverse of splitting)
 └── subtitle/                        # Subtitle data structures + timing alignment + segment building
-    ├── __init__.py                  # Exports Word, Segment, SentenceRecord, SegmentBuilder, etc.
+    ├── __init__.py                  # Exports Word, Segment, SentenceRecord, SegmentProcessor, etc.
     ├── model.py                     # Frozen dataclasses (Word, Segment, SentenceRecord)
     ├── align.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
-    ├── build.py                     # SegmentBuilder — chainable segment restructuring + streaming
+    ├── process.py                   # SegmentProcessor — chainable segment restructuring + streaming
     └── io/
         └── srt.py                   # SRT file parser
 ```
@@ -66,7 +66,7 @@ src/
 
 **strip_spaces property:** `_BaseOps.strip_spaces` controls whether `split_sentences`/`split_clauses` strip leading spaces from chunks. Defaults to `self.is_cjk` (True for Chinese/Japanese, since CJK doesn't use inter-sentence spaces). Korean overrides to `False` because it uses spaces between eojeols.
 
-**Immutability:** `ChunkPipeline` and `SegmentBuilder` return new instances per step. All `subtitle` dataclasses use `frozen=True`. `words.py` and `builder.py` use `dataclasses.replace()` instead of mutation.
+**Immutability:** `ChunkPipeline` and `SegmentProcessor` return new instances per step. All `subtitle` dataclasses use `frozen=True`. `words.py` and `builder.py` use `dataclasses.replace()` instead of mutation.
 
 **Protocol decoupling:** `_length.py` and `_merge.py` define Protocol types instead of importing `_BaseOps`, keeping the chunk package independent from the ops layer.
 
@@ -78,11 +78,11 @@ src/
 lang_ops                              ←  subtitle
   token: split/join/length/normalize       _types (frozen dataclasses)
   segment: sentences/clauses               words (fill/find/distribute/align)
-  pipeline: ChunkPipeline                  builder (SegmentBuilder, _StreamBuilder)
+  pipeline: ChunkPipeline                  process (SegmentProcessor, _StreamProcessor)
   shortcuts: ops.split_sentences() etc.    readers (SRT)
 ```
 
-`subtitle` is independent of `lang_ops` except `ChunkPipeline.segments()` (deferred import of `subtitle.align.align_segments`) and `SegmentBuilder` which takes an `ops` parameter.
+`subtitle` is independent of `lang_ops` except `ChunkPipeline.segments()` (deferred import of `subtitle.align.align_segments`) and `SegmentProcessor` which takes an `ops` parameter.
 
 ### Test structure
 
@@ -101,7 +101,7 @@ tests/
 └── subtitle/
     ├── test_align.py            # fill_words, find_words, distribute_words, align_segments
     ├── test_model.py            # Data type display/pretty tests
-    ├── build_tests/             # SegmentBuilder tests
+    ├── build_tests/             # SegmentProcessor tests
     │   ├── _base.py             # BuilderTestBase
     │   ├── test_en.py
     │   └── test_zh.py
@@ -153,26 +153,26 @@ ops.chunk(text)
   .segments(words)      → list[Segment]   # deferred import from subtitle.align
 ```
 
-### SegmentBuilder (chainable, immutable)
+### SegmentProcessor (chainable, immutable)
 
 ```
-from subtitle import SegmentBuilder
+from subtitle import SegmentProcessor
 
-builder = SegmentBuilder(segments, ops, split_by_speaker=False)
-builder.sentences()                    → SegmentBuilder
-builder.clauses()                      → SegmentBuilder  # sentence-aware
-builder.by_length(40)                  → SegmentBuilder
-builder.merge(60)                      → SegmentBuilder  # greedy merge within groups
-builder.build()                        → list[Segment]
-builder.records(max_length=40)         → list[SentenceRecord]
+proc = SegmentProcessor(segments, ops, split_by_speaker=False)
+proc.sentences()                       → SegmentProcessor
+proc.clauses()                         → SegmentProcessor  # sentence-aware
+proc.max_length(40)                    → SegmentProcessor
+proc.merge(60)                         → SegmentProcessor  # greedy merge adjacent chunks
+proc.build()                           → list[Segment]
+proc.records(max_length=40)            → list[SentenceRecord]
 
 # Streaming mode
-stream = SegmentBuilder.stream(ops)
+stream = SegmentProcessor.stream(ops)
 done = stream.feed(segment)            → list[Segment]  # completed sentences
 remaining = stream.flush()             → list[Segment]
 ```
 
-Group boundaries (set by `sentences()`) are respected by `merge()` — sentences never merge across boundaries.
+`SegmentProcessor` delegates all text operations to `ChunkPipeline` — no redundant re-tokenization. `merge()` freely combines adjacent chunks; use `records()` for sentence-level grouping.
 
 ### Subtitle word timing
 
