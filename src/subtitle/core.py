@@ -181,6 +181,7 @@ class Subtitle:
         batch_size: int = 1,
         workers: int = 1,
         skip_if: Callable[[str], bool] | None = None,
+        max_rounds: int = 1,
     ) -> Subtitle:
         """Apply an external function to each chunk.
 
@@ -196,7 +197,7 @@ class Subtitle:
         return self._with_pipeline(
             self._pipeline.apply(fn, cache=cache,
                                  batch_size=batch_size, workers=workers,
-                                 skip_if=skip_if)
+                                 skip_if=skip_if, max_rounds=max_rounds)
         )
 
     # ---- output ------------------------------------------------------

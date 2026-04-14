@@ -172,6 +172,7 @@ class ChunkPipeline:
         batch_size: int = 1,
         workers: int = 1,
         skip_if: Callable[[str], bool] | None = None,
+        max_rounds: int = 1,
     ) -> ChunkPipeline:
         """Apply an external function to each chunk.
 
@@ -186,6 +187,8 @@ class ChunkPipeline:
             fn: ``list[str] → list[list[str]]``.
             cache: Optional dict-like mapping ``text → list[str]``.
                 Hits are reused; misses are computed by *fn* and stored.
+                The cache is mutated in-place — pass a ``dict`` to
+                collect results for persistence across runs.
             batch_size: Number of texts per *fn* call.
                 ``0`` means pass all uncached texts in one call.
                 Default ``1`` (one text per call).
@@ -195,10 +198,35 @@ class ChunkPipeline:
                 Chunks for which ``skip_if(text)`` returns ``True`` are
                 left unchanged (treated as ``[text]``).  Useful for
                 skipping short texts that don't need processing.
+            max_rounds: Maximum number of apply rounds (default ``1``).
+                When > 1, ``apply`` repeats until all chunks satisfy
+                *skip_if* or the round limit is reached.  Each round
+                only processes chunks that *skip_if* does not skip.
+                Requires *skip_if* when > 1.
 
         Returns:
             A new pipeline with re-tokenized groups and parent lineage.
         """
+        if max_rounds > 1 and skip_if is None:
+            raise ValueError("max_rounds > 1 requires skip_if")
+
+        pipeline = self
+        for _ in range(max_rounds):
+            pipeline = pipeline._apply_once(fn, cache, batch_size, workers,
+                                            skip_if)
+            if skip_if and all(skip_if(t) for t in pipeline.result()):
+                break
+        return pipeline
+
+    def _apply_once(
+        self,
+        fn: ApplyFn,
+        cache: ApplyCache | None,
+        batch_size: int,
+        workers: int,
+        skip_if: Callable[[str], bool] | None,
+    ) -> ChunkPipeline:
+        """Single-round apply — called by :meth:`apply`."""
         texts = self.result()
         if not texts:
             return self

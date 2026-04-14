@@ -177,7 +177,7 @@ sub.sentences()                        → Subtitle
 sub.clauses()                          → Subtitle  # sentence-aware
 sub.max_length(40)                     → Subtitle
 sub.merge(60)                          → Subtitle  # parent-aware greedy merge
-sub.apply(fn, cache, batch_size, workers)  → Subtitle  # unified external fn
+sub.apply(fn, cache, batch_size, workers, skip_if, max_rounds)  → Subtitle  # unified external fn
 sub.build()                            → list[Segment]
 sub.records(max_length=40)             → list[SentenceRecord]
 

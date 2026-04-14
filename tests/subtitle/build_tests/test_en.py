@@ -577,6 +577,63 @@ class TestEnglishApply:
             )
             assert original is not None
 
+    def test_apply_max_rounds(self) -> None:
+        """max_rounds repeats until skip_if is satisfied."""
+        # fn halves text at nearest space — may need multiple rounds
+        def halve(texts):
+            result = []
+            for t in texts:
+                mid = len(t) // 2
+                sp = t.rfind(" ", 0, mid)
+                if sp > 0:
+                    result.append([t[:sp], t[sp + 1:]])
+                else:
+                    result.append([t])
+            return result
+
+        segs = _asr_interview_segments()
+        result = (Subtitle(segs, _ops)
+                  .sentences()
+                  .apply(halve,
+                         skip_if=lambda t: _ops.length(t) <= 30,
+                         max_rounds=5)
+                  .build())
+        # After enough rounds, all chunks should be ≤ 30
+        # (or unsplittable single-word chunks)
+        for seg in result:
+            length = _ops.length(seg.text.strip())
+            if length > 30:
+                # Only acceptable if it's a single word (can't split further)
+                assert len(_ops.split(seg.text.strip())) == 1
+
+    def test_apply_max_rounds_early_exit(self) -> None:
+        """max_rounds exits early when all chunks satisfy skip_if."""
+        round_count = 0
+
+        def counting_halve(texts):
+            nonlocal round_count
+            round_count += 1
+            return [[t] for t in texts]  # noop — already short
+
+        segs = _short_segments()
+        Subtitle(segs, _ops).sentences().apply(
+            counting_halve,
+            skip_if=lambda t: _ops.length(t) <= 200,
+            max_rounds=10,
+        ).build()
+        # All chunks are short → skip_if skips all → fn called 0 times
+        # But first round still runs _apply_once (which skips via skip_if)
+        # Then the all(...) check triggers → exits
+        assert round_count == 0  # fn never called because skip_if caught all
+
+    def test_apply_max_rounds_requires_skip_if(self) -> None:
+        """max_rounds > 1 without skip_if raises ValueError."""
+        with pytest.raises(ValueError, match="max_rounds.*skip_if"):
+            Subtitle(_short_segments(), _ops).sentences().apply(
+                lambda texts: [[t] for t in texts],
+                max_rounds=2,
+            ).build()
+
 
 # ---------------------------------------------------------------------------
 # Records (SentenceRecord output)
