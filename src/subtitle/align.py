@@ -14,12 +14,10 @@ from dataclasses import replace
 from .model import Segment, Word
 
 from lang_ops._core._punctuation import (
-    ALL_PUNCT as _PUNCT,
     OPENING_PUNCT as _OPENING,
     TRAILING_PUNCT as _TRAILING,
     CLOSING_PUNCT as _CLOSING,
     DASHES as _DASHES,
-    strip_punct as _strip_punct,
 )
 
 # Closing/trailing/dash — attaches to the *previous* word.
@@ -41,14 +39,13 @@ def attach_punct_words(words: list[Word]) -> list[Word]:
     Time ranges are extended to cover merged punctuation.
     Returns original list if no merging needed.
     """
-    if not words or not any(_all_in(w.word.strip(), _PUNCT) for w in words):
+    if not words or not any(not w.content for w in words):
         return words
 
     # Phase 1: closing/trailing punct → previous word
     merged: list[Word] = []
     for w in words:
-        txt = w.word.strip()
-        if merged and _all_in(txt, _CLOSE):
+        if merged and not w.content and _all_in(w.word.strip(), _CLOSE):
             p = merged[-1]
             merged[-1] = replace(p, word=p.word + w.word.lstrip(),
                                  end=max(p.end, w.end))
@@ -59,8 +56,7 @@ def attach_punct_words(words: list[Word]) -> list[Word]:
     result: list[Word] = []
     pending: Word | None = None
     for w in merged:
-        txt = w.word.strip()
-        if _all_in(txt, _OPENING):
+        if not w.content and _all_in(w.word.strip(), _OPENING):
             if pending:
                 pending = replace(pending,
                                   word=pending.word + w.word.lstrip(),
@@ -177,21 +173,25 @@ def find_words(
                 last = i + 1
             continue
 
-        # Try exact → content → case-insensitive
-        for needle, haystack, p in [
-            (w.word, sub_text, pos),
-            (w.content, sub_text, pos),
-            (w.content.lower(), sub_lower, pos_low),
-        ]:
-            idx = haystack.find(needle, p)
-            if idx >= 0:
-                if first is None:
-                    first = i
-                last = i + 1
-                pos = pos_low = idx + len(needle)
-                break
+        # Three-level tolerant matching: exact → content → case-insensitive
+        idx = sub_text.find(w.word, pos)
+        if idx >= 0:
+            needle_len = len(w.word)
         else:
-            break  # no match at any level → stop
+            idx = sub_text.find(w.content, pos)
+            if idx >= 0:
+                needle_len = len(w.content)
+            else:
+                idx = sub_lower.find(w.content.lower(), pos_low)
+                if idx >= 0:
+                    needle_len = len(w.content)
+                else:
+                    break  # no match at any level → stop
+
+        if first is None:
+            first = i
+        last = i + 1
+        pos = pos_low = idx + needle_len
 
     return (first, last) if first is not None else (start, start)
 
