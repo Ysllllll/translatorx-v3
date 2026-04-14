@@ -106,34 +106,18 @@ class _BaseOps(ABC):
 
     def split_sentences(self, text: str) -> list[str]:
         """Split text into sentences (token-based)."""
-        from lang_ops.chunk._boundary import find_boundaries, split_tokens_by_boundaries
-        tokens = self.split(text)
-        if not tokens:
-            return []
-        boundaries = find_boundaries(tokens, self.sentence_terminators, self.abbreviations)
-        groups = split_tokens_by_boundaries(tokens, boundaries)
-        return [self.join(g) for g in groups]
+        from lang_ops.chunk._pipeline import ChunkPipeline
+        return ChunkPipeline(text, ops=self).sentences().result()
 
     def split_clauses(self, text: str) -> list[str]:
         """Split text into clauses (sentence boundaries included, token-based)."""
-        from lang_ops.chunk._boundary import find_boundaries, split_tokens_by_boundaries
-        tokens = self.split(text)
-        if not tokens:
-            return []
-        boundaries = find_boundaries(
-            tokens, self.sentence_terminators, self.abbreviations, self.clause_separators,
-        )
-        groups = split_tokens_by_boundaries(tokens, boundaries)
-        return [self.join(g) for g in groups]
+        from lang_ops.chunk._pipeline import ChunkPipeline
+        return ChunkPipeline(text, ops=self).clauses().result()
 
     def split_by_length(self, text: str, max_length: int) -> list[str]:
         """Split text into chunks whose length ≤ *max_length* (token-based)."""
-        from lang_ops.chunk._length import split_tokens_by_length
-        tokens = self.split(text)
-        if not tokens:
-            return []
-        groups = split_tokens_by_length(tokens, self, max_length)
-        return [self.join(g) for g in groups]
+        from lang_ops.chunk._pipeline import ChunkPipeline
+        return ChunkPipeline(text, ops=self).max_length(max_length).result()
 
     def merge_by_length(self, chunks: list[str], max_length: int) -> list[str]:
         """Greedily merge adjacent chunks whose combined length ≤ *max_length*."""

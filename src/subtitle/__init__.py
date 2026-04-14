@@ -3,7 +3,7 @@ from .align import (
     fill_words, find_words, distribute_words, align_segments,
     attach_punct_words, normalize_words,
 )
-from .process import SegmentProcessor
+from .core import Subtitle, SubtitleStream
 
 __all__ = [
     "Word",
@@ -15,5 +15,6 @@ __all__ = [
     "align_segments",
     "attach_punct_words",
     "normalize_words",
-    "SegmentProcessor",
+    "Subtitle",
+    "SubtitleStream",
 ]
