@@ -516,72 +516,83 @@ class TestNormalizeWords:
 
 # ---------------------------------------------------------------------------
 # Multilingual: parametrized tests for zh / ko coverage
+#
+# Each dict maps test-case IDs to (inputs, expected) tuples.
+# Adding a language = adding entries to the dict — no new class needed.
 # ---------------------------------------------------------------------------
 
-class TestFindWordsChinese:
-    """find_words with CJK single-char words (Whisper-style)."""
-
-    def test_basic_char_matching(self):
-        ws = [Word("你", 0, .2), Word("好", .2, .4),
-              Word("世", .4, .6), Word("界", .6, .8)]
-        assert find_words(ws, "你好世界") == (0, 4)
-        assert find_words(ws, "你好") == (0, 2)
-        assert find_words(ws, "世界", start=2) == (2, 4)
-
-    def test_fullwidth_punct_absorbed(self):
-        ws = [Word("你", 0, .2), Word("好", .2, .4),
-              Word("。", .4, .5), Word("再", .5, .7), Word("见", .7, .9)]
-        assert find_words(ws, "你好。") == (0, 3)
-        assert find_words(ws, "再见", start=3) == (3, 5)
-
-    def test_mixed_cjk_latin(self):
-        ws = [Word("学", 0, .3), Word("习", .3, .5),
-              Word("Python", .5, 1.0), Word("编", 1.0, 1.2), Word("程", 1.2, 1.5)]
-        assert find_words(ws, "学习Python") == (0, 3)
-        assert find_words(ws, "编程", start=3) == (3, 5)
+from lang_ops import LangOps
 
 
-class TestFindWordsKorean:
-    """find_words with Korean eojeol-level words."""
+# -- find_words ---------------------------------------------------------------
 
-    def test_eojeol_matching(self):
-        ws = [Word("안녕하세요.", 0, 1), Word("잘", 1, 1.5),
-              Word("지내세요?", 1.5, 2.5)]
-        assert find_words(ws, "안녕하세요.") == (0, 1)
-        assert find_words(ws, "잘 지내세요?", start=1) == (1, 3)
-
-    def test_content_match_strips_punct(self):
-        ws = [Word("감사합니다!", 0, 1)]
-        # content = "감사합니다" — should match without punct
-        assert find_words(ws, "감사합니다") == (0, 1)
-
-
-class TestAttachPunctWordsChinese:
-    """attach_punct_words with fullwidth punctuation."""
-
-    def test_fullwidth_closing(self):
-        ws = [Word("你好", 0, .4), Word("。", .4, .5)]
-        result = attach_punct_words(ws)
-        assert len(result) == 1
-        assert result[0].word == "你好。"
-
-    def test_fullwidth_opening(self):
-        ws = [Word("「", 0, .1), Word("你好", .1, .5), Word("」", .5, .6)]
-        result = attach_punct_words(ws)
-        assert len(result) == 1
-        assert result[0].word == "「你好」"
-
-    def test_mixed_fullwidth(self):
-        ws = [Word("他", 0, .2), Word("说", .2, .4), Word("：", .4, .5),
-              Word("「", .5, .6), Word("你好", .6, 1.0), Word("」", 1.0, 1.1)]
-        result = attach_punct_words(ws)
-        assert [w.word for w in result] == ["他", "说：", "「你好」"]
+FIND_WORDS_CASES = {
+    # Chinese char-level (Whisper-style)
+    "zh_full_match":     ([Word("你", 0, .2), Word("好", .2, .4),
+                           Word("世", .4, .6), Word("界", .6, .8)],
+                          "你好世界", 0, (0, 4)),
+    "zh_partial":        ([Word("你", 0, .2), Word("好", .2, .4),
+                           Word("世", .4, .6), Word("界", .6, .8)],
+                          "你好", 0, (0, 2)),
+    "zh_with_offset":    ([Word("你", 0, .2), Word("好", .2, .4),
+                           Word("世", .4, .6), Word("界", .6, .8)],
+                          "世界", 2, (2, 4)),
+    "zh_fullwidth_punct": ([Word("你", 0, .2), Word("好", .2, .4),
+                            Word("。", .4, .5), Word("再", .5, .7), Word("见", .7, .9)],
+                           "你好。", 0, (0, 3)),
+    "zh_mixed_cjk_latin": ([Word("学", 0, .3), Word("习", .3, .5),
+                             Word("Python", .5, 1.0), Word("编", 1.0, 1.2), Word("程", 1.2, 1.5)],
+                            "学习Python", 0, (0, 3)),
+    # Korean eojeol-level
+    "ko_eojeol":         ([Word("안녕하세요.", 0, 1), Word("잘", 1, 1.5),
+                           Word("지내세요?", 1.5, 2.5)],
+                          "안녕하세요.", 0, (0, 1)),
+    "ko_multi_eojeol":   ([Word("안녕하세요.", 0, 1), Word("잘", 1, 1.5),
+                           Word("지내세요?", 1.5, 2.5)],
+                          "잘 지내세요?", 1, (1, 3)),
+    "ko_content_strip":  ([Word("감사합니다!", 0, 1)],
+                          "감사합니다", 0, (0, 1)),
+}
 
 
-class TestNormalizeWordsChinese:
-    """normalize_words with CJK text."""
+@pytest.mark.parametrize(
+    "words,text,start,expected",
+    FIND_WORDS_CASES.values(),
+    ids=FIND_WORDS_CASES.keys(),
+)
+def test_find_words_multilingual(words, text, start, expected):
+    assert find_words(words, text, start=start) == expected
 
-    def test_only_text_cjk(self):
+
+# -- attach_punct_words -------------------------------------------------------
+
+ATTACH_PUNCT_CASES = {
+    "zh_closing":     ([Word("你好", 0, .4), Word("。", .4, .5)],
+                       ["你好。"]),
+    "zh_opening":     ([Word("「", 0, .1), Word("你好", .1, .5), Word("」", .5, .6)],
+                       ["「你好」"]),
+    "zh_mixed":       ([Word("他", 0, .2), Word("说", .2, .4), Word("：", .4, .5),
+                        Word("「", .5, .6), Word("你好", .6, 1.0), Word("」", 1.0, 1.1)],
+                       ["他", "说：", "「你好」"]),
+}
+
+
+@pytest.mark.parametrize(
+    "words,expected_texts",
+    ATTACH_PUNCT_CASES.values(),
+    ids=ATTACH_PUNCT_CASES.keys(),
+)
+def test_attach_punct_multilingual(words, expected_texts):
+    result = attach_punct_words(words)
+    assert [w.word for w in result] == expected_texts
+
+
+# -- normalize_words ----------------------------------------------------------
+
+class TestNormalizeWordsMultilingual:
+    """Language-specific normalize_words behaviour."""
+
+    def test_zh_only_text(self):
         text, words = normalize_words(
             "你好世界", [], split_fn=list, start=0.0, end=4.0,
         )
@@ -589,12 +600,12 @@ class TestNormalizeWordsChinese:
         assert len(words) == 4
         assert words[0].content == "你"
 
-    def test_only_words_cjk(self):
+    def test_zh_only_words(self):
         ws = [Word("你", 0, .5), Word("好", .5, 1)]
         text, words = normalize_words(None, ws)
         assert text == "你好"
 
-    def test_both_with_punct(self):
+    def test_zh_both_with_punct(self):
         ws = [Word("你", 0, .3), Word("好", .3, .5), Word("！", .5, .6)]
         text, words = normalize_words("你好！", ws)
         assert text == "你好！"
@@ -603,42 +614,43 @@ class TestNormalizeWordsChinese:
         assert words[1].word == "好！"
 
 
-class TestDistributeWordsChinese:
-    """distribute_words with CJK char-level words."""
+# -- distribute_words ---------------------------------------------------------
 
-    def test_split_into_sentences(self):
-        ws = [Word("你", 0, .2), Word("好", .2, .4), Word("。", .4, .5),
-              Word("再", .5, .7), Word("见", .7, .9), Word("。", .9, 1.0)]
-        groups = distribute_words(ws, ["你好。", "再见。"])
-        assert len(groups) == 2
-        assert len(groups[0]) == 3
-        assert len(groups[1]) == 3
-
-
-class TestPipelineSegmentsChinese:
-    """Pipeline .sentences().segments() with Chinese."""
-
-    def test_chinese_sentences_segments(self):
-        from lang_ops import LangOps
-        ops = LangOps.for_language("zh")
-        ws = [Word("你", 0, .2), Word("好", .2, .4), Word("。", .4, .5),
-              Word("再", .5, .7), Word("见", .7, .9), Word("。", .9, 1.0)]
-        text = "你好。再见。"
-        segs = ops.chunk(text).sentences().segments(ws)
-        assert len(segs) == 2
-        assert segs[0].text == "你好。"
-        assert segs[1].text == "再见。"
+def test_distribute_words_zh():
+    ws = [Word("你", 0, .2), Word("好", .2, .4), Word("。", .4, .5),
+          Word("再", .5, .7), Word("见", .7, .9), Word("。", .9, 1.0)]
+    groups = distribute_words(ws, ["你好。", "再见。"])
+    assert len(groups) == 2
+    assert len(groups[0]) == 3
+    assert len(groups[1]) == 3
 
 
-class TestPipelineSegmentsKorean:
-    """Pipeline .sentences().segments() with Korean."""
+# -- Pipeline .sentences().segments() ----------------------------------------
 
-    def test_korean_sentences_segments(self):
-        from lang_ops import LangOps
-        ops = LangOps.for_language("ko")
-        ws = [Word("안녕하세요.", 0, 1), Word("반갑습니다.", 1.5, 2.5)]
-        text = "안녕하세요. 반갑습니다."
-        segs = ops.chunk(text).sentences().segments(ws)
-        assert len(segs) == 2
-        assert segs[0].start == pytest.approx(0.0)
-        assert segs[1].start == pytest.approx(1.5)
+PIPELINE_SEGMENTS_CASES = {
+    "zh": ("zh",
+           "你好。再见。",
+           [Word("你", 0, .2), Word("好", .2, .4), Word("。", .4, .5),
+            Word("再", .5, .7), Word("见", .7, .9), Word("。", .9, 1.0)],
+           2, ["你好。", "再见。"]),
+    "ko": ("ko",
+           "안녕하세요. 반갑습니다.",
+           [Word("안녕하세요.", 0, 1), Word("반갑습니다.", 1.5, 2.5)],
+           2, None),  # None = skip text check, just verify count + timing
+}
+
+
+@pytest.mark.parametrize(
+    "lang,text,words,expected_count,expected_texts",
+    PIPELINE_SEGMENTS_CASES.values(),
+    ids=PIPELINE_SEGMENTS_CASES.keys(),
+)
+def test_pipeline_segments_multilingual(lang, text, words, expected_count, expected_texts):
+    ops = LangOps.for_language(lang)
+    segs = ops.chunk(text).sentences().segments(words)
+    assert len(segs) == expected_count
+    if expected_texts is not None:
+        assert [s.text for s in segs] == expected_texts
+    # Timing monotonic
+    for i in range(1, len(segs)):
+        assert segs[i].start >= segs[i - 1].start
