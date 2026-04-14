@@ -280,12 +280,16 @@ class Subtitle:
 class SubtitleStream:
     """Stateful streaming segment restructurer.
 
-    Buffers incoming segments.  On each :meth:`feed`, tries to emit
-    completed sentences (those followed by more text, proving they are
-    complete).  :meth:`flush` emits everything remaining.
+    Buffers only the last incomplete sentence.  On each :meth:`feed`,
+    combines the incomplete sentence with the new segment, splits
+    sentences, emits completed ones, and keeps only the trailing
+    incomplete part.  This is O(incomplete + new) per call rather
+    than O(total) — a significant improvement for long streams.
+
+    :meth:`flush` emits everything remaining.
     """
 
-    __slots__ = ("_ops", "_split_by_speaker", "_buffer_segments")
+    __slots__ = ("_ops", "_split_by_speaker", "_incomplete")
 
     def __init__(
         self,
@@ -295,39 +299,41 @@ class SubtitleStream:
     ) -> None:
         self._ops = ops
         self._split_by_speaker = split_by_speaker
-        self._buffer_segments: list[Segment] = []
+        self._incomplete: Segment | None = None
 
     def feed(self, segment: Segment) -> list[Segment]:
         """Feed one segment; return any completed sentence-segments."""
-        self._buffer_segments.append(segment)
+        if self._incomplete is not None:
+            segs = [self._incomplete, segment]
+        else:
+            segs = [segment]
 
         sub = Subtitle(
-            self._buffer_segments, self._ops,
+            segs, self._ops,
             split_by_speaker=self._split_by_speaker,
         )
         all_sentences = sub.sentences().build()
 
         if len(all_sentences) <= 1:
+            # No confirmed complete sentences yet
+            self._incomplete = all_sentences[0] if all_sentences else None
             return []
 
         # All but the last sentence are confirmed complete
         done = all_sentences[:-1]
-
-        # Rebuild buffer from the last (incomplete) sentence's words
         last = all_sentences[-1]
-        self._buffer_segments = [last] if last.words else []
-
+        self._incomplete = last if last.words else None
         return done
 
     def flush(self) -> list[Segment]:
         """Flush remaining buffer as sentence-segments."""
-        if not self._buffer_segments:
+        if self._incomplete is None:
             return []
 
         sub = Subtitle(
-            self._buffer_segments, self._ops,
+            [self._incomplete], self._ops,
             split_by_speaker=self._split_by_speaker,
         )
         result = sub.sentences().build()
-        self._buffer_segments = []
+        self._incomplete = None
         return result
