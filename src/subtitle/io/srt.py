@@ -1,4 +1,4 @@
-"""SRT subtitle file parser."""
+"""SRT subtitle file parser and sanitizer."""
 
 from __future__ import annotations
 
@@ -11,6 +11,85 @@ from subtitle.model import Segment
 _TIMESTAMP_RE = re.compile(
     r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})"
 )
+
+# ── sanitize_srt helpers ──────────────────────────────────────────────
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_MULTI_SPACE_RE = re.compile(r" {2,}")
+
+# Invisible / zero-width characters to strip (BOM handled separately)
+_INVISIBLE_RE = re.compile(
+    "["
+    "\u200b"  # ZERO WIDTH SPACE
+    "\u200c"  # ZERO WIDTH NON-JOINER
+    "\u200d"  # ZERO WIDTH JOINER
+    "\u2060"  # WORD JOINER
+    "\ufeff"  # BOM / ZERO WIDTH NO-BREAK SPACE (mid-text)
+    "\u007f"  # DEL control character
+    "]"
+)
+
+# Smart quotes → straight quotes
+_SMART_QUOTE_MAP = str.maketrans({
+    "\u2018": "'",   # LEFT SINGLE QUOTATION MARK
+    "\u2019": "'",   # RIGHT SINGLE QUOTATION MARK
+    "\u201c": '"',   # LEFT DOUBLE QUOTATION MARK
+    "\u201d": '"',   # RIGHT DOUBLE QUOTATION MARK
+})
+
+# Non-standard whitespace → regular space
+_WHITESPACE_MAP = str.maketrans({
+    "\u00a0": " ",   # NO-BREAK SPACE
+    "\u2002": " ",   # EN SPACE
+    "\u2003": " ",   # EM SPACE
+    "\u2009": " ",   # THIN SPACE
+    "\u200a": " ",   # HAIR SPACE
+})
+
+
+def sanitize_srt(content: str) -> str:
+    """Clean raw SRT text before parsing.
+
+    Handles encoding artifacts, invisible characters, non-standard
+    punctuation/whitespace, and HTML tags.  Does NOT touch timestamps or
+    segment structure — only the text content.
+
+    Args:
+        content: Raw SRT file content.
+
+    Returns:
+        Cleaned SRT content ready for ``parse_srt``.
+    """
+    # BOM at file start
+    if content.startswith("\ufeff"):
+        content = content[1:]
+
+    # Line endings
+    content = content.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Invisible / zero-width characters
+    content = _INVISIBLE_RE.sub("", content)
+
+    # HTML tags
+    content = _HTML_TAG_RE.sub("", content)
+
+    # Smart quotes → straight
+    content = content.translate(_SMART_QUOTE_MAP)
+
+    # Non-standard whitespace → regular space
+    content = content.translate(_WHITESPACE_MAP)
+
+    # Unicode ellipsis → three dots
+    content = content.replace("\u2026", "...")
+
+    # Double period → single (but preserve triple "...")
+    # "word.. next" → "word. next", but "word..." stays
+    content = re.sub(r"(?<!\.)\.\.(?!\.)", ".", content)
+
+    # Collapse multiple spaces
+    content = _MULTI_SPACE_RE.sub(" ", content)
+
+    return content
 
 
 def _parse_timestamp(h: str, m: str, s: str, ms: str) -> float:
