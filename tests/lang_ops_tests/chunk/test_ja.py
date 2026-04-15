@@ -59,27 +59,27 @@ class TestJapaneseSplitter(SplitterTestBase):
 
     def test_split_by_length(self) -> None:
         # 文字数による分割
-        assert _ops.split_by_length("これはテストです", max_length=4) == ["これは", "テスト", "です"]
-        assert _ops.split_by_length("今日はいい天気ですね", max_length=5) == ["今日はいい", "天気ですね"]
+        assert _ops.split_by_length("これはテストです", max_len=4) == ["これは", "テスト", "です"]
+        assert _ops.split_by_length("今日はいい天気ですね", max_len=5) == ["今日はいい", "天気ですね"]
 
         # フィット / 空 / 端のケース
-        assert _ops.split_by_length("テスト", max_length=10) == ["テスト"]
-        assert _ops.split_by_length("", max_length=10) == []
+        assert _ops.split_by_length("テスト", max_len=10) == ["テスト"]
+        assert _ops.split_by_length("", max_len=10) == []
 
         # エラー
         import pytest
         with pytest.raises(ValueError):
-            _ops.split_by_length("テスト", max_length=0)
+            _ops.split_by_length("テスト", max_len=0)
         with pytest.raises(ValueError):
-            _ops.split_by_length("テスト", max_length=-1)
+            _ops.split_by_length("テスト", max_len=-1)
         with pytest.raises(TypeError):
-            _ops.split_by_length("テスト", max_length=5, unit="sentence")
+            _ops.split_by_length("テスト", max_len=5, unit="sentence")
 
         # チャンクチェーン
-        assert _ops.chunk("これはテストです。次の文です。").sentences().max_length(8).result() == [
+        assert _ops.chunk("これはテストです。次の文です。").sentences().split(8).result() == [
             "これはテスト", "です。", "次の文です。",
         ]
-        assert _ops.chunk("最初、次、最後。").clauses().max_length(4).result() == [
+        assert _ops.chunk("最初、次、最後。").clauses().split(4).result() == [
             "最初、", "次、", "最後。",
         ]
 

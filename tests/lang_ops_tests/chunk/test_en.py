@@ -63,44 +63,44 @@ class TestEnglishSplitter(SplitterTestBase):
 
     def test_split_by_length(self) -> None:
         # Basic split
-        assert _ops.split_by_length("Hello world", max_length=20) == ["Hello world"]
-        assert _ops.split_by_length("abcdefghij", max_length=5) == ["abcdefghij"]
+        assert _ops.split_by_length("Hello world", max_len=20) == ["Hello world"]
+        assert _ops.split_by_length("abcdefghij", max_len=5) == ["abcdefghij"]
 
         # Multi-word split
-        assert _ops.split_by_length("one two three four", max_length=9) == ["one two", "three", "four"]
-        assert _ops.split_by_length("a b c d e", max_length=3) == ["a b", "c d", "e"]
+        assert _ops.split_by_length("one two three four", max_len=9) == ["one two", "three", "four"]
+        assert _ops.split_by_length("a b c d e", max_len=3) == ["a b", "c d", "e"]
 
         # Oversized token kept whole (minimum unit = one token)
-        assert _ops.split_by_length("supercalifragilisticexpialidocious", max_length=5) == [
+        assert _ops.split_by_length("supercalifragilisticexpialidocious", max_len=5) == [
             "supercalifragilisticexpialidocious",
         ]
 
         # Boundary
-        assert _ops.split_by_length("a b c", max_length=1) == ["a", "b", "c"]
-        assert _ops.split_by_length("one two three", max_length=5) == ["one", "two", "three"]
+        assert _ops.split_by_length("a b c", max_len=1) == ["a", "b", "c"]
+        assert _ops.split_by_length("one two three", max_len=5) == ["one", "two", "three"]
 
         # Exact fit
-        assert _ops.split_by_length("Hello", max_length=5) == ["Hello"]
-        assert _ops.split_by_length("ab cd", max_length=5) == ["ab cd"]
+        assert _ops.split_by_length("Hello", max_len=5) == ["Hello"]
+        assert _ops.split_by_length("ab cd", max_len=5) == ["ab cd"]
 
         # Fit / empty / edge
-        assert _ops.split_by_length("Hi there", max_length=8) == ["Hi there"]
-        assert _ops.split_by_length("", max_length=10) == []
+        assert _ops.split_by_length("Hi there", max_len=8) == ["Hi there"]
+        assert _ops.split_by_length("", max_len=10) == []
 
         # Errors
         import pytest
         with pytest.raises(ValueError):
-            _ops.split_by_length("Hello", max_length=0)
+            _ops.split_by_length("Hello", max_len=0)
         with pytest.raises(ValueError):
-            _ops.split_by_length("Hello", max_length=-1)
+            _ops.split_by_length("Hello", max_len=-1)
         with pytest.raises(TypeError):
-            _ops.split_by_length("Hello", max_length=5, unit="sentence")
+            _ops.split_by_length("Hello", max_len=5, unit="sentence")
 
         # Chunk chains
-        assert _ops.chunk("Hello world. This is a test sentence.").sentences().max_length(25).result() == [
+        assert _ops.chunk("Hello world. This is a test sentence.").sentences().split(25).result() == [
             "Hello world.", "This is a test sentence.",
         ]
-        assert _ops.chunk("First clause, second clause, and a third one.").clauses().max_length(20).result() == [
+        assert _ops.chunk("First clause, second clause, and a third one.").clauses().split(20).result() == [
             "First clause,", "second clause,", "and a third one.",
         ]
 

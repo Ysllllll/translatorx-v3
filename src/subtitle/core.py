@@ -9,8 +9,8 @@ Typical usage::
     from subtitle import Subtitle
 
     sub = Subtitle(segments, language="zh")
-    result = sub.sentences().max_length(40).build()
-    records = sub.sentences().max_length(40).records()
+    result = sub.sentences().split(40).build()
+    records = sub.sentences().split(40).records()
 
 With external text transforms (e.g. punctuation restoration)::
 
@@ -18,7 +18,7 @@ With external text transforms (e.g. punctuation restoration)::
         .sentences()
         .apply(restore_fn)       # fn: list[str] → list[list[str]]
         .sentences()             # re-split after text change
-        .max_length(40)
+        .split(40)
         .records())
 """
 
@@ -79,7 +79,7 @@ class Subtitle:
 
     After ``sentences()``, the instance holds one pipeline per sentence
     with its corresponding words.  Subsequent operations (``clauses``,
-    ``max_length``, ``apply``) are applied per-sentence, so they never
+    ``split``, ``apply``) are applied per-sentence, so they never
     cross sentence boundaries.
 
     All text operations are delegated to
@@ -161,7 +161,13 @@ class Subtitle:
 
         After this call, each pipeline holds exactly one sentence and
         words are distributed to their respective sentences (early
-        alignment).  Subsequent operations are per-sentence.
+        alignment).  Subsequent operations (``clauses``, ``split``,
+        ``merge``, ``apply``) are applied per-sentence — they never
+        cross sentence boundaries.
+
+        This is typically the first operation in a chain::
+
+            sub.sentences().clauses(merge_under=60).split(40).build()
         """
         from lang_ops.chunk._pipeline import ChunkPipeline
 
@@ -187,34 +193,33 @@ class Subtitle:
 
         return self._with_pipelines(new_pipelines, new_words)
 
-    def clauses(self, min_length: int | None = None) -> Subtitle:
+    def clauses(self, merge_under: int | None = None) -> Subtitle:
         """Split each chunk into clauses (sentence-aware).
 
         Args:
-            min_length: If given, merge back clauses shorter than this.
+            merge_under: If given, merge back clauses shorter than this.
         """
         return self._with_pipelines(
-            [p.clauses(min_length=min_length) for p in self._pipelines]
+            [p.clauses(merge_under=merge_under) for p in self._pipelines]
         )
 
-    def max_length(self, max_length: int, min_length: int | None = None) -> Subtitle:
+    def split(self, max_len: int) -> Subtitle:
         """Split each chunk by length.
 
         Args:
-            max_length: Upper bound on chunk length.
-            min_length: If given, merge back groups shorter than this.
+            max_len: Upper bound on chunk length.
         """
         return self._with_pipelines(
-            [p.max_length(max_length, min_length=min_length) for p in self._pipelines]
+            [p.split(max_len) for p in self._pipelines]
         )
 
-    def merge(self, max_length: int) -> Subtitle:
+    def merge(self, max_len: int) -> Subtitle:
         """Greedily merge adjacent chunks within each pipeline.
 
         Merging is per-pipeline (i.e. per-sentence after ``sentences()``).
         """
         return self._with_pipelines(
-            [p.merge(max_length) for p in self._pipelines]
+            [p.merge(max_len) for p in self._pipelines]
         )
 
     def apply(
@@ -304,14 +309,16 @@ class Subtitle:
             result.extend(align_segments(chunks, words))
         return result
 
-    def records(self, max_length: int | None = None) -> list[SentenceRecord]:
+    def records(self) -> list[SentenceRecord]:
         """Return SentenceRecords: one per sentence, with sub-segments.
 
         If ``sentences()`` has not been called, it is done automatically.
 
-        Each record's ``src_text`` is a full sentence.  If *max_length*
-        is given, sentences are further split by ``clauses → max_length``
-        to produce the record's ``segments``.
+        Each record's ``src_text`` is a full sentence.  Use chained
+        operations (``clauses``, ``split``) before calling ``records()``
+        to control segment granularity::
+
+            sub.sentences().clauses(merge_under=60).split(40).records()
         """
         # Ensure we're at sentence granularity
         sub = self if len(self._pipelines) > 1 or not self._pipelines else self.sentences()
@@ -324,13 +331,7 @@ class Subtitle:
             if not src_text.strip():
                 continue
 
-            if max_length is not None:
-                sub_chunks = (pipeline
-                              .clauses()
-                              .max_length(max_length)
-                              .result())
-            else:
-                sub_chunks = pipeline.result()
+            sub_chunks = pipeline.result()
 
             sub_segments = align_segments(sub_chunks, words)
             if sub_segments:

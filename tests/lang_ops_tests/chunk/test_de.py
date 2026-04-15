@@ -46,26 +46,26 @@ class TestGermanSplitter(SplitterTestBase):
     def test_split_by_length(self) -> None:
         # Character split
         # Multi-word split
-        assert _ops.split_by_length("Hallo Welt wie geht es", max_length=12) == ["Hallo Welt", "wie geht es"]
+        assert _ops.split_by_length("Hallo Welt wie geht es", max_len=12) == ["Hallo Welt", "wie geht es"]
 
         # Fit / empty / edge
-        assert _ops.split_by_length("Hallo", max_length=20) == ["Hallo"]
-        assert _ops.split_by_length("", max_length=10) == []
+        assert _ops.split_by_length("Hallo", max_len=20) == ["Hallo"]
+        assert _ops.split_by_length("", max_len=10) == []
 
         # Errors
         import pytest
         with pytest.raises(ValueError):
-            _ops.split_by_length("Hallo", max_length=0)
+            _ops.split_by_length("Hallo", max_len=0)
         with pytest.raises(ValueError):
-            _ops.split_by_length("Hallo", max_length=-1)
+            _ops.split_by_length("Hallo", max_len=-1)
         with pytest.raises(TypeError):
-            _ops.split_by_length("Hallo", max_length=5, unit="sentence")
+            _ops.split_by_length("Hallo", max_len=5, unit="sentence")
 
         # Chunk chains
-        assert _ops.chunk("Hello world. This is a test. Another one.").sentences().max_length(20).result() == [
+        assert _ops.chunk("Hello world. This is a test. Another one.").sentences().split(20).result() == [
             "Hello world.", "This is a test.", "Another one.",
         ]
-        assert _ops.chunk("First clause, second clause, and third.").clauses().max_length(20).result() == [
+        assert _ops.chunk("First clause, second clause, and third.").clauses().split(20).result() == [
             "First clause,", "second clause,", "and third.",
         ]
 

@@ -48,20 +48,20 @@ class TestKoreanSplitter(SplitterTestBase):
         assert _ops.split_clauses("구분자없음") == ["구분자없음"]
 
     def test_split_by_length(self) -> None:
-        assert _ops.split_by_length("가나다라마바사", max_length=3) == ['가나다라', '마바사']
-        assert _ops.split_by_length("테스트", max_length=10) == ["테스트"]
-        assert _ops.split_by_length("", max_length=10) == []
+        assert _ops.split_by_length("가나다라마바사", max_len=3) == ['가나다라', '마바사']
+        assert _ops.split_by_length("테스트", max_len=10) == ["테스트"]
+        assert _ops.split_by_length("", max_len=10) == []
 
         import pytest
         with pytest.raises(ValueError):
-            _ops.split_by_length("테스트", max_length=0)
+            _ops.split_by_length("테스트", max_len=0)
         with pytest.raises(ValueError):
-            _ops.split_by_length("테스트", max_length=-1)
+            _ops.split_by_length("테스트", max_len=-1)
         with pytest.raises(TypeError):
-            _ops.split_by_length("테스트", max_length=5, unit="sentence")
+            _ops.split_by_length("테스트", max_len=5, unit="sentence")
 
-        assert _ops.chunk("안녕하세요. 반갑습니다!").sentences().max_length(8).result() == ['안녕하세요.', '반갑습니다!']
-        assert _ops.chunk("첫째, 둘째, 셋째.").clauses().max_length(5).result() == ['첫째,', '둘째,', '셋째.']
+        assert _ops.chunk("안녕하세요. 반갑습니다!").sentences().split(8).result() == ['안녕하세요.', '반갑습니다!']
+        assert _ops.chunk("첫째, 둘째, 셋째.").clauses().split(5).result() == ['첫째,', '둘째,', '셋째.']
 
     def test_split_long_text(self) -> None:
         # long text split_sentences()

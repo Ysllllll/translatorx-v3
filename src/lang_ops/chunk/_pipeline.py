@@ -3,21 +3,13 @@
 Fully token-based: tokenizes once at init, all operations work on
 the token array.  No redundant re-tokenization across chained calls.
 
-Each splitting operation (``sentences``, ``clauses``, ``max_length``)
+Each splitting operation (``sentences``, ``clauses``, ``split``)
 subdivides existing groups and returns a new pipeline instance.
-``merge()`` greedily combines all adjacent groups — use it when there
-are no structural boundaries to preserve (e.g. after ``max_length``).
-
-For boundary-respecting merging, use ``min_length`` parameters on
-``clauses()`` and ``max_length()`` — they skip boundaries that would
-create chunks shorter than the threshold.
+``merge()`` greedily combines all adjacent groups.
 
 Example::
 
-    pipeline.sentences().clauses(min_length=60)
-    #  sentences() splits into sentence groups
-    #  clauses() splits each sentence by clause boundaries, then
-    #            merges back any clause shorter than 60 chars
+    pipeline.sentences().clauses(merge_under=60).split(max_len=50)
 """
 
 from __future__ import annotations
@@ -113,11 +105,11 @@ class ChunkPipeline:
             return split_tokens_by_boundaries(group, boundaries)
         return self._split(_split_fn)
 
-    def clauses(self, min_length: int | None = None) -> ChunkPipeline:
+    def clauses(self, merge_under: int | None = None) -> ChunkPipeline:
         """Split each group into clauses (sentence boundaries included).
 
         Args:
-            min_length: If given, merge back groups shorter than this
+            merge_under: If given, merge back clauses shorter than this
                 threshold after splitting.  Prevents overly short chunks.
         """
         def _split_fn(group):
@@ -128,31 +120,26 @@ class ChunkPipeline:
                 self._ops.clause_separators,
             )
             sub_groups = split_tokens_by_boundaries(group, boundaries)
-            if min_length is not None and len(sub_groups) > 1:
-                sub_groups = _merge_short_groups(sub_groups, self._ops, min_length)
+            if merge_under is not None and len(sub_groups) > 1:
+                sub_groups = _merge_short_groups(sub_groups, self._ops, merge_under)
             return sub_groups
         return self._split(_split_fn)
 
-    def max_length(self, max_length: int, min_length: int | None = None) -> ChunkPipeline:
+    def split(self, max_len: int) -> ChunkPipeline:
         """Split each group by length.
 
         Args:
-            max_length: Upper bound on chunk length.
-            min_length: If given, merge back groups shorter than this
-                threshold after splitting.
+            max_len: Upper bound on chunk length.
         """
         def _split_fn(group):
-            sub_groups = split_tokens_by_length(group, self._ops, max_length)
-            if min_length is not None and len(sub_groups) > 1:
-                sub_groups = _merge_short_groups(sub_groups, self._ops, min_length)
-            return sub_groups
+            return split_tokens_by_length(group, self._ops, max_len)
         return self._split(_split_fn)
 
-    def merge(self, max_length: int) -> ChunkPipeline:
-        """Greedily merge all adjacent groups whose combined length ≤ *max_length*."""
+    def merge(self, max_len: int) -> ChunkPipeline:
+        """Greedily merge all adjacent groups whose combined length ≤ *max_len*."""
         if len(self._groups) <= 1:
             return self
-        merged = merge_token_groups(self._groups, self._ops, max_length)
+        merged = merge_token_groups(self._groups, self._ops, max_len)
         if len(merged) == len(self._groups):
             return self
         return ChunkPipeline._from_groups(merged, self._ops)

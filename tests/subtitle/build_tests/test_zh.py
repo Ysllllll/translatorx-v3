@@ -106,7 +106,7 @@ def _mixed_language_segments() -> list[Segment]:
 
 
 def _extreme_length_segment() -> list[Segment]:
-    """Segment with extremely long word that exceeds max_length."""
+    """Segment with extremely long word that exceeds split limit."""
     return [
         S("这是一个超级长的英文单词supercalifragilisticexpialidocious测试", 0.0, 5.0, words=[
             W("这", 0.0, 0.2), W("是", 0.2, 0.4), W("一", 0.4, 0.6), W("个", 0.6, 0.8),
@@ -316,10 +316,10 @@ class TestChineseClauses:
 
 class TestChineseByLength:
 
-    def test_sentences_then_max_length(self) -> None:
+    def test_sentences_then_split(self) -> None:
         result = (Subtitle(_asr_news_segments(), _ops)
                   .sentences()
-                  .max_length(10)
+                  .split(10)
                   .build())
         assert [s.text for s in result] == [
             "近年来，人工智能技术",
@@ -331,11 +331,11 @@ class TestChineseByLength:
             "技术的风险。",
         ]
 
-    def test_sentences_then_clauses_then_max_length(self) -> None:
+    def test_sentences_then_clauses_then_split(self) -> None:
         result = (Subtitle(_asr_news_segments(), _ops)
                   .sentences()
                   .clauses()
-                  .max_length(8)
+                  .split(8)
                   .build())
         assert [s.text for s in result] == [
             "近年来，",
@@ -352,13 +352,13 @@ class TestChineseByLength:
         ]
 
     def test_short_text_no_split(self) -> None:
-        result = Subtitle(_short_segments(), _ops).max_length(50).build()
+        result = Subtitle(_short_segments(), _ops).split(50).build()
         assert [s.text for s in result] == ["你好世界。今天天气不错！"]
 
     def test_mixed_language_split(self) -> None:
         result = (Subtitle(_mixed_language_segments(), _ops)
                   .sentences()
-                  .max_length(10)
+                  .split(10)
                   .build())
         assert [s.text for s in result] == [
             "我正在学习",
@@ -369,7 +369,7 @@ class TestChineseByLength:
     def test_extreme_length_word_fallback(self) -> None:
         result = (Subtitle(_extreme_length_segment(), _ops)
                   .sentences()
-                  .max_length(15)
+                  .split(15)
                   .build())
         assert [s.text for s in result] == [
             "这是一个超级长的英文单词",
@@ -385,7 +385,7 @@ class TestChineseByLength:
 class TestChineseMerge:
 
     def test_merge_clauses_back(self) -> None:
-        """clauses → merge: small clauses recombined under max_length."""
+        """clauses → merge: small clauses recombined under max_len."""
         clause_result = (Subtitle(_asr_news_segments(), _ops)
                          .sentences().clauses().build())
         merged_result = (Subtitle(_asr_news_segments(), _ops)
@@ -441,9 +441,9 @@ class TestChineseMerge:
         assert result[1].end == 5.0
 
     def test_merge_chain_full(self) -> None:
-        """Full chain: sentences → clauses → max_length → merge."""
+        """Full chain: sentences → clauses → split → merge."""
         result = (Subtitle(_asr_news_segments(), _ops)
-                  .sentences().clauses().max_length(8).merge(15).build())
+                  .sentences().clauses().split(8).merge(15).build())
         for seg in result:
             assert _ops.length(seg.text) <= 15, f"Too long: {seg.text!r}"
         merged_text = "".join(s.text for s in result)
@@ -475,8 +475,8 @@ class TestChineseRecords:
         assert records[0].start == 0.0
         assert records[0].end == 2.0
 
-    def test_records_with_max_length(self) -> None:
-        records = Subtitle(_asr_news_segments(), _ops).records(max_length=8)
+    def test_records_with_split(self) -> None:
+        records = Subtitle(_asr_news_segments(), _ops).sentences().clauses().split(8).records()
         assert [rec.src_text for rec in records] == [
             "近年来，人工智能技术蓬勃发展。",
             "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。",

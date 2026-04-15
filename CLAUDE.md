@@ -145,8 +145,8 @@ ops.restore_punc(text_a, text_b)
 # Segment-level shortcuts
 ops.split_sentences(text) → list[str]
 ops.split_clauses(text)   → list[str]   # sentence-aware (splits at sentence boundaries too)
-ops.split_by_length(text, max_length) → list[str]
-ops.merge_by_length(chunks, max_length) → list[str]  # greedy merge (inverse of split)
+ops.split_by_length(text, max_len) → list[str]
+ops.merge_by_length(chunks, max_len) → list[str]  # greedy merge (inverse of split)
 ops.chunk(text) → ChunkPipeline
 ```
 
@@ -155,10 +155,10 @@ ops.chunk(text) → ChunkPipeline
 ```
 ops.chunk(text)
   .sentences()
-  .clauses(min_length=60)   # sentence-aware; min_length merges back short clauses
-  .max_length(50, min_length=30)  # token-boundary aware; min_length avoids tiny fragments
-  .merge(80)                # greedy merge all adjacent chunks
-  .apply(fn)                # external fn: list[str] → list[list[str]] (unified split/apply/batch)
+  .clauses(merge_under=60)  # sentence-aware; merge_under merges back short clauses
+  .split(max_len=50)        # split by length
+  .merge(max_len=80)        # greedy merge all adjacent chunks
+  .apply(fn, skip_if=None)  # external fn: list[str] → list[list[str]]; skip_if skips chunks
   .result()                 → list[str]
   .segments(words)          → list[Segment]   # deferred import from subtitle.align
 
@@ -174,12 +174,12 @@ from subtitle import Subtitle
 sub = Subtitle(segments, language="zh")           # or ops=ops; split_by_speaker=True groups by speaker
 sub = Subtitle.from_words(words, language="zh")   # from flat word list
 sub.sentences()                        → Subtitle  # splits into per-sentence pipelines (early word alignment)
-sub.clauses(min_length=60)             → Subtitle  # per-sentence clause splitting
-sub.max_length(40, min_length=20)      → Subtitle  # per-sentence length splitting
-sub.merge(60)                          → Subtitle  # per-sentence greedy merge
-sub.apply(fn, cache, batch_size, workers)  → Subtitle  # batched across all pipelines
+sub.clauses(merge_under=60)            → Subtitle  # per-sentence clause splitting
+sub.split(max_len=40)                  → Subtitle  # per-sentence length splitting
+sub.merge(max_len=60)                  → Subtitle  # per-sentence greedy merge
+sub.apply(fn, cache, batch_size, workers, skip_if)  → Subtitle  # batched across all pipelines
 sub.build()                            → list[Segment]
-sub.records(max_length=40)             → list[SentenceRecord]
+sub.records()                          → list[SentenceRecord]
 
 # Streaming mode (split_by_speaker=True groups by speaker)
 stream = Subtitle.stream(language="zh")
@@ -192,7 +192,7 @@ After `sentences()`, each operation is implicitly per-sentence — it never cros
 ### Subtitle word timing
 
 ```
-normalize_words(words) → list[Word]              # normalize word.content for matching
+normalize_words(text, words, split_fn=None, start=0.0, end=0.0) → tuple[str, list[Word]]  # reconcile text + words
 attach_punct_words(words) → list[Word]           # merge standalone punct into adjacent words
 fill_words(segment, split_fn=None) → Segment     # populate segment.words (auto-attaches punct)
 find_words(words, sub_text, start=0) → (start_idx, end_idx)
@@ -202,7 +202,7 @@ align_segments(chunks, words) → list[Segment]    # text chunks + timed words �
 
 ### Data types (all frozen)
 
-- `Word(word, start, end, speaker=None, extra={})`
+- `Word(word, start, end, speaker=None, extra={})` — `content` property returns word stripped of punctuation
 - `Segment(start, end, text, speaker=None, words=[], extra={})`
 - `SentenceRecord(src_text, start, end, segments=[], ...)` — also has `chunk_cache`, `translations`, `alignment`
 

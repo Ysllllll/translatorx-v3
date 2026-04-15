@@ -241,7 +241,7 @@ class TestEnglishByLength:
     def test_length_constraint(self) -> None:
         result = (Subtitle(_single_long_segment(), _ops)
                   .sentences()
-                  .max_length(25)
+                  .split(25)
                   .build())
         for seg in result:
             # Each chunk ≤ 25 chars, or is a single oversized token
@@ -251,20 +251,20 @@ class TestEnglishByLength:
     def test_text_preserved_after_length_split(self) -> None:
         result = (Subtitle(_single_long_segment(), _ops)
                   .sentences()
-                  .max_length(25)
+                  .split(25)
                   .build())
-        # max_length re-tokenizes via ops.split()/join(), which normalizes
+        # split re-tokenizes via ops.split()/join(), which normalizes
         # whitespace; verify all content words are present
         result_words = " ".join(s.text for s in result).split()
         original_words = _single_long_segment()[0].text.split()
         assert result_words == original_words
 
     def test_chain_sentences_clauses_length(self) -> None:
-        """Full chain: sentences → clauses → max_length."""
+        """Full chain: sentences → clauses → split."""
         result = (Subtitle(_asr_interview_segments(), _ops)
                   .sentences()
                   .clauses()
-                  .max_length(30)
+                  .split(30)
                   .build())
         for seg in result:
             stripped = seg.text.strip()
@@ -275,14 +275,14 @@ class TestEnglishByLength:
         original_words = " ".join(s.text for s in _asr_interview_segments()).split()
         assert result_words == original_words
 
-    def test_max_length_exact_results(self) -> None:
+    def test_split_exact_results(self) -> None:
         segs = [S("one two three four five six seven", 0.0, 7.0, words=[
             W("one", 0.0, 1.0), W("two", 1.0, 2.0), W("three", 2.0, 3.0),
             W("four", 3.0, 4.0), W("five", 4.0, 5.0), W("six", 5.0, 6.0),
             W("seven", 6.0, 7.0),
         ])]
-        result = Subtitle(segs, _ops).max_length(12).build()
-        # max_length re-tokenizes each chunk, so no leading spaces
+        result = Subtitle(segs, _ops).split(12).build()
+        # split re-tokenizes each chunk, so no leading spaces
         assert [s.text for s in result] == [
             "one two",
             "three four",
@@ -328,10 +328,10 @@ class TestEnglishMerge:
             W("four", 3.0, 4.0), W("five", 4.0, 5.0), W("six", 5.0, 6.0),
             W("seven", 6.0, 7.0),
         ])]
-        # max_length(8) → ["one two", "three", "four", "five six", "seven"]
+        # split(8) → ["one two", "three", "four", "five six", "seven"]
         # merge(12): "one two"(7) +"three"→13>12 flush; "three"(5)+"four"→10≤12;
         #   "three four"(10)+"five six"→18>12 flush; "five six"(8)+"seven"→14>12 flush
-        result = Subtitle(segs, _ops).max_length(8).merge(12).build()
+        result = Subtitle(segs, _ops).split(8).merge(12).build()
         assert [s.text for s in result] == [
             "one two",
             "three four",
@@ -351,7 +351,7 @@ class TestEnglishMerge:
         assert result[1].text == "How are you?"
 
     def test_merge_nothing_fits(self) -> None:
-        """When max_length is smaller than each chunk, no merging occurs."""
+        """When split limit is smaller than each chunk, no merging occurs."""
         result = (Subtitle(_short_segments(), _ops)
                   .sentences()
                   .merge(5)
@@ -372,11 +372,11 @@ class TestEnglishMerge:
         assert result[1].end == 5.0
 
     def test_merge_chain_full(self) -> None:
-        """Full chain: sentences → clauses → max_length → merge."""
+        """Full chain: sentences → clauses → split → merge."""
         result = (Subtitle(_single_long_segment(), _ops)
                   .sentences()
                   .clauses()
-                  .max_length(20)
+                  .split(20)
                   .merge(40)
                   .build())
         for seg in result:
@@ -397,9 +397,9 @@ class TestEnglishMerge:
         assert len(merged) == sentence_count
 
     def test_merge_without_prior_split_can_combine_all(self) -> None:
-        """Without sentences(), max_length shares one parent — merge is free."""
+        """Without sentences(), split shares one pipeline — merge is free."""
         result = (Subtitle(_short_segments(), _ops)
-                  .max_length(5)
+                  .split(5)
                   .merge(100)
                   .build())
         assert len(result) == 1
@@ -586,7 +586,7 @@ class TestEnglishApply:
 
 class TestEnglishRecords:
 
-    def test_records_without_max_length(self) -> None:
+    def test_records_without_split(self) -> None:
         records = Subtitle(_short_segments(), _ops).records()
         assert len(records) == 2
         assert isinstance(records[0], SentenceRecord)
@@ -596,9 +596,9 @@ class TestEnglishRecords:
         assert len(records[0].segments) == 1
         assert records[0].segments[0].text == "Hello world."
 
-    def test_records_with_max_length(self) -> None:
+    def test_records_with_split(self) -> None:
         """Long sentences are sub-split into clause→length segments."""
-        records = Subtitle(_asr_interview_segments(), _ops).records(max_length=20)
+        records = Subtitle(_asr_interview_segments(), _ops).sentences().clauses().split(20).records()
         # Check that long sentences got sub-split
         for rec in records:
             for seg in rec.segments:
@@ -613,7 +613,7 @@ class TestEnglishRecords:
         assert records[-1].end == 22.0
 
     def test_records_sub_segments_have_words(self) -> None:
-        records = Subtitle(_asr_interview_segments(), _ops).records(max_length=20)
+        records = Subtitle(_asr_interview_segments(), _ops).sentences().clauses().split(20).records()
         for rec in records:
             for seg in rec.segments:
                 assert len(seg.words) >= 1, \

@@ -77,39 +77,39 @@ class TestChineseSplitter(SplitterTestBase):
 
     def test_split_by_length(self) -> None:
         # split_by_length() — oversized tokens kept whole (minimum unit = one token)
-        assert _ops.split_by_length("你好世界", max_length=1) == ["你好", "世界"]
-        assert _ops.split_by_length("人工智能技术在中国蓬勃发展", max_length=6) == [
+        assert _ops.split_by_length("你好世界", max_len=1) == ["你好", "世界"]
+        assert _ops.split_by_length("人工智能技术在中国蓬勃发展", max_len=6) == [
             "人工智能技术", "在中国", "蓬勃发展",
         ]
         
         # 中英文混合、带网址与特殊符号的长度切分
         # URL 现在会作为单个 token 保留，长度切分不会再把它拆坏。
-        assert _ops.split_by_length("访问https://example.com查看", max_length=15) == [
+        assert _ops.split_by_length("访问https://example.com查看", max_len=15) == [
             "访问",
             "https://example.com",
             "查看",
         ]
-        assert _ops.split_by_length("你好😊世界", max_length=2) == ["你好", "😊", "世界"]
+        assert _ops.split_by_length("你好😊世界", max_len=2) == ["你好", "😊", "世界"]
         
-        assert _ops.split_by_length("你好", max_length=10) == ["你好"]
-        assert _ops.split_by_length("", max_length=10) == []
-        assert _ops.split_by_length("这是一段比较长的中文文本需要切分", max_length=8) == [
+        assert _ops.split_by_length("你好", max_len=10) == ["你好"]
+        assert _ops.split_by_length("", max_len=10) == []
+        assert _ops.split_by_length("这是一段比较长的中文文本需要切分", max_len=8) == [
             "这是一段比较长的", "中文文本需要切分",
         ]
         import pytest
         with pytest.raises(ValueError):
-            _ops.split_by_length("你好", max_length=0)
+            _ops.split_by_length("你好", max_len=0)
         with pytest.raises(ValueError):
-            _ops.split_by_length("你好", max_length=-1)
+            _ops.split_by_length("你好", max_len=-1)
         with pytest.raises(TypeError):
-            _ops.split_by_length("你好", max_length=5, unit="sentence")
+            _ops.split_by_length("你好", max_len=5, unit="sentence")
 
         # chunk chain
         assert _ops.chunk("你好。世界！").sentences().result() == ["你好。", "世界！"]
-        assert _ops.chunk("这是第一句。这是一个比较长的第二句话需要被切分。").sentences().max_length(10).result() == [
+        assert _ops.chunk("这是第一句。这是一个比较长的第二句话需要被切分。").sentences().split(10).result() == [
             "这是第一句。", "这是一个比较长的", "第二句话需要被切分。",
         ]
-        assert _ops.chunk("近年来，人工智能技术在中国蓬勃发展。").clauses().max_length(8).result() == [
+        assert _ops.chunk("近年来，人工智能技术在中国蓬勃发展。").clauses().split(8).result() == [
             "近年来，", "人工智能技术在", "中国蓬勃发展。",
         ]
 

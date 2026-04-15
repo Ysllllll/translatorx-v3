@@ -114,15 +114,15 @@ class _BaseOps(ABC):
         from lang_ops.chunk._pipeline import ChunkPipeline
         return ChunkPipeline(text, ops=self).clauses().result()
 
-    def split_by_length(self, text: str, max_length: int) -> list[str]:
-        """Split text into chunks whose length ≤ *max_length* (token-based)."""
+    def split_by_length(self, text: str, max_len: int) -> list[str]:
+        """Split text into chunks whose length ≤ *max_len* (token-based)."""
         from lang_ops.chunk._pipeline import ChunkPipeline
-        return ChunkPipeline(text, ops=self).max_length(max_length).result()
+        return ChunkPipeline(text, ops=self).split(max_len).result()
 
-    def merge_by_length(self, chunks: list[str], max_length: int) -> list[str]:
-        """Greedily merge adjacent chunks whose combined length ≤ *max_length*."""
+    def merge_by_length(self, chunks: list[str], max_len: int) -> list[str]:
+        """Greedily merge adjacent chunks whose combined length ≤ *max_len*."""
         from lang_ops.chunk._merge import merge_chunks_by_length
-        return merge_chunks_by_length(chunks, self, max_length)
+        return merge_chunks_by_length(chunks, self, max_len)
 
     def chunk(self, text: str) -> "ChunkPipeline":
         """Create a ChunkPipeline for chainable chunking."""

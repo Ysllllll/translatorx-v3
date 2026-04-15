@@ -163,10 +163,10 @@ class TestKoreanClauses:
 
 class TestKoreanByLength:
 
-    def test_sentences_then_max_length(self) -> None:
+    def test_sentences_then_split(self) -> None:
         result = (Subtitle(_news_segments(), _ops)
                   .sentences()
-                  .max_length(15)
+                  .split(15)
                   .build())
         for seg in result:
             # Allow slight overshoot for indivisible eojeols
@@ -175,7 +175,7 @@ class TestKoreanByLength:
     def test_text_preserved(self) -> None:
         result = (Subtitle(_news_segments(), _ops)
                   .sentences()
-                  .max_length(15)
+                  .split(15)
                   .build())
         joined = " ".join(s.text for s in result)
         # All content words present
@@ -221,8 +221,8 @@ class TestKoreanRecords:
             assert rec.start <= rec.end
             assert len(rec.segments) >= 1
 
-    def test_records_with_max_length(self) -> None:
-        records = Subtitle(_news_segments(), _ops).records(max_length=12)
+    def test_records_with_split(self) -> None:
+        records = Subtitle(_news_segments(), _ops).sentences().clauses().split(12).records()
         for rec in records:
             for seg in rec.segments:
                 assert _ops.length(seg.text) <= 18  # some tolerance
