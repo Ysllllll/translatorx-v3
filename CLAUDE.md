@@ -53,7 +53,8 @@ src/
     ├── align.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
     ├── core.py                      # Subtitle — chainable segment restructuring
     └── io/
-        └── srt.py                   # SRT file parser
+        ├── srt.py                   # SRT file parser + sanitize_srt
+        └── whisperx.py              # WhisperX JSON parser + word-level sanitizer
 ```
 
 ### Key design decisions
@@ -209,10 +210,21 @@ align_segments(chunks, words) → list[Segment]    # text chunks + timed words �
 ### SRT reader
 
 ```
-from subtitle.io import parse_srt, read_srt
+from subtitle.io import sanitize_srt, parse_srt, read_srt
 
-parse_srt(content) → list[Segment]   # parse SRT string
-read_srt(path)     → list[Segment]   # parse SRT file
+sanitize_srt(content) → str            # text-level cleaning (BOM, CRLF, HTML, invisible chars, etc.)
+parse_srt(content) → list[Segment]     # parse SRT string
+read_srt(path)     → list[Segment]     # parse SRT file
+```
+
+### WhisperX reader
+
+```
+from subtitle.io import sanitize_whisperx, parse_whisperx, read_whisperx
+
+sanitize_whisperx(word_segments) → list[Word]  # sanitize raw word dicts (dedup, interpolate, attach punct, collapse repeats)
+parse_whisperx(data)             → list[Word]  # parse JSON dict (expects 'word_segments' key)
+read_whisperx(path)              → list[Word]  # read JSON file
 ```
 
 ## Fonts
