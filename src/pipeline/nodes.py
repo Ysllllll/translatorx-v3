@@ -31,8 +31,8 @@ from llm_ops import (
 )
 from model import SentenceRecord
 
-from ._config import ProgressCallback, TranslateNodeConfig
-from ._prefix import PrefixHandler
+from .config import ProgressCallback, TranslateNodeConfig
+from .prefix import PrefixHandler
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
-from ._protocol import Message
+from .protocol import Message
 
 
 # ---------------------------------------------------------------------------

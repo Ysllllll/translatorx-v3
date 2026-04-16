@@ -1,4 +1,4 @@
-"""Tests for llm_ops._protocol — LLMEngine Protocol."""
+"""Tests for llm_ops.protocol — LLMEngine Protocol."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import AsyncIterator
 
 import pytest
 
-from llm_ops._protocol import LLMEngine
+from llm_ops.protocol import LLMEngine
 
 
 # ---------------------------------------------------------------------------

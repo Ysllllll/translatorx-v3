@@ -9,9 +9,9 @@ immediately.
 
 from __future__ import annotations
 
-from ._config import PROFILES, ProfileOverrides
-from ._rules import Rule, build_default_rules, RatioThresholds
-from ._types import CheckReport, Issue, Severity
+from .config import PROFILES, ProfileOverrides
+from .rules import Rule, build_default_rules, RatioThresholds
+from .types import CheckReport, Issue, Severity
 
 
 class Checker:

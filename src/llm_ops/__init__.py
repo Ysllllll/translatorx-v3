@@ -9,14 +9,14 @@ import from ``checker`` directly::
     from checker import LengthRatioRule, LangProfile, get_profile
 """
 
-from ._context import (
+from .context import (
     ContextWindow,
     StaticTerms,
     TermsProvider,
     TranslationContext,
 )
-from ._protocol import LLMEngine, Message
-from ._translate import TranslateResult, translate_with_verify
+from .protocol import LLMEngine, Message
+from .translate import TranslateResult, translate_with_verify
 from checker import (
     CheckReport,
     Checker,
@@ -24,7 +24,7 @@ from checker import (
     default_checker,
 )
 from .engines import OpenAICompatEngine
-from .engines._openai_compat import EngineConfig
+from .engines.openai_compat import EngineConfig
 
 __all__ = [
     # Protocol

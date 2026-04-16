@@ -6,7 +6,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ._protocol import MediaFileInfo
+from .protocol import MediaFileInfo
 
 
 def _run_ffprobe(path: Path) -> dict:

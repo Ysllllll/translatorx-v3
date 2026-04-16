@@ -254,6 +254,114 @@ Therefore, controlling X is critical.
             assert len(r.translations["zh"]) > 0
 
     @pytest.mark.asyncio
+    async def test_live_mixed_processing_paths(
+        self,
+        engine: OpenAICompatEngine,
+        ctx: TranslationContext,
+        node_config: TranslateNodeConfig,
+    ):
+        """Cover mixed skip/LLM paths with weak but stable assertions."""
+        checker = default_checker("en", "zh")
+        long_text = (
+            "This sentence is intentionally longer than the short limit used "
+            "for the live skip-long branch."
+        )
+        cfg = TranslateNodeConfig(
+            direct_translate=node_config.direct_translate,
+            prefix_rules=node_config.prefix_rules,
+            max_source_len=40,
+            system_prompt=node_config.system_prompt,
+        )
+        records = [
+            _make_record("Already translated.", translations={"zh": "已经翻译好了。"}),
+            _make_record("Thank you."),
+            _make_record("Okay, let's move to the next section."),
+            _make_record(long_text),
+            _make_record("This final example goes through the model."),
+        ]
+
+        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
+        result = await pipeline.translate(config=cfg)
+        built = result.build()
+        results = result.translate_results
+
+        assert [r.src_text for r in built] == [r.src_text for r in records]
+        assert built[0].translations["zh"] == "已经翻译好了。"
+        assert built[1].translations["zh"] == "谢谢。"
+        assert built[2].translations["zh"].startswith("好的，")
+        assert built[3].translations["zh"] == long_text
+        assert len(built[4].translations["zh"]) > 0
+
+        assert len(results) == 5
+        assert results[0].skipped and results[0].attempts == 0
+        assert results[1].skipped and results[1].attempts == 0
+        assert not results[2].skipped and results[2].attempts >= 1
+        assert results[3].skipped and results[3].attempts == 0
+        assert not results[4].skipped and results[4].attempts >= 1
+
+    @pytest.mark.asyncio
+    async def test_live_concurrency_preserves_record_alignment(
+        self,
+        engine: OpenAICompatEngine,
+        node_config: TranslateNodeConfig,
+    ):
+        """Concurrent live translation should preserve output order and mapping."""
+        ctx = TranslationContext(
+            source_lang="en",
+            target_lang="zh",
+            max_retries=1,
+            window_size=2,
+        )
+        checker = default_checker("en", "zh")
+        source_texts = [
+            "The speaker opens the lecture.",
+            "We define the baseline model here.",
+            "Next we compare it with the improved version.",
+            "Finally we summarize the experiment results.",
+        ]
+        records = [_make_record(text) for text in source_texts]
+
+        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
+        result = await pipeline.translate(config=node_config, concurrency=3)
+        built = result.build()
+
+        assert [r.src_text for r in built] == source_texts
+        assert len(result.translate_results) == len(source_texts)
+        for rec, meta in zip(built, result.translate_results):
+            assert len(rec.translations["zh"]) > 0
+            assert not meta.skipped
+            assert meta.attempts >= 1
+
+    @pytest.mark.asyncio
+    async def test_live_repeated_term_stays_visible_across_context(
+        self,
+        engine: OpenAICompatEngine,
+        node_config: TranslateNodeConfig,
+    ):
+        """Use weak assertions for repeated-term continuity across sentences."""
+        ctx = TranslationContext(
+            source_lang="en",
+            target_lang="zh",
+            max_retries=1,
+            window_size=4,
+        )
+        checker = default_checker("en", "zh")
+        records = [
+            _make_record("Variable X represents temperature in this experiment."),
+            _make_record("When X increases, the reaction becomes faster."),
+            _make_record("Therefore, controlling X is essential."),
+        ]
+
+        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
+        result = await pipeline.translate(config=node_config)
+        built = result.build()
+        translations = [record.translations["zh"] for record in built]
+
+        for text in translations:
+            assert len(text) > 0
+            assert "X" in text
+
+    @pytest.mark.asyncio
     async def test_retry_on_checker_failure(
         self,
         engine: OpenAICompatEngine,

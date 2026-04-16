@@ -7,7 +7,7 @@ prepended to the translation result.
 
 from __future__ import annotations
 
-from ._config import PrefixRule
+from .config import PrefixRule
 
 
 class PrefixHandler:

@@ -1,4 +1,4 @@
-"""Tests for media._ytdlp (YtdlpSource).
+"""Tests for media.ytdlp (YtdlpSource).
 
 Most tests require network access and are skipped in CI.
 Unit tests for parsing helpers run without network.
@@ -7,7 +7,7 @@ Unit tests for parsing helpers run without network.
 import pytest
 
 from media import MediaInfo, PlaylistInfo
-from media._ytdlp import (
+from media.ytdlp import (
     _detect_platform,
     _extract_subtitle_languages,
     _parse_info,

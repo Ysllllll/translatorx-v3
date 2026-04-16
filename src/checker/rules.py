@@ -19,7 +19,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
-from ._types import Issue, Severity
+from .types import Issue, Severity
 
 
 # -------------------------------------------------------------------

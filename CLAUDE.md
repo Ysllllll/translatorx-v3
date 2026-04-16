@@ -50,9 +50,9 @@ src/
 │       ├── _length.py               # Length-based splitting (uses Protocol for decoupling)
 │       └── _merge.py                # Length-based merging (inverse of splitting)
 ├── media/                           # Media download + audio extraction (L1)
-│   ├── _protocol.py                 # MediaSource Protocol
-│   ├── _ytdlp.py                    # yt-dlp implementation
-│   └── _ffmpeg.py                   # ffprobe + extract_audio
+│   ├── protocol.py                  # MediaSource Protocol
+│   ├── ytdlp.py                     # yt-dlp implementation
+│   └── ffmpeg.py                    # ffprobe + extract_audio
 ├── subtitle/                        # Subtitle timing alignment + segment building (L2)
 │   ├── __init__.py                  # Re-exports model types + Subtitle/Stream + alignment utilities
 │   ├── model.py                     # Backward-compat shim → re-exports from model package
@@ -62,23 +62,23 @@ src/
 │       ├── srt.py                   # SRT file parser + sanitize_srt
 │       └── whisperx.py              # WhisperX JSON parser + word-level sanitizer
 ├── llm_ops/                         # LLM engine + translation context (L2)
-│   ├── _protocol.py                 # LLMEngine Protocol (complete + stream)
-│   ├── _context.py                  # TermsProvider, StaticTerms, ContextWindow, TranslationContext
-│   ├── _translate.py                # translate_with_verify micro-loop (prompt degradation)
+│   ├── protocol.py                  # LLMEngine Protocol (complete + stream)
+│   ├── context.py                   # TermsProvider, StaticTerms, ContextWindow, TranslationContext
+│   ├── translate.py                 # translate_with_verify micro-loop (prompt degradation)
 │   └── engines/
-│       └── _openai_compat.py        # OpenAI-compatible engine
+│       └── openai_compat.py         # OpenAI-compatible engine
 ├── checker/                         # Translation quality checker (L2, top-level)
-│   ├── _types.py                    # Severity, Issue, CheckReport
-│   ├── _rules.py                    # Rule Protocol + 5 rule classes
-│   ├── _config.py                   # ProfileOverrides, PROFILES
-│   ├── _checkers.py                 # Checker (rule engine, ERROR short-circuit)
-│   ├── _factory.py                  # default_checker(src, tgt)
-│   └── _lang/                       # 10 per-language LangProfile files
+│   ├── types.py                     # Severity, Issue, CheckReport
+│   ├── rules.py                     # Rule Protocol + 5 rule classes
+│   ├── config.py                    # ProfileOverrides, PROFILES
+│   ├── checkers.py                  # Checker (rule engine, ERROR short-circuit)
+│   ├── factory.py                   # default_checker(src, tgt)
+│   └── lang/                        # 10 per-language LangProfile files
 └── pipeline/                        # Translation pipeline (L3)
-    ├── _config.py                   # TranslateNodeConfig, PrefixRule
-    ├── _prefix.py                   # PrefixHandler
-    ├── _nodes.py                    # translate_node (orchestrates refinements)
-    └── _chain.py                    # Pipeline (immutable chain)
+    ├── config.py                    # TranslateNodeConfig, PrefixRule
+    ├── prefix.py                    # PrefixHandler
+    ├── nodes.py                     # translate_node (orchestrates refinements)
+    └── chain.py                     # Pipeline (immutable chain)
 ```
 
 ### Key design decisions

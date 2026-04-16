@@ -1,4 +1,4 @@
-"""Tests for media._protocol data types."""
+"""Tests for media.protocol data types."""
 
 from media import (
     DownloadResult,

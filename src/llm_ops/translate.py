@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ._context import ContextWindow, TranslationContext
-from ._protocol import LLMEngine, Message
+from .context import ContextWindow, TranslationContext
+from .protocol import LLMEngine, Message
 from checker import CheckReport, Checker
 
 

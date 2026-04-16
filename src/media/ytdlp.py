@@ -14,7 +14,7 @@ from typing import Any
 
 import yt_dlp
 
-from ._protocol import DownloadResult, MediaInfo, PlaylistInfo
+from .protocol import DownloadResult, MediaInfo, PlaylistInfo
 
 
 def _find_downloaded_file(directory: Path, video_id: str) -> Path | None:

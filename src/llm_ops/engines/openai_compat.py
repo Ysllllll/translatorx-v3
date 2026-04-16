@@ -12,7 +12,7 @@ from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
-from .._protocol import Message
+from ..protocol import Message
 
 
 @dataclass

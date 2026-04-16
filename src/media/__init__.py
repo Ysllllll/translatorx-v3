@@ -15,7 +15,7 @@ FFmpeg utilities:
     probe, extract_audio
 """
 
-from ._protocol import (
+from .protocol import (
     DownloadResult,
     MediaFileInfo,
     MediaInfo,
@@ -23,8 +23,8 @@ from ._protocol import (
     MediaSource,
     PlaylistInfo,
 )
-from ._ffmpeg import extract_audio, probe
-from ._ytdlp import YtdlpSource
+from .ffmpeg import extract_audio, probe
+from .ytdlp import YtdlpSource
 
 __all__ = [
     # Data types

@@ -1,10 +1,10 @@
-"""Tests for llm_ops._context — TermsProvider, StaticTerms, ContextWindow, TranslationContext."""
+"""Tests for llm_ops.context — TermsProvider, StaticTerms, ContextWindow, TranslationContext."""
 
 from __future__ import annotations
 
 import pytest
 
-from llm_ops._context import (
+from llm_ops.context import (
     ContextWindow,
     StaticTerms,
     TermsProvider,

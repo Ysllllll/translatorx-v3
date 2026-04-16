@@ -1,11 +1,11 @@
-"""Tests for llm_ops.engines._openai_compat — OpenAICompatEngine."""
+"""Tests for llm_ops.engines.openai_compat — OpenAICompatEngine."""
 
 from __future__ import annotations
 
 import pytest
 
-from llm_ops._protocol import LLMEngine
-from llm_ops.engines._openai_compat import (
+from llm_ops.protocol import LLMEngine
+from llm_ops.engines.openai_compat import (
     EngineConfig,
     OpenAICompatEngine,
     _clean_response,

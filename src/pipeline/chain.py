@@ -22,8 +22,8 @@ from dataclasses import dataclass, field
 from llm_ops import Checker, LLMEngine, TranslateResult, TranslationContext
 from model import SentenceRecord
 
-from ._config import ProgressCallback, TranslateNodeConfig
-from ._nodes import translate_node
+from .config import ProgressCallback, TranslateNodeConfig
+from .nodes import translate_node
 
 
 @dataclass(frozen=True)

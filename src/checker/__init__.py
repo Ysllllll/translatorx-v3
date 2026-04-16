@@ -3,12 +3,12 @@
 Subpackage structure::
 
     checker/
-    ├── _types.py      — Severity, Issue, CheckReport
-    ├── _config.py     — ProfileOverrides, PROFILES
-    ├── _rules.py      — Rule Protocol, rule classes, build_default_rules
-    ├── _checkers.py   — Checker class (rule engine)
-    ├── _factory.py    — default_checker(src, tgt)
-    └── _lang/         — per-language profiles (add xx.py for new language)
+    ├── types.py       — Severity, Issue, CheckReport
+    ├── config.py      — ProfileOverrides, PROFILES
+    ├── rules.py       — Rule Protocol, rule classes, build_default_rules
+    ├── checkers.py    — Checker class (rule engine)
+    ├── factory.py     — default_checker(src, tgt)
+    └── lang/          — per-language profiles (add xx.py for new language)
 
 Quick start::
 
@@ -21,9 +21,9 @@ Quick start::
             print(f"[{issue.severity.value}] {issue.rule}: {issue.message}")
 """
 
-from ._types import Severity, Issue, CheckReport
-from ._config import ProfileOverrides, PROFILES
-from ._rules import (
+from .types import Severity, Issue, CheckReport
+from .config import ProfileOverrides, PROFILES
+from .rules import (
     Rule,
     RatioThresholds,
     LengthRatioRule,
@@ -33,9 +33,9 @@ from ._rules import (
     TrailingAnnotationRule,
     build_default_rules,
 )
-from ._checkers import Checker
-from ._factory import default_checker
-from ._lang import LangProfile, get_profile, registered_langs
+from .checkers import Checker
+from .factory import default_checker
+from .lang import LangProfile, get_profile, registered_langs
 
 __all__ = [
     # Types

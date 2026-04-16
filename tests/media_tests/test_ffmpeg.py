@@ -1,4 +1,4 @@
-"""Tests for media._ffmpeg (probe and extract_audio).
+"""Tests for media.ffmpeg (probe and extract_audio).
 
 These tests require ffmpeg to be installed. They are skipped otherwise.
 """

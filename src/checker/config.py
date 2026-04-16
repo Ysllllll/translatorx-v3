@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from ._types import Severity
+from .types import Severity
 
 
 class ProfileOverrides(BaseModel, frozen=True):

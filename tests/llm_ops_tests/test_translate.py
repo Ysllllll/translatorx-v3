@@ -1,4 +1,4 @@
-"""Tests for llm_ops._translate — translate_with_verify micro-loop."""
+"""Tests for llm_ops.translate — translate_with_verify micro-loop."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from typing import AsyncIterator
 
 import pytest
 
-from llm_ops._context import ContextWindow, StaticTerms, TranslationContext
-from llm_ops._translate import (
+from llm_ops.context import ContextWindow, StaticTerms, TranslationContext
+from llm_ops.translate import (
     TranslateResult,
     _build_messages_compressed,
     _build_messages_full,

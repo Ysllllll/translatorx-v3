@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from pipeline._config import PrefixRule, EN_ZH_PREFIX_RULES
-from pipeline._prefix import PrefixHandler
+from pipeline.config import PrefixRule, EN_ZH_PREFIX_RULES
+from pipeline.prefix import PrefixHandler
 
 
 @pytest.fixture

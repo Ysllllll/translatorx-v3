@@ -1,14 +1,14 @@
 """Pipeline — processing chain for subtitle translation."""
 
-from ._chain import Pipeline
-from ._config import (
+from .chain import Pipeline
+from .config import (
     EN_ZH_PREFIX_RULES,
     PrefixRule,
     ProgressCallback,
     TranslateNodeConfig,
 )
-from ._nodes import translate_node
-from ._prefix import PrefixHandler
+from .nodes import translate_node
+from .prefix import PrefixHandler
 
 __all__ = [
     "Pipeline",

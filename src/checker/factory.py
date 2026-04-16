@@ -7,15 +7,15 @@ profile-specific rule sets (lenient, minimal) for runtime switching.
 
 from __future__ import annotations
 
-from ._checkers import Checker
-from ._config import PROFILES, ProfileOverrides
-from ._lang import LangProfile, get_profile
-from ._rules import (
+from .checkers import Checker
+from .config import PROFILES, ProfileOverrides
+from .lang import LangProfile, get_profile
+from .rules import (
     Rule,
     RatioThresholds,
     build_default_rules,
 )
-from ._types import Severity
+from .types import Severity
 
 
 # -------------------------------------------------------------------
