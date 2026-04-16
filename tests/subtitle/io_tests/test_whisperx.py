@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from subtitle.model import Word
+from model import Word
 from subtitle.io.whisperx import (
     sanitize_whisperx,
     parse_whisperx,

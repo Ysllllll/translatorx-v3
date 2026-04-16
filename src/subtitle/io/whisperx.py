@@ -16,7 +16,7 @@ import json
 import string
 from pathlib import Path
 
-from subtitle.model import Word
+from model import Word
 
 
 # ── Repeating-pattern detection ───────────────────────────────────────

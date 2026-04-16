@@ -27,7 +27,7 @@ from __future__ import annotations
 from collections.abc import Callable, MutableMapping
 from typing import TYPE_CHECKING
 
-from .model import Segment, SentenceRecord, Word
+from model import Segment, SentenceRecord, Word
 from .align import fill_words, align_segments, distribute_words
 
 if TYPE_CHECKING:

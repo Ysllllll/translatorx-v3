@@ -10,8 +10,8 @@ pytest tests/ -v
 
 # Run a single test file
 pytest tests/lang_ops_tests/test_chinese.py -v
-pytest tests/lang_ops_tests/chunk/test_en.py -v
-pytest tests/subtitle/build_tests/test_en.py -v
+pytest tests/lang_ops_tests/chunk/test_chinese.py -v
+pytest tests/subtitle/build_tests/test_english.py -v
 
 # Run via the venv explicitly (if pytest not on PATH)
 /home/ysl/workspace/.venv/bin/pytest tests/ -v
@@ -20,17 +20,19 @@ pytest tests/subtitle/build_tests/test_en.py -v
 /home/ysl/workspace/.venv/bin/pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
-`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops` and `subtitle` from `src/`.
+`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops`, `subtitle`, `model`, `checker`, `llm_ops`, `media`, and `pipeline` from `src/`.
 
 ## Architecture
 
-A subtitle processing toolkit with two top-level packages under `src/`.
+A subtitle translation platform with seven top-level packages under `src/`.
 
 ### Package overview
 
 ```
 src/
-├── lang_ops/                        # Language-adapted text operations
+├── model/                           # Shared data types (L0 — no cross-package deps except lang_ops)
+│   └── __init__.py                  # Word, Segment, SentenceRecord (frozen dataclasses)
+├── lang_ops/                        # Language-adapted text operations (L1)
 │   ├── __init__.py                  # Public API: LangOps, ChunkPipeline, normalize_language
 │   ├── en_type.py                   # EnTypeOps (shared by 7 space-delimited languages)
 │   ├── chinese.py / japanese.py / korean.py  # CJK language ops
@@ -47,14 +49,36 @@ src/
 │       ├── _boundary.py             # Token-based boundary detection (sentences + clauses)
 │       ├── _length.py               # Length-based splitting (uses Protocol for decoupling)
 │       └── _merge.py                # Length-based merging (inverse of splitting)
-└── subtitle/                        # Subtitle data structures + timing alignment + segment building
-    ├── __init__.py                  # Exports data types + Subtitle/Stream + alignment utilities (fill/find/distribute/align)
-    ├── model.py                     # Frozen dataclasses (Word, Segment, SentenceRecord)
-    ├── align.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
-    ├── core.py                      # Subtitle — chainable segment restructuring
-    └── io/
-        ├── srt.py                   # SRT file parser + sanitize_srt
-        └── whisperx.py              # WhisperX JSON parser + word-level sanitizer
+├── media/                           # Media download + audio extraction (L1)
+│   ├── _protocol.py                 # MediaSource Protocol
+│   ├── _ytdlp.py                    # yt-dlp implementation
+│   └── _ffmpeg.py                   # ffprobe + extract_audio
+├── subtitle/                        # Subtitle timing alignment + segment building (L2)
+│   ├── __init__.py                  # Re-exports model types + Subtitle/Stream + alignment utilities
+│   ├── model.py                     # Backward-compat shim → re-exports from model package
+│   ├── align.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
+│   ├── core.py                      # Subtitle — chainable segment restructuring (per-sentence pipelines)
+│   └── io/
+│       ├── srt.py                   # SRT file parser + sanitize_srt
+│       └── whisperx.py              # WhisperX JSON parser + word-level sanitizer
+├── llm_ops/                         # LLM engine + translation context (L2)
+│   ├── _protocol.py                 # LLMEngine Protocol (complete + stream)
+│   ├── _context.py                  # TermsProvider, StaticTerms, ContextWindow, TranslationContext
+│   ├── _translate.py                # translate_with_verify micro-loop (prompt degradation)
+│   └── engines/
+│       └── _openai_compat.py        # OpenAI-compatible engine
+├── checker/                         # Translation quality checker (L2, top-level)
+│   ├── _types.py                    # Severity, Issue, CheckReport
+│   ├── _rules.py                    # Rule Protocol + 5 rule classes
+│   ├── _config.py                   # ProfileOverrides, PROFILES
+│   ├── _checkers.py                 # Checker (rule engine, ERROR short-circuit)
+│   ├── _factory.py                  # default_checker(src, tgt)
+│   └── _lang/                       # 10 per-language LangProfile files
+└── pipeline/                        # Translation pipeline (L3)
+    ├── _config.py                   # TranslateNodeConfig, PrefixRule
+    ├── _prefix.py                   # PrefixHandler
+    ├── _nodes.py                    # translate_node (orchestrates refinements)
+    └── _chain.py                    # Pipeline (immutable chain)
 ```
 
 ### Key design decisions
@@ -73,17 +97,23 @@ src/
 
 **Token-based boundary detection:** `_boundary.py` unifies sentence and clause splitting via `find_boundaries()` / `split_tokens_by_boundaries()`. Sentence splitting uses token-level boundary markers (terminators, abbreviations, ellipsis guards). Clause splitting (`split_clauses`) is sentence-aware — it splits at clause separators and sentence boundaries in one pass.
 
+**Per-sentence pipelines:** After `Subtitle.sentences()`, the instance holds one `ChunkPipeline` per sentence with its corresponding words. Subsequent operations (`clauses`, `split`, `merge`, `apply`) are applied per-sentence — they never cross sentence boundaries. This structural isolation replaces the previous `_parent_ids` mechanism.
+
 ### Layer relationship
 
 ```
-lang_ops                              ←  subtitle
-  token: split/join/length/normalize       _types (frozen dataclasses)
-  segment: sentences/clauses               words (fill/find/distribute/align)
-  pipeline: ChunkPipeline                  core (Subtitle, SubtitleStream)
-  shortcuts: ops.split_sentences() etc.    readers (SRT)
+L0: model (Word, Segment, SentenceRecord)
+L1: lang_ops, media
+L2: subtitle, llm_ops, checker
+L3: pipeline
+L4: app (future)
 ```
 
-`subtitle` is independent of `lang_ops` except `ChunkPipeline.segments()` (deferred import of `subtitle.align.align_segments`) and `Subtitle` which takes an `ops` or `language` parameter.
+Dependencies flow downward only. `model` depends on `lang_ops._core._punctuation` for `strip_punct`.
+`subtitle` re-exports model types for backward compatibility.
+`llm_ops` re-exports checker types (`Checker`, `CheckReport`, `Severity`, `default_checker`) for convenience.
+
+`subtitle` depends on `lang_ops` via `ChunkPipeline.segments()` (deferred import of `subtitle.align.align_segments`) and `Subtitle` which takes an `ops` or `language` parameter.
 
 ### Test structure
 
@@ -92,31 +122,36 @@ tests/
 ├── lang_ops_tests/              # Token + chunk tests
 │   ├── _base.py                 # TextOpsTestCase — shared assertion helpers
 │   ├── conftest.py              # Font path resolution, pixel length fixture
-│   ├── test_{language}.py       # Per-language token-level tests (10 files)
+│   ├── test_{language}.py       # Per-language token-level tests (10 files, English full names)
 │   ├── chunk/
 │   │   ├── _base.py             # SplitterTestBase — reconstruction assertions
-│   │   └── test_{lang}.py       # Per-language chunk tests
+│   │   └── test_{language}.py   # Per-language chunk tests (English full names)
 │   └── _core/
 │       ├── test_mechanism.py    # Factory tests
 │       ├── test_normalize.py    # Language code normalization
 │       └── test_punctuation.py  # Punctuation constants tests
-└── subtitle/
-    ├── align_tests/             # Word timing tests
-    │   ├── test_align.py        # align_segments
-    │   ├── test_attach_punct.py # attach_punct_words
-    │   ├── test_distribute.py   # distribute_words
-    │   ├── test_fill.py         # fill_words
-    │   ├── test_find.py         # find_words
-    │   ├── test_normalize.py    # normalize_words
-    │   └── test_pipeline.py     # Pipeline integration
-    ├── test_model.py            # Data type display/pretty tests
-    ├── build_tests/             # Subtitle tests
-    │   ├── _base.py             # BuilderTestBase
-    │   ├── test_en.py
-    │   ├── test_ko.py
-    │   └── test_zh.py
-    └── io_tests/
-        └── test_srt.py          # SRT parser tests
+├── subtitle/
+│   ├── align_tests/             # Word timing tests
+│   │   ├── test_align.py        # align_segments
+│   │   ├── test_attach_punct.py # attach_punct_words
+│   │   ├── test_distribute.py   # distribute_words
+│   │   ├── test_fill.py         # fill_words
+│   │   ├── test_find.py         # find_words
+│   │   ├── test_normalize.py    # normalize_words
+│   │   └── test_pipeline.py     # Pipeline integration
+│   ├── test_model.py            # Data type display/pretty tests
+│   ├── build_tests/             # Subtitle tests (English full names)
+│   │   ├── _base.py             # BuilderTestBase
+│   │   ├── test_english.py
+│   │   ├── test_korean.py
+│   │   └── test_chinese.py
+│   └── io_tests/
+│       └── test_srt.py          # SRT parser tests
+├── llm_ops_tests/               # LLM engine + translate tests
+│   ├── test_checker.py          # Checker rule engine tests
+│   └── test_translate.py        # translate_with_verify tests
+├── media_tests/                 # Media download + extraction tests
+└── pipeline_tests/              # Pipeline chain + node tests
 ```
 
 Test directory is `lang_ops_tests` (not `lang_ops`) to prevent Python from importing it instead of `src/lang_ops`.

@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import replace
 
-from .model import Segment, Word
+from model import Segment, Word
 
 from lang_ops._core._punctuation import (
     OPENING_PUNCT as _OPENING,
