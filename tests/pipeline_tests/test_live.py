@@ -174,8 +174,8 @@ class TestLiveTranslation:
 
         # 4. Translate
         checker = default_checker("en", "zh")
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate(config=node_config, progress=on_progress)
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker, config=node_config, progress=on_progress)
         built = result.build()
 
         # 5. Print results
@@ -239,8 +239,8 @@ Therefore, controlling X is critical.
         records = sub.records()
 
         checker = default_checker("en", "zh")
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate(config=node_config)
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker, config=node_config)
         built = result.build()
 
         print("\n\n=== Context Coherence ===")
@@ -280,8 +280,8 @@ Therefore, controlling X is critical.
             _make_record("This final example goes through the model."),
         ]
 
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate(config=cfg)
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker, config=cfg)
         built = result.build()
         results = result.translate_results
 
@@ -321,8 +321,8 @@ Therefore, controlling X is critical.
         ]
         records = [_make_record(text) for text in source_texts]
 
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate(config=node_config, concurrency=3)
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker, config=node_config, concurrency=3)
         built = result.build()
 
         assert [r.src_text for r in built] == source_texts
@@ -352,8 +352,8 @@ Therefore, controlling X is critical.
             _make_record("Therefore, controlling X is essential."),
         ]
 
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate(config=node_config)
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker, config=node_config)
         built = result.build()
         translations = [record.translations["zh"] for record in built]
 
@@ -381,8 +381,8 @@ Therefore, controlling X is critical.
             _make_record("This is a simple test sentence."),
         ]
 
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate(config=cfg)
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker, config=cfg)
         built = result.build()
         tr = result.translate_results[0]
 

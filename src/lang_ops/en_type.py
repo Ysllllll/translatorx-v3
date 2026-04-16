@@ -185,6 +185,8 @@ class EnTypeOps(_BaseOps):
             raise ValueError(f"Invalid mode: {mode!r}")
         if mode == "character":
             return [ch for ch in text if not ch.isspace()]
+        if attach_punctuation and self._language != "fr":
+            return self.normalize(text).split()
         return text.split()
 
     def join(self, tokens: list[str]) -> str:

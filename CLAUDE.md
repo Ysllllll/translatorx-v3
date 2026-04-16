@@ -20,11 +20,11 @@ pytest tests/subtitle/build_tests/test_english.py -v
 /home/ysl/workspace/.venv/bin/pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
-`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops`, `subtitle`, `model`, `checker`, `llm_ops`, `media`, and `pipeline` from `src/`.
+`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops`, `subtitle`, `model`, `checker`, `llm_ops`, `media`, `pipeline`, and `trx` from `src/`.
 
 ## Architecture
 
-A subtitle translation platform with seven top-level packages under `src/`.
+A subtitle translation platform with eight top-level packages under `src/`.
 
 ### Package overview
 
@@ -204,7 +204,7 @@ ops.merge_by_length(chunks, max_len) → list[str]  # greedy merge (inverse of s
 ops.chunk(text) → ChunkPipeline
 ```
 
-### Pipeline (chainable, immutable)
+### ChunkPipeline (chainable, immutable)
 
 ```
 ops.chunk(text)
@@ -278,6 +278,25 @@ from subtitle.io import sanitize_whisperx, parse_whisperx, read_whisperx
 sanitize_whisperx(word_segments) → list[Word]  # sanitize raw word dicts (dedup, interpolate, attach punct, collapse repeats)
 parse_whisperx(data)             → list[Word]  # parse JSON dict (expects 'word_segments' key)
 read_whisperx(path)              → list[Word]  # read JSON file
+```
+
+### Translation Pipeline (async, immutable)
+
+```
+from pipeline import Pipeline, TranslateNodeConfig
+
+# Pipeline only holds data (records + results).
+# Each node method takes its own dependencies as arguments.
+p = Pipeline(records)
+
+# translate() takes engine, context, checker as required positional args
+result = await p.translate(engine, context, checker, config=cfg)
+translated = result.build()          → list[SentenceRecord]
+results = result.translate_results   → list[TranslateResult]
+
+# Terms are injected via frozen_pairs in TranslationContext
+ctx = trx.create_context("en", "zh", terms={"AI": "人工智能"})
+# terms dict → frozen_pairs tuples → few-shot messages in LLM prompt
 ```
 
 ## Fonts

@@ -10,8 +10,8 @@ Usage::
         max_source_len=800,
         system_prompt="You are a subtitle translator.",
     )
-    pipeline = Pipeline(records, engine=engine, context=ctx, checker=chk)
-    result = await pipeline.translate(config=cfg)
+    pipeline = Pipeline(records)
+    result = await pipeline.translate(engine, context, checker, config=cfg)
     translated = result.build()
 """
 
@@ -30,14 +30,12 @@ from .nodes import translate_node
 class Pipeline:
     """Immutable processing chain over a list of SentenceRecords.
 
-    Each async method returns a new Pipeline with updated records.
+    Pipeline only holds data (records + results from the last operation).
+    Each async node method takes its own dependencies as arguments.
     Call :meth:`build` to extract the final records.
     """
 
     records: list[SentenceRecord]
-    engine: LLMEngine | None = None
-    context: TranslationContext | None = None
-    checker: Checker | None = None
     _results: list[TranslateResult] = field(default_factory=list, repr=False)
 
     # ------------------------------------------------------------------
@@ -46,45 +44,34 @@ class Pipeline:
 
     async def translate(
         self,
+        engine: LLMEngine,
+        context: TranslationContext,
+        checker: Checker,
         *,
-        engine: LLMEngine | None = None,
-        context: TranslationContext | None = None,
-        checker: Checker | None = None,
         config: TranslateNodeConfig | None = None,
         concurrency: int = 1,
         progress: ProgressCallback | None = None,
     ) -> Pipeline:
         """Run the translate node, returning a new Pipeline.
 
-        Args can override the pipeline-level defaults set at construction.
+        Args:
+            engine: LLM backend.
+            context: Immutable translation context (langs, terms, etc.).
+            checker: Quality checker instance.
+            config: Translate-node-specific configuration.
+            concurrency: Max parallel translation tasks (1 = sequential).
+            progress: Optional progress callback.
         """
-        _engine = engine or self.engine
-        _context = context or self.context
-        _checker = checker or self.checker
-
-        if _engine is None:
-            raise ValueError("engine is required for translate()")
-        if _context is None:
-            raise ValueError("context is required for translate()")
-        if _checker is None:
-            raise ValueError("checker is required for translate()")
-
         new_records, results = await translate_node(
             self.records,
-            _engine,
-            _context,
-            _checker,
+            engine,
+            context,
+            checker,
             config=config,
             concurrency=concurrency,
             progress=progress,
         )
-        return Pipeline(
-            records=new_records,
-            engine=_engine,
-            context=_context,
-            checker=_checker,
-            _results=results,
-        )
+        return Pipeline(records=new_records, _results=results)
 
     # ------------------------------------------------------------------
     # Access

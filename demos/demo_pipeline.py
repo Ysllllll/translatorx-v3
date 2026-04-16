@@ -88,8 +88,8 @@ async def main():
         skipped = " (skipped)" if result.skipped else ""
         print(f"  [{idx+1}/{total}] {status}{skipped} {result.translation[:40]}")
 
-    pipeline = trx.Pipeline(records, engine=engine, context=ctx, checker=checker)
-    translated = await pipeline.translate(config=config, progress=on_progress)
+    pipeline = trx.Pipeline(records)
+    translated = await pipeline.translate(engine, ctx, checker, config=config, progress=on_progress)
     print()
 
     for i, result in enumerate(translated.translate_results):

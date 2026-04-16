@@ -26,9 +26,15 @@ class EnglishTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text2, expect_split_text, expect_join_text2)
 
         text3 = "He said, \"It's AI.\" (Really?) [Yes.] {'OK.'} \"orphan 'solo tail) [loose {brace ,"
-        expect_split_text = ["He", "said,", "\"It's", "AI.\"", "(Really?)", "[Yes.]", "{'OK.'}", "\"orphan", "'solo", "tail)", "[loose", "{brace", ","]
+        expect_split_text = ["He", "said,", "\"It's", "AI.\"", "(Really?)", "[Yes.]", "{'OK.'}", "\"orphan", "'solo", "tail)", "[loose", "{brace,"]
+        expect_split_text_raw = ["He", "said,", "\"It's", "AI.\"", "(Really?)", "[Yes.]", "{'OK.'}", "\"orphan", "'solo", "tail)", "[loose", "{brace", ","]
         expect_join_text3 = "He said, \"It's AI.\" (Really?) [Yes.] {'OK.'} \"orphan 'solo tail) [loose {brace,"
-        self._assert_entype_text_case(text3, expect_split_text, expect_join_text3)
+        self._assert_entype_text_case(
+            text3,
+            expect_split_text,
+            expect_join_text3,
+            expected_split_without_punctuation=expect_split_text_raw,
+        )
 
         mixed_text = "Keep I'm deeplearning.ai and https://www.com intact."
         self._assert_preserved_fragments(
@@ -39,6 +45,12 @@ class EnglishTextTest(LangOpsTestCase):
         # split()
         self.assertEqual(o.split("Hello, world!"), ["Hello,", "world!"])
         self.assertEqual(o.split("It's 2026."), ["It's", "2026."])
+        self.assertEqual(o.split("Hello, world !"), ["Hello,", "world!"])
+        self.assertEqual(o.split("Hello, world      !"), ["Hello,", "world!"])
+        self.assertEqual(o.split("Hello    , world      !"), ["Hello,", "world!"])
+        self.assertEqual(o.split("Hello    ,            world      !"), ["Hello,", "world!"])
+        self.assertEqual(o.split("Hello, world !", attach_punctuation=False), ["Hello,", "world", "!"])
+        self.assertEqual(o.split("Hello    ,            world      !", attach_punctuation=False), ["Hello", ",", "world", "!"])
 
         # length()
         self.assertEqual(o.length("Hello"), 5)

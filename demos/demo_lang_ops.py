@@ -23,6 +23,10 @@ print()
 
 print("=== 分词 / 合词 ===")
 
+tokens_en = ops_en.split("Hello world, this is a test.")
+print(f"EN split: {tokens_en}")
+print(f"EN join:  {ops_en.join(tokens_en)!r}")
+
 tokens_en = ops_en.split("Hello world , this is a test.")
 print(f"EN split: {tokens_en}")
 print(f"EN join:  {ops_en.join(tokens_en)!r}")
@@ -52,8 +56,8 @@ long_text = "This is a somewhat long sentence that might need to be split into s
 split_result = ops_en.split_by_length(long_text, max_len=40)
 print(f"Split (max=40): {split_result}")
 
-merged = ops_en.merge_by_length(split_result, max_len=60)
-print(f"Merged (max=60): {merged}")
+merged = ops_en.merge_by_length(split_result, max_len=80)
+print(f"Merged (max=80): {merged}")
 print()
 
 # ── 5. ChunkPipeline 链式调用 ─────────────────────────────────────────
@@ -67,6 +71,21 @@ result = (
     .result()
 )
 print(f"Sentences: {result}")
+
+result = (
+    ops_zh.chunk(text_zh)
+    .sentences()
+    .clauses()
+    .result()
+)
+print(f"Sentences + Clauses: {result}")
+
+result = (
+    ops_zh.chunk(text_zh)
+    .clauses()
+    .result()
+)
+print(f"Clauses: {result}")
 
 result2 = (
     ops_zh.chunk(text_zh)

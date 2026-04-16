@@ -214,8 +214,8 @@ class TestPipeline:
         checker = _AlwaysPassChecker()
         ctx = _ctx()
 
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate()
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker)
         built = result.build()
 
         assert len(built) == 2
@@ -229,8 +229,8 @@ class TestPipeline:
         checker = _AlwaysPassChecker()
         ctx = _ctx()
 
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate()
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker)
 
         assert len(result.translate_results) == 1
         assert result.translate_results[0].accepted
@@ -242,54 +242,25 @@ class TestPipeline:
         checker = _AlwaysPassChecker()
         ctx = _ctx()
 
-        p1 = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        p2 = await p1.translate()
+        p1 = Pipeline(records)
+        p2 = await p1.translate(engine, ctx, checker)
 
         assert p1.records[0].translations == {}
         assert "zh" in p2.records[0].translations
 
     @pytest.mark.asyncio
-    async def test_override_at_translate(self):
+    async def test_different_engines(self):
+        """Pass different engines to translate() — each call uses its own."""
         records = _make_records(["Hello."])
-        engine1 = _MockEngine(prefix="A：")
-        engine2 = _MockEngine(prefix="B：")
+        engine_a = _MockEngine(prefix="A：")
+        engine_b = _MockEngine(prefix="B：")
         checker = _AlwaysPassChecker()
         ctx = _ctx()
 
-        p = Pipeline(records, engine=engine1, context=ctx, checker=checker)
-        result = await p.translate(engine=engine2)
+        p = Pipeline(records)
+        result = await p.translate(engine_b, ctx, checker)
         built = result.build()
 
         assert built[0].translations["zh"].startswith("B：")
-        assert engine1.call_count == 0
-        assert engine2.call_count == 1
-
-    @pytest.mark.asyncio
-    async def test_missing_engine_raises(self):
-        records = _make_records(["Hello."])
-        ctx = _ctx()
-        checker = _AlwaysPassChecker()
-
-        p = Pipeline(records, context=ctx, checker=checker)
-        with pytest.raises(ValueError, match="engine"):
-            await p.translate()
-
-    @pytest.mark.asyncio
-    async def test_missing_context_raises(self):
-        records = _make_records(["Hello."])
-        engine = _MockEngine()
-        checker = _AlwaysPassChecker()
-
-        p = Pipeline(records, engine=engine, checker=checker)
-        with pytest.raises(ValueError, match="context"):
-            await p.translate()
-
-    @pytest.mark.asyncio
-    async def test_missing_checker_raises(self):
-        records = _make_records(["Hello."])
-        engine = _MockEngine()
-        ctx = _ctx()
-
-        p = Pipeline(records, engine=engine, context=ctx)
-        with pytest.raises(ValueError, match="checker"):
-            await p.translate()
+        assert engine_a.call_count == 0
+        assert engine_b.call_count == 1

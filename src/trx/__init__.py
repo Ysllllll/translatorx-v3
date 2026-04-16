@@ -39,6 +39,7 @@ from llm_ops import (
     LLMEngine,
     OpenAICompatEngine,
     StaticTerms,
+    TermsProvider,
     TranslateResult,
     TranslationContext,
     translate_with_verify,
@@ -102,19 +103,27 @@ def create_context(
     tgt: str,
     *,
     terms: dict[str, str] | None = None,
+    frozen_pairs: tuple[tuple[str, str], ...] = (),
     window_size: int = 4,
     max_retries: int = 3,
 ) -> TranslationContext:
     """Create a translation context.
 
+    *terms* are converted to frozen few-shot pairs (``{source: target}``
+    → ``(source, target)`` tuples) and prepended before the sliding
+    history window in every LLM call.
+
     Example::
 
         ctx = trx.create_context("en", "zh", terms={"AI": "人工智能"})
     """
+    term_pairs = tuple(terms.items()) if terms else ()
+    all_pairs = term_pairs + frozen_pairs
     return TranslationContext(
         source_lang=src,
         target_lang=tgt,
         terms_provider=StaticTerms(terms) if terms else StaticTerms(),
+        frozen_pairs=all_pairs,
         window_size=window_size,
         max_retries=max_retries,
     )
@@ -150,8 +159,8 @@ async def translate_srt(
     ctx = create_context(src, tgt, terms=terms)
     chk = default_checker(src, tgt)
 
-    p = Pipeline(records, engine=engine, context=ctx, checker=chk)
-    translated = await p.translate(config=config, progress=progress)
+    p = Pipeline(records)
+    translated = await p.translate(engine, ctx, chk, config=config, progress=progress)
     return translated.build()
 
 
@@ -180,6 +189,7 @@ __all__ = [
     "EngineConfig",
     "TranslationContext",
     "StaticTerms",
+    "TermsProvider",
     "ContextWindow",
     "TranslateResult",
     "translate_with_verify",

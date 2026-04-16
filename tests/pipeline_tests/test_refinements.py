@@ -376,8 +376,8 @@ class TestPipelineWithConfig:
             _make_record("Normal sentence."),
         ]
 
-        pipeline = Pipeline(records, engine=engine, context=_ctx(), checker=_PassChecker())
-        result = await pipeline.translate(config=cfg)
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, _ctx(), _PassChecker(), config=cfg)
         built = result.build()
 
         # Direct translate

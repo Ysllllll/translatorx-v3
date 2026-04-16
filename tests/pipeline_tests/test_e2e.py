@@ -93,8 +93,8 @@ class TestEndToEnd:
         engine = _MockTranslator()
         checker = _PassChecker()
 
-        pipeline = Pipeline(records, engine=engine, context=ctx, checker=checker)
-        result = await pipeline.translate()
+        pipeline = Pipeline(records)
+        result = await pipeline.translate(engine, ctx, checker)
         built = result.build()
 
         # 4. Verify translations
@@ -119,13 +119,13 @@ class TestEndToEnd:
 
         # First: en → zh
         ctx_zh = TranslationContext(source_lang="en", target_lang="zh", max_retries=0)
-        p1 = Pipeline(records, engine=engine, context=ctx_zh, checker=checker)
-        result1 = await p1.translate()
+        p1 = Pipeline(records)
+        result1 = await p1.translate(engine, ctx_zh, checker)
 
         # Second: en → ja (using same mock, will produce fallback translations)
         ctx_ja = TranslationContext(source_lang="en", target_lang="ja", max_retries=0)
-        p2 = Pipeline(result1.build(), engine=engine, context=ctx_ja, checker=checker)
-        result2 = await p2.translate()
+        p2 = Pipeline(result1.build())
+        result2 = await p2.translate(engine, ctx_ja, checker)
         built = result2.build()
 
         # Both translations present

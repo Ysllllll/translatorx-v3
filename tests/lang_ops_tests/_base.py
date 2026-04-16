@@ -43,15 +43,26 @@ class LangOpsTestCase(unittest.TestCase):
         ]
         self.assert_actual_vs_expect(actual_vs_expect)
 
-    def _assert_entype_text_case(self, text: str, expected_split: list[str], expected_join_text: str | None = None) -> None:
+    def _assert_entype_text_case(
+        self,
+        text: str,
+        expected_split: list[str],
+        expected_join_text: str | None = None,
+        expected_split_without_punctuation: list[str] | None = None,
+    ) -> None:
         """EnType: verify split (all modes), length, plength, and join roundtrip."""
         expected_chars = [ch for ch in text if not ch.isspace()]
+        expected_split_without_punctuation = (
+            expected_split
+            if expected_split_without_punctuation is None
+            else expected_split_without_punctuation
+        )
         actual_vs_expect = [
             [self.ops.split(text), expected_split],
             [self.ops.split(text, mode="word"), expected_split],
             [self.ops.split(text, mode="character"), expected_chars],
-            [self.ops.split(text, attach_punctuation=False), expected_split],
-            [self.ops.split(text, mode="word", attach_punctuation=False), expected_split],
+            [self.ops.split(text, attach_punctuation=False), expected_split_without_punctuation],
+            [self.ops.split(text, mode="word", attach_punctuation=False), expected_split_without_punctuation],
             [self.ops.split(text, mode="character", attach_punctuation=False), expected_chars],
             [self.ops.length(text), len(text)],
             [self.ops.plength(text, TEST_FONT_PATH, 16), expected_pixel_length(text, TEST_FONT_PATH, 16)],
