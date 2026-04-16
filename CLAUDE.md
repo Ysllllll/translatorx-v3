@@ -79,6 +79,8 @@ src/
     ├── prefix.py                    # PrefixHandler
     ├── nodes.py                     # translate_node (orchestrates refinements)
     └── chain.py                     # Pipeline (immutable chain)
+├── trx/                             # Unified API facade (L3)
+│   └── __init__.py                  # create_engine, create_context, translate_srt + re-exports
 ```
 
 ### Key design decisions
@@ -105,13 +107,14 @@ src/
 L0: model (Word, Segment, SentenceRecord)
 L1: lang_ops, media
 L2: subtitle, llm_ops, checker
-L3: pipeline
+L3: pipeline, trx (facade)
 L4: app (future)
 ```
 
 Dependencies flow downward only. `model` depends on `lang_ops._core._punctuation` for `strip_punct`.
 `subtitle` re-exports model types for backward compatibility.
 `llm_ops` re-exports checker types (`Checker`, `CheckReport`, `Severity`, `default_checker`) for convenience.
+`trx` is a pure facade — re-exports from all lower packages + factory functions. No new logic.
 
 `subtitle` depends on `lang_ops` via `ChunkPipeline.segments()` (deferred import of `subtitle.align.align_segments`) and `Subtitle` which takes an `ops` or `language` parameter.
 
@@ -165,6 +168,21 @@ Test directory is `lang_ops_tests` (not `lang_ops`) to prevent Python from impor
 Check availability at runtime: `jieba_is_available()`, `mecab_is_available()`, `kiwi_is_available()` (exported from `lang_ops`).
 
 ## API quick reference
+
+### trx — unified facade (recommended entry point)
+
+```
+import trx
+
+# Factory functions
+engine = trx.create_engine(model="Qwen/Qwen3-32B", base_url="http://localhost:26592/v1")
+ctx = trx.create_context("en", "zh", terms={"AI": "人工智能"})
+
+# One-line SRT translation
+records = await trx.translate_srt(srt_content, engine, src="en", tgt="zh")
+
+# All common types available: trx.Subtitle, trx.Pipeline, trx.Word, trx.Segment, etc.
+```
 
 ### Language operations
 

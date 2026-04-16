@@ -269,7 +269,7 @@ Therefore, controlling X is critical.
         cfg = TranslateNodeConfig(
             direct_translate=node_config.direct_translate,
             prefix_rules=node_config.prefix_rules,
-            max_source_len=40,
+            max_source_len=50,
             system_prompt=node_config.system_prompt,
         )
         records = [
