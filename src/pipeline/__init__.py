@@ -9,6 +9,7 @@ from .config import (
 )
 from .nodes import translate_node
 from .prefix import PrefixHandler
+from .stream import FeedResult, StreamAdapter
 
 __all__ = [
     "Pipeline",
@@ -18,4 +19,6 @@ __all__ = [
     "TranslateNodeConfig",
     "EN_ZH_PREFIX_RULES",
     "translate_node",
+    "StreamAdapter",
+    "FeedResult",
 ]

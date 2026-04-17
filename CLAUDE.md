@@ -149,12 +149,25 @@ tests/
 │   │   ├── test_korean.py
 │   │   └── test_chinese.py
 │   └── io_tests/
-│       └── test_srt.py          # SRT parser tests
-├── llm_ops_tests/               # LLM engine + translate tests
-│   ├── test_checker.py          # Checker rule engine tests
-│   └── test_translate.py        # translate_with_verify tests
+│       ├── test_sanitize_srt.py # SRT sanitization tests
+│       ├── test_srt.py          # SRT parser tests
+│       └── test_whisperx.py     # WhisperX parser tests
+├── llm_ops_tests/               # LLM engine + context + translate tests
+│   ├── test_checker.py          # Checker integration via translate_with_verify
+│   ├── test_context.py          # ContextWindow, StaticTerms, TermsProvider
+│   ├── test_protocol.py         # LLMEngine Protocol conformance
+│   ├── test_translate.py        # translate_with_verify micro-loop
+│   └── engines_tests/
+│       └── test_openai_compat.py # OpenAI-compatible engine
 ├── media_tests/                 # Media download + extraction tests
+│   ├── test_ffmpeg.py           # ffprobe + extract_audio
+│   ├── test_protocol.py         # MediaSource Protocol conformance
+│   └── test_ytdlp.py            # yt-dlp source tests
 └── pipeline_tests/              # Pipeline chain + node tests
+    ├── test_e2e.py              # End-to-end translation pipeline
+    ├── test_pipeline.py         # Pipeline chain + build
+    ├── test_prefix.py           # PrefixHandler + rules
+    └── test_refinements.py      # translate_node refinements
 ```
 
 Test directory is `lang_ops_tests` (not `lang_ops`) to prevent Python from importing it instead of `src/lang_ops`.

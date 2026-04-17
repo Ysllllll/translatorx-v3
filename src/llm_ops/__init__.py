@@ -9,6 +9,7 @@ import from ``checker`` directly::
     from checker import LengthRatioRule, LangProfile, get_profile
 """
 
+from .agents import TermsAgent, TermsAgentResult, parse_terms_response
 from .context import (
     ContextWindow,
     StaticTerms,
@@ -16,6 +17,7 @@ from .context import (
     TranslationContext,
 )
 from .protocol import LLMEngine, Message
+from .providers import OneShotTerms, PreloadableTerms
 from .translate import TranslateResult, translate_with_verify
 from checker import (
     CheckReport,
@@ -33,6 +35,11 @@ __all__ = [
     # Context
     "TermsProvider",
     "StaticTerms",
+    "PreloadableTerms",
+    "OneShotTerms",
+    "TermsAgent",
+    "TermsAgentResult",
+    "parse_terms_response",
     "ContextWindow",
     "TranslationContext",
     # Translate

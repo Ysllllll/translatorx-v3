@@ -425,3 +425,27 @@ class SubtitleStream:
         result = sub.sentences().build()
         self._incomplete = None
         return result
+
+    # ---- SentenceRecord streaming (for translation pipelines) --------
+
+    def feed_records(self, segment: Segment) -> list[SentenceRecord]:
+        """Feed one segment; return completed sentences as SentenceRecords.
+
+        Each emitted record represents one complete sentence with a
+        single sub-segment.  Designed to feed :class:`StreamAdapter`.
+        """
+        return [_segment_to_record(s) for s in self.feed(segment)]
+
+    def flush_records(self) -> list[SentenceRecord]:
+        """Flush remaining buffer as SentenceRecords."""
+        return [_segment_to_record(s) for s in self.flush()]
+
+
+def _segment_to_record(seg: Segment) -> SentenceRecord:
+    """Wrap a completed sentence-segment as a SentenceRecord."""
+    return SentenceRecord(
+        src_text=seg.text,
+        start=seg.start,
+        end=seg.end,
+        segments=[seg],
+    )

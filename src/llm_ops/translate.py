@@ -14,7 +14,8 @@ standard — on each attempt:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections import defaultdict
+from dataclasses import dataclass
 
 from .context import ContextWindow, TranslationContext
 from .protocol import LLMEngine, Message
@@ -124,7 +125,19 @@ async def translate_with_verify(
         A :class:`TranslateResult` with the translation and metadata.
     """
     max_retries = context.max_retries
-    context_messages = window.build_messages(context.frozen_pairs)
+
+    # Merge provider terms (if ready) in front of user-supplied frozen_pairs.
+    provider = context.terms_provider
+    if provider.ready:
+        provider_terms = await provider.get_terms()
+        effective_pairs = tuple(provider_terms.items()) + context.frozen_pairs
+    else:
+        effective_pairs = context.frozen_pairs
+
+    # Optional system-prompt template interpolated from provider metadata.
+    resolved_system_prompt = _resolve_system_prompt(system_prompt, context)
+
+    context_messages = window.build_messages(effective_pairs)
 
     last_translation = ""
     last_report = CheckReport.ok()
@@ -137,9 +150,9 @@ async def translate_with_verify(
         # Rebuild context messages only for level 0 (others don't use them
         # or have them embedded in system prompt).
         if attempt > 0 and level == 0:
-            context_messages = window.build_messages(context.frozen_pairs)
+            context_messages = window.build_messages(effective_pairs)
 
-        messages = builder(system_prompt, context_messages, source)
+        messages = builder(resolved_system_prompt, context_messages, source)
         translation = await engine.complete(messages)
         translation = translation.strip()
 
@@ -163,3 +176,17 @@ async def translate_with_verify(
         attempts=max_retries + 1,
         accepted=False,
     )
+
+
+def _resolve_system_prompt(system_prompt: str, context: TranslationContext) -> str:
+    """Interpolate ``context.system_prompt_template`` with provider metadata.
+
+    If the template is empty the caller's ``system_prompt`` is returned as-is.
+    Otherwise the template is filled via ``str.format_map`` with the provider's
+    metadata; missing keys become empty strings.
+    """
+    template = context.system_prompt_template
+    if not template:
+        return system_prompt
+    metadata = context.terms_provider.metadata if context.terms_provider.ready else {}
+    return template.format_map(defaultdict(str, metadata))

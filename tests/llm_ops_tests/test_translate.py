@@ -307,3 +307,84 @@ class TestTranslateWithVerify:
         contents = [m["content"] for m in call]
         assert "fix_src" in contents
         assert "fix_tgt" in contents
+
+    @pytest.mark.asyncio
+    async def test_provider_terms_injected_when_ready(self):
+        engine = _MockEngine(["翻译"])
+        checker = _AlwaysPassChecker()
+        provider = StaticTerms({"neural net": "神经网络"})
+        ctx = TranslationContext(
+            source_lang="en",
+            target_lang="zh",
+            terms_provider=provider,
+        )
+        window = ContextWindow(size=4)
+
+        await translate_with_verify("hello", engine, ctx, checker, window)
+
+        contents = [m["content"] for m in engine.calls[0]]
+        assert "neural net" in contents
+        assert "神经网络" in contents
+
+    @pytest.mark.asyncio
+    async def test_provider_terms_not_injected_when_not_ready(self):
+        class _NotReadyProvider:
+            @property
+            def ready(self): return False
+            async def get_terms(self): return {"should": "not-appear"}
+            async def request_generation(self, texts): return None
+            @property
+            def metadata(self): return {}
+
+        engine = _MockEngine(["翻译"])
+        checker = _AlwaysPassChecker()
+        ctx = TranslationContext(
+            source_lang="en",
+            target_lang="zh",
+            terms_provider=_NotReadyProvider(),
+        )
+        window = ContextWindow(size=4)
+
+        await translate_with_verify("hello", engine, ctx, checker, window)
+
+        contents = [m["content"] for m in engine.calls[0]]
+        assert "should" not in contents
+        assert "not-appear" not in contents
+
+    @pytest.mark.asyncio
+    async def test_system_prompt_template_interpolation(self):
+        engine = _MockEngine(["翻译"])
+        checker = _AlwaysPassChecker()
+        provider = StaticTerms({}, metadata={"topic": "ai", "title": "Intro"})
+        ctx = TranslationContext(
+            source_lang="en",
+            target_lang="zh",
+            terms_provider=provider,
+            system_prompt_template="You are a {topic} translator. Doc: {title}.",
+        )
+        window = ContextWindow(size=4)
+
+        # system_prompt arg is ignored when template is set
+        await translate_with_verify(
+            "hello", engine, ctx, checker, window, system_prompt="ignored-base",
+        )
+
+        system = engine.calls[0][0]
+        assert system["role"] == "system"
+        assert system["content"] == "You are a ai translator. Doc: Intro."
+
+    @pytest.mark.asyncio
+    async def test_system_prompt_template_missing_key_becomes_empty(self):
+        engine = _MockEngine(["翻译"])
+        checker = _AlwaysPassChecker()
+        provider = StaticTerms({}, metadata={"topic": "ai"})
+        ctx = TranslationContext(
+            source_lang="en",
+            target_lang="zh",
+            terms_provider=provider,
+            system_prompt_template="Topic: {topic}. Missing: {nonexistent}.",
+        )
+        window = ContextWindow(size=4)
+        await translate_with_verify("hello", engine, ctx, checker, window)
+        system = engine.calls[0][0]
+        assert system["content"] == "Topic: ai. Missing: ."

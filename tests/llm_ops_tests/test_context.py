@@ -17,13 +17,21 @@ from llm_ops.context import (
 # ---------------------------------------------------------------------------
 
 class TestStaticTerms:
-    def test_version_is_always_one(self):
+    def test_always_ready(self):
         t = StaticTerms({"hello": "你好"})
-        assert t.version == 1
+        assert t.ready is True
 
     def test_empty_default(self):
         t = StaticTerms()
-        assert t.version == 1
+        assert t.ready is True
+
+    def test_metadata_default_empty(self):
+        t = StaticTerms()
+        assert t.metadata == {}
+
+    def test_metadata_preserved(self):
+        t = StaticTerms({"a": "b"}, metadata={"topic": "ml"})
+        assert t.metadata == {"topic": "ml"}
 
     @pytest.mark.asyncio
     async def test_get_terms_returns_copy(self):
@@ -36,11 +44,11 @@ class TestStaticTerms:
         assert "world" not in (await t.get_terms())
 
     @pytest.mark.asyncio
-    async def test_update_returns_false(self):
+    async def test_request_generation_is_noop(self):
         t = StaticTerms({"hello": "你好"})
-        changed = await t.update(["some text"])
-        assert changed is False
-        assert t.version == 1
+        await t.request_generation(["some text"])
+        assert t.ready is True
+        assert await t.get_terms() == {"hello": "你好"}
 
     def test_satisfies_protocol(self):
         assert isinstance(StaticTerms(), TermsProvider)
@@ -134,12 +142,10 @@ class TestTranslationContext:
             frozen_pairs=(("hello", "你好"),),
             window_size=8,
             max_retries=5,
-            retranslate_on_terms_update=False,
-            retranslate_max_lookback=10,
+            system_prompt_template="You are a {topic} translator.",
         )
         assert ctx.terms_provider is terms
         assert ctx.frozen_pairs == (("hello", "你好"),)
         assert ctx.window_size == 8
         assert ctx.max_retries == 5
-        assert ctx.retranslate_on_terms_update is False
-        assert ctx.retranslate_max_lookback == 10
+        assert ctx.system_prompt_template == "You are a {topic} translator."

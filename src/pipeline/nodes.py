@@ -181,7 +181,8 @@ async def _translate_one(
         )
 
     new_translations = {**record.translations, target: translation}
-    return replace(record, translations=new_translations), result
+    new_extra = {**record.extra, "terms_ready_at_translate": context.terms_provider.ready}
+    return replace(record, translations=new_translations, extra=new_extra), result
 
 
 # ---------------------------------------------------------------------------

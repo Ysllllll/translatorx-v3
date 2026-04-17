@@ -37,8 +37,11 @@ from llm_ops import (
     ContextWindow,
     EngineConfig,
     LLMEngine,
+    OneShotTerms,
     OpenAICompatEngine,
+    PreloadableTerms,
     StaticTerms,
+    TermsAgent,
     TermsProvider,
     TranslateResult,
     TranslationContext,
@@ -56,9 +59,11 @@ from checker import (
 # Pipeline
 from pipeline import (
     EN_ZH_PREFIX_RULES,
+    FeedResult,
     Pipeline,
     PrefixRule,
     ProgressCallback,
+    StreamAdapter,
     TranslateNodeConfig,
 )
 
@@ -103,29 +108,52 @@ def create_context(
     tgt: str,
     *,
     terms: dict[str, str] | None = None,
+    terms_provider: TermsProvider | None = None,
     frozen_pairs: tuple[tuple[str, str], ...] = (),
     window_size: int = 4,
     max_retries: int = 3,
+    system_prompt_template: str = "",
 ) -> TranslationContext:
     """Create a translation context.
 
-    *terms* are converted to frozen few-shot pairs (``{source: target}``
-    → ``(source, target)`` tuples) and prepended before the sliding
-    history window in every LLM call.
+    Supply terminology in one of two ways:
+
+    * ``terms={...}`` — convenience form; wraps the dict in
+      :class:`StaticTerms` for you.
+    * ``terms_provider=...`` — pass a pre-built provider
+      (e.g. :class:`PreloadableTerms`, :class:`OneShotTerms`).
+
+    ``frozen_pairs`` are extra non-term reference pairs concatenated
+    *after* the provider terms in the few-shot context.
 
     Example::
 
         ctx = trx.create_context("en", "zh", terms={"AI": "人工智能"})
+
+        # Or with a dynamic provider:
+        provider = trx.PreloadableTerms(engine, "en", "zh")
+        await provider.preload(all_source_texts)
+        ctx = trx.create_context("en", "zh", terms_provider=provider)
     """
-    term_pairs = tuple(terms.items()) if terms else ()
-    all_pairs = term_pairs + frozen_pairs
+    if terms is not None and terms_provider is not None:
+        raise ValueError("Pass either 'terms' or 'terms_provider', not both.")
+
+    provider: TermsProvider
+    if terms_provider is not None:
+        provider = terms_provider
+    elif terms:
+        provider = StaticTerms(terms)
+    else:
+        provider = StaticTerms()
+
     return TranslationContext(
         source_lang=src,
         target_lang=tgt,
-        terms_provider=StaticTerms(terms) if terms else StaticTerms(),
-        frozen_pairs=all_pairs,
+        terms_provider=provider,
+        frozen_pairs=frozen_pairs,
         window_size=window_size,
         max_retries=max_retries,
+        system_prompt_template=system_prompt_template,
     )
 
 
@@ -189,7 +217,10 @@ __all__ = [
     "EngineConfig",
     "TranslationContext",
     "StaticTerms",
+    "PreloadableTerms",
+    "OneShotTerms",
     "TermsProvider",
+    "TermsAgent",
     "ContextWindow",
     "TranslateResult",
     "translate_with_verify",
@@ -204,4 +235,6 @@ __all__ = [
     "PrefixRule",
     "ProgressCallback",
     "EN_ZH_PREFIX_RULES",
+    "StreamAdapter",
+    "FeedResult",
 ]

@@ -753,3 +753,33 @@ class TestEnglishStream:
         merged = " ".join(s.text for s in all_done)
         original = " ".join(s.text for s in _asr_interview_segments())
         assert merged == original
+
+    def test_feed_records_emits_sentence_records(self) -> None:
+        stream = Subtitle.stream(_ops)
+        done1 = stream.feed_records(S("Welcome to the show. Today", 0.0, 3.0, words=[
+            W("Welcome", 0.0, 0.6),
+            W("to", 0.6, 0.8),
+            W("the", 0.8, 1.0),
+            W("show.", 1.0, 1.5),
+            W("Today", 2.0, 3.0),
+        ]))
+        assert len(done1) == 1
+        assert isinstance(done1[0], SentenceRecord)
+        assert done1[0].src_text == "Welcome to the show."
+        assert len(done1[0].segments) == 1
+        assert done1[0].start == done1[0].segments[0].start
+        assert done1[0].end == done1[0].segments[0].end
+
+    def test_flush_records_returns_remaining(self) -> None:
+        stream = Subtitle.stream(_ops)
+        stream.feed_records(S("Hello world.", 0.0, 2.0, words=[
+            W("Hello", 0.0, 1.0), W("world.", 1.0, 2.0),
+        ]))
+        rest = stream.flush_records()
+        assert len(rest) == 1
+        assert isinstance(rest[0], SentenceRecord)
+        assert rest[0].src_text == "Hello world."
+
+    def test_flush_records_empty(self) -> None:
+        stream = Subtitle.stream(_ops)
+        assert stream.flush_records() == []
