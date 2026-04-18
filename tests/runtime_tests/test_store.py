@@ -17,11 +17,17 @@ from runtime.store import (
     empty_video_data,
     set_nested,
 )
+from runtime.workspace import Workspace
 
 
 @pytest.fixture
-def store(tmp_path: Path) -> JsonFileStore:
-    return JsonFileStore(tmp_path)
+def ws(tmp_path: Path) -> Workspace:
+    return Workspace(tmp_path, "c")
+
+
+@pytest.fixture
+def store(ws: Workspace) -> JsonFileStore:
+    return JsonFileStore(ws)
 
 
 # ---------------------------------------------------------------------------
@@ -71,37 +77,42 @@ def test_jsonfilestore_conforms_to_protocol(store: JsonFileStore) -> None:
 
 class TestLayout:
     @pytest.mark.asyncio
-    async def test_video_path_layout(self, store: JsonFileStore, tmp_path: Path) -> None:
-        await store.save_video("mit-6.5940", "lec01", empty_video_data())
+    async def test_video_path_layout(self, tmp_path: Path) -> None:
+        ws = Workspace(tmp_path, "mit-6.5940")
+        store = JsonFileStore(ws)
+        await store.save_video("lec01", empty_video_data())
         assert (tmp_path / "mit-6.5940" / "zzz_translation" / "lec01.json").exists()
 
     @pytest.mark.asyncio
-    async def test_nested_course_key(self, store: JsonFileStore, tmp_path: Path) -> None:
-        await store.save_video("2025-09/MIT-6.5940", "lec01", empty_video_data())
+    async def test_nested_course_key(self, tmp_path: Path) -> None:
+        ws = Workspace(tmp_path, "2025-09/MIT-6.5940")
+        store = JsonFileStore(ws)
+        await store.save_video("lec01", empty_video_data())
         assert (
             tmp_path / "2025-09" / "MIT-6.5940" / "zzz_translation" / "lec01.json"
         ).exists()
 
     @pytest.mark.asyncio
-    async def test_course_metadata_path(self, store: JsonFileStore, tmp_path: Path) -> None:
-        await store.patch_course("mit", meta={"title": "lectures"})
+    async def test_course_metadata_path(self, tmp_path: Path) -> None:
+        ws = Workspace(tmp_path, "mit")
+        store = JsonFileStore(ws)
+        await store.patch_course(meta={"title": "lectures"})
         assert (tmp_path / "mit" / "metadata.json").exists()
 
-    @pytest.mark.asyncio
-    async def test_rejects_path_traversal(self, store: JsonFileStore) -> None:
+    def test_rejects_course_traversal(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError):
-            await store.load_video("../escape", "x")
+            Workspace(tmp_path, "../escape")
         with pytest.raises(ValueError):
-            await store.load_video("course", "../x")
-        with pytest.raises(ValueError):
-            await store.load_video("course", "sub/x")
+            Workspace(tmp_path, "")
 
     @pytest.mark.asyncio
-    async def test_rejects_empty_names(self, store: JsonFileStore) -> None:
+    async def test_rejects_video_traversal(self, store: JsonFileStore) -> None:
         with pytest.raises(ValueError):
-            await store.load_video("", "x")
+            await store.load_video("../x")
         with pytest.raises(ValueError):
-            await store.load_video("c", "")
+            await store.load_video("sub/x")
+        with pytest.raises(ValueError):
+            await store.load_video("")
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +125,7 @@ class TestLoadSave:
     async def test_load_missing_returns_fresh_schema(
         self, store: JsonFileStore
     ) -> None:
-        data = await store.load_video("c", "v")
+        data = await store.load_video("v")
         assert data["schema_version"] == SCHEMA_VERSION
         assert data["records"] == []
         assert data["failed"] == []
@@ -125,8 +136,8 @@ class TestLoadSave:
         original = empty_video_data()
         original["meta"] = {"video_id": "v1"}
         original["records"] = [{"id": 0, "src": "hello"}]
-        await store.save_video("c", "v", original)
-        loaded = await store.load_video("c", "v")
+        await store.save_video("v", original)
+        loaded = await store.load_video("v")
         assert loaded["meta"]["video_id"] == "v1"
         assert loaded["records"][0]["src"] == "hello"
 
@@ -134,15 +145,15 @@ class TestLoadSave:
     async def test_save_enforces_schema_version(
         self, store: JsonFileStore
     ) -> None:
-        await store.save_video("c", "v", {"meta": {}, "records": []})
-        loaded = await store.load_video("c", "v")
+        await store.save_video("v", {"meta": {}, "records": []})
+        loaded = await store.load_video("v")
         assert loaded["schema_version"] == SCHEMA_VERSION
 
     @pytest.mark.asyncio
     async def test_atomic_write_no_tmp_leftover(
         self, store: JsonFileStore, tmp_path: Path
     ) -> None:
-        await store.save_video("c", "v", empty_video_data())
+        await store.save_video("v", empty_video_data())
         tmp_files = list((tmp_path / "c" / "zzz_translation").glob("*.tmp"))
         assert tmp_files == []
 
@@ -158,10 +169,9 @@ class TestPatchVideo:
         self, store: JsonFileStore
     ) -> None:
         await store.patch_video(
-            "c", "v",
-            records={0: {"src": "hello", "translations.zh": "你好"}},
+            "v", records={0: {"src": "hello", "translations.zh": "你好"}},
         )
-        data = await store.load_video("c", "v")
+        data = await store.load_video("v")
         assert data["records"] == [
             {"id": 0, "src": "hello", "translations": {"zh": "你好"}}
         ]
@@ -171,12 +181,10 @@ class TestPatchVideo:
         self, store: JsonFileStore
     ) -> None:
         await store.patch_video(
-            "c", "v", records={0: {"src": "hello", "translations.en": "hello"}}
+            "v", records={0: {"src": "hello", "translations.en": "hello"}}
         )
-        await store.patch_video(
-            "c", "v", records={0: {"translations.zh": "你好"}}
-        )
-        data = await store.load_video("c", "v")
+        await store.patch_video("v", records={0: {"translations.zh": "你好"}})
+        data = await store.load_video("v")
         assert data["records"][0]["translations"] == {
             "en": "hello", "zh": "你好",
         }
@@ -184,23 +192,19 @@ class TestPatchVideo:
 
     @pytest.mark.asyncio
     async def test_patch_appends_failed(self, store: JsonFileStore) -> None:
-        await store.patch_video(
-            "c", "v", failed=[{"id": 5, "processor": "translate"}]
-        )
-        await store.patch_video(
-            "c", "v", failed=[{"id": 7, "processor": "translate"}]
-        )
-        data = await store.load_video("c", "v")
+        await store.patch_video("v", failed=[{"id": 5, "processor": "translate"}])
+        await store.patch_video("v", failed=[{"id": 7, "processor": "translate"}])
+        data = await store.load_video("v")
         assert [f["id"] for f in data["failed"]] == [5, 7]
 
     @pytest.mark.asyncio
     async def test_patch_merges_meta_and_terms(
         self, store: JsonFileStore
     ) -> None:
-        await store.patch_video("c", "v", meta={"video_id": "v1"})
-        await store.patch_video("c", "v", meta={"duration": 60})
-        await store.patch_video("c", "v", terms={"AI": "人工智能"})
-        data = await store.load_video("c", "v")
+        await store.patch_video("v", meta={"video_id": "v1"})
+        await store.patch_video("v", meta={"duration": 60})
+        await store.patch_video("v", terms={"AI": "人工智能"})
+        data = await store.load_video("v")
         assert data["meta"] == {"video_id": "v1", "duration": 60}
         assert data["terms"] == {"AI": "人工智能"}
 
@@ -208,13 +212,9 @@ class TestPatchVideo:
     async def test_patch_replaces_source_subtitle(
         self, store: JsonFileStore
     ) -> None:
-        await store.patch_video(
-            "c", "v", source_subtitle=[{"id": 0, "text": "a"}]
-        )
-        await store.patch_video(
-            "c", "v", source_subtitle=[{"id": 0, "text": "b"}]
-        )
-        data = await store.load_video("c", "v")
+        await store.patch_video("v", source_subtitle=[{"id": 0, "text": "a"}])
+        await store.patch_video("v", source_subtitle=[{"id": 0, "text": "b"}])
+        data = await store.load_video("v")
         assert data["source_subtitle"] == [{"id": 0, "text": "b"}]
 
     @pytest.mark.asyncio
@@ -222,18 +222,18 @@ class TestPatchVideo:
         self, store: JsonFileStore
     ) -> None:
         await store.patch_video(
-            "c", "v",
+            "v",
             records={2: {"src": "c"}, 0: {"src": "a"}, 1: {"src": "b"}},
         )
-        data = await store.load_video("c", "v")
+        data = await store.load_video("v")
         assert [r["id"] for r in data["records"]] == [0, 1, 2]
 
     @pytest.mark.asyncio
     async def test_patch_noop_returns_silently(
         self, store: JsonFileStore, tmp_path: Path
     ) -> None:
-        await store.patch_video("c", "v")
-        assert not (tmp_path / "c").exists()
+        await store.patch_video("v")
+        assert not (tmp_path / "c" / "zzz_translation").exists()
 
     @pytest.mark.asyncio
     async def test_patch_preserves_unknown_fields(
@@ -254,8 +254,8 @@ class TestPatchVideo:
             ),
             encoding="utf-8",
         )
-        await store.patch_video("c", "v", records={0: {"translations.zh": "你好"}})
-        data = await store.load_video("c", "v")
+        await store.patch_video("v", records={0: {"translations.zh": "你好"}})
+        data = await store.load_video("v")
         assert data["meta"]["future_key"] == "keep"
         assert data["records"][0]["custom_namespace"] == {"x": 1}
         assert data["records"][0]["translations"] == {"zh": "你好"}
@@ -274,12 +274,10 @@ class TestConcurrency:
         N = 30
 
         async def writer(i: int) -> None:
-            await store.patch_video(
-                "c", "v", records={i: {"src": f"rec-{i}"}}
-            )
+            await store.patch_video("v", records={i: {"src": f"rec-{i}"}})
 
         await asyncio.gather(*(writer(i) for i in range(N)))
-        data = await store.load_video("c", "v")
+        data = await store.load_video("v")
         assert len(data["records"]) == N
         assert {r["id"] for r in data["records"]} == set(range(N))
 
@@ -288,14 +286,12 @@ class TestConcurrency:
         self, store: JsonFileStore
     ) -> None:
         async def writer(vid: str, i: int) -> None:
-            await store.patch_video(
-                "c", vid, records={i: {"src": f"{vid}-{i}"}}
-            )
+            await store.patch_video(vid, records={i: {"src": f"{vid}-{i}"}})
 
         tasks = [writer(f"v{i}", j) for i in range(5) for j in range(5)]
         await asyncio.gather(*tasks)
         for i in range(5):
-            data = await store.load_video("c", f"v{i}")
+            data = await store.load_video(f"v{i}")
             assert {r["id"] for r in data["records"]} == set(range(5))
 
 
@@ -315,7 +311,7 @@ class TestSchema:
             json.dumps({"records": [{"id": 0, "src": "x"}]}),
             encoding="utf-8",
         )
-        data = await store.load_video("c", "v")
+        data = await store.load_video("v")
         assert data["schema_version"] == SCHEMA_VERSION
         assert data["records"][0]["src"] == "x"
         assert data["failed"] == []
@@ -331,9 +327,9 @@ class TestSchema:
             encoding="utf-8",
         )
         with pytest.raises(IncompatibleStoreError):
-            await store.load_video("c", "v")
+            await store.load_video("v")
         with pytest.raises(IncompatibleStoreError):
-            await store.patch_video("c", "v", meta={"k": 1})
+            await store.patch_video("v", meta={"k": 1})
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +340,7 @@ class TestSchema:
 class TestInvalidate:
     async def _seed(self, store: JsonFileStore) -> None:
         await store.patch_video(
-            "c", "v",
+            "v",
             records={
                 0: {
                     "src": "a",
@@ -368,49 +364,41 @@ class TestInvalidate:
     async def test_invalidate_missing_file_is_noop(
         self, store: JsonFileStore
     ) -> None:
-        await store.invalidate("c", "v")
+        await store.invalidate("v")
 
     @pytest.mark.asyncio
     async def test_invalidate_all_clears_record_namespaces(
         self, store: JsonFileStore
     ) -> None:
         await self._seed(store)
-        await store.invalidate("c", "v")
-        data = await store.load_video("c", "v")
+        await store.invalidate("v")
+        data = await store.load_video("v")
         for rec in data["records"]:
             assert rec.get("translations", {}) == {}
             assert rec.get("_fingerprints", {}) == {}
             assert rec.get("errors", {}) == {}
-            # src is preserved.
             assert "src" in rec
         assert data["failed"] == []
 
     @pytest.mark.asyncio
-    async def test_invalidate_by_processor(
-        self, store: JsonFileStore
-    ) -> None:
+    async def test_invalidate_by_processor(self, store: JsonFileStore) -> None:
         await self._seed(store)
-        await store.invalidate("c", "v", processor_name="translate")
-        data = await store.load_video("c", "v")
-        # fingerprints/errors for translate removed
+        await store.invalidate("v", processor_name="translate")
+        data = await store.load_video("v")
         for rec in data["records"]:
             assert "translate" not in rec.get("_fingerprints", {})
             assert "translate" not in rec.get("errors", {})
-        # failed filtered by processor
         assert [f["processor"] for f in data["failed"]] == ["tts"]
 
     @pytest.mark.asyncio
-    async def test_invalidate_by_record_ids(
-        self, store: JsonFileStore
-    ) -> None:
+    async def test_invalidate_by_record_ids(self, store: JsonFileStore) -> None:
         await self._seed(store)
-        await store.invalidate("c", "v", record_ids=[0])
-        data = await store.load_video("c", "v")
+        await store.invalidate("v", record_ids=[0])
+        data = await store.load_video("v")
         rec0 = next(r for r in data["records"] if r["id"] == 0)
         rec1 = next(r for r in data["records"] if r["id"] == 1)
         assert rec0.get("translations", {}) == {}
         assert rec1["translations"] == {"zh": "乙"}
-        # failed filtered by id
         assert [f["id"] for f in data["failed"]] == [1]
 
 
@@ -424,22 +412,24 @@ class TestCourse:
     async def test_load_missing_course_returns_fresh(
         self, store: JsonFileStore
     ) -> None:
-        data = await store.load_course("c")
+        data = await store.load_course()
         assert data == empty_course_data()
 
     @pytest.mark.asyncio
     async def test_patch_merges_videos_and_meta(
         self, store: JsonFileStore
     ) -> None:
-        await store.patch_course("c", videos={"v1": {"status": "done"}})
+        await store.patch_course(videos={"v1": {"status": "done"}})
         await store.patch_course(
-            "c", videos={"v2": {"status": "pending"}}, meta={"title": "X"}
+            videos={"v2": {"status": "pending"}}, meta={"title": "X"}
         )
-        data = await store.load_course("c")
+        data = await store.load_course()
         assert set(data["videos"].keys()) == {"v1", "v2"}
         assert data["meta"]["title"] == "X"
 
     @pytest.mark.asyncio
-    async def test_patch_course_noop(self, store: JsonFileStore, tmp_path: Path) -> None:
-        await store.patch_course("c")
+    async def test_patch_course_noop(
+        self, store: JsonFileStore, tmp_path: Path
+    ) -> None:
+        await store.patch_course()
         assert not (tmp_path / "c" / "metadata.json").exists()

@@ -1,9 +1,11 @@
 """Store layer — persistent state for video/course runs.
 
 Design refs: D-041 (physical layout), D-042 (Store Protocol), D-043
-(consistency/fingerprint), D-044 (write performance), D-046 (resume).
+(consistency/fingerprint), D-044 (write performance), D-046 (resume),
+D-061 (Store depends on Workspace for path routing).
 
-Physical layout (`JsonFileStore`):
+Physical layout is owned by ``runtime.workspace.Workspace``; Store only
+knows *what* to write and delegates *where* to Workspace::
 
     <root>/<course>/zzz_translation/<video>.json   # per-video source of truth
     <root>/<course>/metadata.json                   # course index (cache, rebuildable)
@@ -26,10 +28,10 @@ Video JSON schema (v1):
       "terms": {...}
     }
 
-`patch_video` is the hot path: it merges per-record dotted-path updates,
+``patch_video`` is the hot path: it merges per-record dotted-path updates,
 appends failed entries, and shallow-merges meta. Concurrent writes on the
-same (course, video) are serialized via an asyncio.Lock (D-043 R1).
-Writes are atomic (tmp file + rename).
+same video are serialized via an asyncio.Lock (D-043 R1). Writes are
+atomic (tmp file + rename).
 """
 
 from __future__ import annotations
@@ -37,19 +39,13 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 import tempfile
-from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Protocol, runtime_checkable
 
+from runtime.workspace import Workspace
+
 SCHEMA_VERSION = 1
-
-_VIDEO_DIR = "zzz_translation"
-_COURSE_META = "metadata.json"
-
-# Basic safety: forbid path traversal in course / video identifiers.
-_SAFE_NAME_RE = re.compile(r"^[^\s][^\x00]*$")
 
 
 class IncompatibleStoreError(RuntimeError):
@@ -101,24 +97,23 @@ class Store(Protocol):
     """Persistent store for video / course state.
 
     Implementations must be safe under concurrent access for distinct
-    (course, video) pairs. Same-pair concurrent `patch_video` calls are
-    serialized by the implementation (D-043 R1).
+    videos. Same-video concurrent ``patch_video`` calls are serialized by
+    the implementation (D-043 R1).
 
     All methods are coroutines so alternate backends (SQLite, Postgres,
-    Redis) can swap in without Processor changes (D-042).
+    Redis) can swap in without Processor changes (D-042). A Store is
+    bound to a single Workspace (one course); cross-course access creates
+    a new Store.
     """
 
-    async def load_video(self, course: str, video: str) -> dict[str, Any]:
+    async def load_video(self, video: str) -> dict[str, Any]:
         ...
 
-    async def save_video(
-        self, course: str, video: str, data: dict[str, Any]
-    ) -> None:
+    async def save_video(self, video: str, data: dict[str, Any]) -> None:
         ...
 
     async def patch_video(
         self,
-        course: str,
         video: str,
         *,
         records: dict[int, dict[str, Any]] | None = None,
@@ -129,15 +124,14 @@ class Store(Protocol):
     ) -> None:
         ...
 
-    async def load_course(self, course: str) -> dict[str, Any]:
+    async def load_course(self) -> dict[str, Any]:
         ...
 
-    async def patch_course(self, course: str, **updates: Any) -> None:
+    async def patch_course(self, **updates: Any) -> None:
         ...
 
     async def invalidate(
         self,
-        course: str,
         video: str,
         *,
         processor_name: str | None = None,
@@ -149,18 +143,6 @@ class Store(Protocol):
 # ---------------------------------------------------------------------------
 # JsonFileStore
 # ---------------------------------------------------------------------------
-
-
-def _validate_name(kind: str, name: str) -> None:
-    if not isinstance(name, str) or not name:
-        raise ValueError(f"{kind} must be a non-empty string")
-    if not _SAFE_NAME_RE.match(name):
-        raise ValueError(f"{kind} contains invalid characters: {name!r}")
-    # Course may contain `/` for nested namespacing; video may not.
-    if kind == "video" and "/" in name:
-        raise ValueError("video name must not contain '/'")
-    if ".." in Path(name).parts:
-        raise ValueError(f"{kind} must not contain '..'")
 
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
@@ -205,73 +187,67 @@ def _check_schema(data: dict[str, Any], where: str) -> None:
 class JsonFileStore:
     """File-backed Store writing one JSON per video.
 
-    Per-(course, video) asyncio.Lock guarantees read-modify-write atomicity
-    within one process. File IO runs in a worker thread to avoid blocking
-    the event loop.
+    Bound to a single ``Workspace`` (one course). Paths come from
+    ``ws.translation.path_for(video)`` and ``ws.metadata_path`` — changing
+    the physical layout is a Workspace concern, not a Store concern.
+
+    Per-video asyncio.Lock guarantees read-modify-write atomicity within
+    one process. File IO runs in a worker thread to avoid blocking the
+    event loop.
     """
 
-    def __init__(self, root: str | os.PathLike[str]) -> None:
-        self._root = Path(root)
-        self._locks: dict[tuple[str, str], asyncio.Lock] = {}
-        self._course_locks: dict[str, asyncio.Lock] = {}
+    def __init__(self, workspace: Workspace) -> None:
+        self._ws = workspace
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._course_lock = asyncio.Lock()
         self._locks_guard = asyncio.Lock()
 
-    # -- paths --
+    # -- paths (delegate to Workspace) -----------------------------------
 
-    def _video_path(self, course: str, video: str) -> Path:
-        _validate_name("course", course)
-        _validate_name("video", video)
-        return self._root / course / _VIDEO_DIR / f"{video}.json"
+    @property
+    def workspace(self) -> Workspace:
+        return self._ws
 
-    def _course_path(self, course: str) -> Path:
-        _validate_name("course", course)
-        return self._root / course / _COURSE_META
+    def _video_path(self, video: str) -> Path:
+        if not isinstance(video, str) or not video or "/" in video:
+            raise ValueError(f"invalid video name: {video!r}")
+        return self._ws.translation.path_for(video, suffix=".json")
 
-    # -- lock helpers --
+    def _course_path(self) -> Path:
+        return self._ws.metadata_path
 
-    async def _video_lock(self, course: str, video: str) -> asyncio.Lock:
-        key = (course, video)
+    # -- lock helpers ----------------------------------------------------
+
+    async def _video_lock(self, video: str) -> asyncio.Lock:
         async with self._locks_guard:
-            lock = self._locks.get(key)
+            lock = self._locks.get(video)
             if lock is None:
                 lock = asyncio.Lock()
-                self._locks[key] = lock
+                self._locks[video] = lock
             return lock
 
-    async def _course_lock(self, course: str) -> asyncio.Lock:
-        async with self._locks_guard:
-            lock = self._course_locks.get(course)
-            if lock is None:
-                lock = asyncio.Lock()
-                self._course_locks[course] = lock
-            return lock
+    # -- video ops -------------------------------------------------------
 
-    # -- video ops --
-
-    async def load_video(self, course: str, video: str) -> dict[str, Any]:
-        path = self._video_path(course, video)
+    async def load_video(self, video: str) -> dict[str, Any]:
+        path = self._video_path(video)
         data = await asyncio.to_thread(_read_json, path)
         if data is None:
             return empty_video_data()
-        _check_schema(data, f"{course}/{video}")
-        # Backfill any missing top-level keys for robustness.
+        _check_schema(data, f"{self._ws.course}/{video}")
         merged = empty_video_data()
         merged.update(data)
         return merged
 
-    async def save_video(
-        self, course: str, video: str, data: dict[str, Any]
-    ) -> None:
-        path = self._video_path(course, video)
+    async def save_video(self, video: str, data: dict[str, Any]) -> None:
+        path = self._video_path(video)
         data = {**empty_video_data(), **data}
         data["schema_version"] = SCHEMA_VERSION
-        lock = await self._video_lock(course, video)
+        lock = await self._video_lock(video)
         async with lock:
             await asyncio.to_thread(_atomic_write_json, path, data)
 
     async def patch_video(
         self,
-        course: str,
         video: str,
         *,
         records: dict[int, dict[str, Any]] | None = None,
@@ -280,16 +256,18 @@ class JsonFileStore:
         terms: dict[str, Any] | None = None,
         source_subtitle: list[Any] | None = None,
     ) -> None:
-        if not any(x is not None for x in (records, failed, meta, terms, source_subtitle)):
+        if not any(
+            x is not None for x in (records, failed, meta, terms, source_subtitle)
+        ):
             return
-        path = self._video_path(course, video)
-        lock = await self._video_lock(course, video)
+        path = self._video_path(video)
+        lock = await self._video_lock(video)
         async with lock:
             data = await asyncio.to_thread(_read_json, path)
             if data is None:
                 data = empty_video_data()
             else:
-                _check_schema(data, f"{course}/{video}")
+                _check_schema(data, f"{self._ws.course}/{video}")
                 for k, v in empty_video_data().items():
                     data.setdefault(k, v)
 
@@ -308,26 +286,25 @@ class JsonFileStore:
 
     async def invalidate(
         self,
-        course: str,
         video: str,
         *,
         processor_name: str | None = None,
         record_ids: Iterable[int] | None = None,
     ) -> None:
-        """Clear fields written by `processor_name` (or all if None).
+        """Clear fields written by *processor_name* (or all if None).
 
-        `record_ids` restricts invalidation to those ids; None means all.
+        ``record_ids`` restricts invalidation to those ids; None means all.
 
-        When `processor_name` is None, the full record namespace is cleared
+        When ``processor_name`` is None, the full record namespace is cleared
         (translations/alignment/tts + per-processor errors/fingerprints).
         """
-        path = self._video_path(course, video)
-        lock = await self._video_lock(course, video)
+        path = self._video_path(video)
+        lock = await self._video_lock(video)
         async with lock:
             data = await asyncio.to_thread(_read_json, path)
             if data is None:
                 return
-            _check_schema(data, f"{course}/{video}")
+            _check_schema(data, f"{self._ws.course}/{video}")
             ids: set[int] | None
             ids = set(record_ids) if record_ids is not None else None
             for rec in data.get("records", []):
@@ -335,11 +312,15 @@ class JsonFileStore:
                 if ids is not None and rid not in ids:
                     continue
                 if processor_name is None:
-                    for key in ("translations", "alignment", "tts", "errors", "_fingerprints"):
-                        if key in rec:
-                            rec[key] = {} if isinstance(rec[key], dict) else rec[key]
-                            if isinstance(rec[key], dict):
-                                rec[key].clear()
+                    for key in (
+                        "translations",
+                        "alignment",
+                        "tts",
+                        "errors",
+                        "_fingerprints",
+                    ):
+                        if key in rec and isinstance(rec[key], dict):
+                            rec[key].clear()
                 else:
                     for bucket in ("errors", "_fingerprints"):
                         if isinstance(rec.get(bucket), dict):
@@ -353,29 +334,28 @@ class JsonFileStore:
                 ]
             await asyncio.to_thread(_atomic_write_json, path, data)
 
-    # -- course ops --
+    # -- course ops ------------------------------------------------------
 
-    async def load_course(self, course: str) -> dict[str, Any]:
-        path = self._course_path(course)
+    async def load_course(self) -> dict[str, Any]:
+        path = self._course_path()
         data = await asyncio.to_thread(_read_json, path)
         if data is None:
             return empty_course_data()
-        _check_schema(data, course)
+        _check_schema(data, self._ws.course)
         merged = empty_course_data()
         merged.update(data)
         return merged
 
-    async def patch_course(self, course: str, **updates: Any) -> None:
+    async def patch_course(self, **updates: Any) -> None:
         if not updates:
             return
-        path = self._course_path(course)
-        lock = await self._course_lock(course)
-        async with lock:
+        path = self._course_path()
+        async with self._course_lock:
             data = await asyncio.to_thread(_read_json, path)
             if data is None:
                 data = empty_course_data()
             else:
-                _check_schema(data, course)
+                _check_schema(data, self._ws.course)
                 for k, v in empty_course_data().items():
                     data.setdefault(k, v)
             for key, value in updates.items():
