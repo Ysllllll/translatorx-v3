@@ -209,3 +209,63 @@ class TestBuilderEnhancements:
         _write_srt(srt, ["x"])
         # Should not raise.
         app.course(course="c1").add_video("x", srt, language="en")
+
+
+class TestStreamBuilder:
+    @pytest.mark.asyncio
+    async def test_stream_feed_and_drain(self, app: App, monkeypatch):
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        from model import Segment
+
+        handle = (
+            app.stream(course="c1", video="live01", language="en")
+            .translate(src="en", tgt="zh")
+            .start()
+        )
+        # Feed two segments, close, drain.
+        await handle.feed(Segment(start=0.0, end=1.0, text="Hello."))
+        await handle.feed(Segment(start=1.0, end=2.0, text="World."))
+        await handle.close()
+
+        got = [rec async for rec in handle.records()]
+        assert len(got) == 2
+        assert got[0].translations["zh"] == "[Hello.]"
+        assert got[1].translations["zh"] == "[World.]"
+
+    @pytest.mark.asyncio
+    async def test_stream_as_async_context_manager(self, app: App, monkeypatch):
+        """`async with builder.start() as h:` closes on exit."""
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        from model import Segment
+
+        async with (
+            app.stream(course="c1", video="live02", language="en")
+            .translate(src="en", tgt="zh")
+            .start()
+        ) as handle:
+            await handle.feed(Segment(start=0.0, end=1.0, text="Ping."))
+            # Note: close called on __aexit__; iterate records afterwards.
+            collected = []
+
+            async def drain():
+                async for rec in handle.records():
+                    collected.append(rec)
+
+            import asyncio as _aio
+            task = _aio.create_task(drain())
+            # Let the pump flush; __aexit__ closes the stream, drain ends.
+
+        await task  # records() drains after close()
+        assert len(collected) == 1
+        assert collected[0].translations["zh"] == "[Ping.]"
+
+    def test_stream_requires_translate(self, app: App):
+        b = app.stream(course="c1", video="live", language="en")
+        with pytest.raises(ValueError, match="translate"):
+            b.start()

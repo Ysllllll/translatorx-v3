@@ -20,17 +20,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Sequence
+from typing import AsyncIterator, Sequence
 
 from checker import Checker, default_checker
 from llm_ops import EngineConfig, OpenAICompatEngine, StaticTerms, TranslationContext
+from model import SentenceRecord, Segment
 
 from runtime.config import AppConfig, EngineEntry
 from runtime.course import CourseOrchestrator, CourseResult, VideoSpec
 from runtime.errors import ErrorReporter
-from runtime.orchestrator import VideoOrchestrator, VideoResult
+from runtime.orchestrator import StreamingOrchestrator, VideoOrchestrator, VideoResult
 from runtime.processors.translate import TranslateProcessor
-from runtime.protocol import Source, VideoKey
+from runtime.protocol import Priority, Source, VideoKey
 from runtime.sources.srt import SrtSource
 from runtime.sources.whisperx import WhisperXSource
 from runtime.store import JsonFileStore, Store
@@ -124,6 +125,17 @@ class App:
 
     def course(self, *, course: str) -> "CourseBuilder":
         return CourseBuilder(app=self, course=course)
+
+    def stream(self, *, course: str, video: str, language: str) -> "StreamBuilder":
+        """Builder for live-streaming translation (browser-plugin scenario).
+
+        Unlike :meth:`video`, the returned builder produces a long-lived
+        :class:`LiveStreamHandle` via :meth:`StreamBuilder.start` — callers
+        concurrently :meth:`feed` segments and iterate :meth:`records`.
+        ``language`` is the source-media language (needed to construct the
+        underlying :class:`PushQueueSource`).
+        """
+        return StreamBuilder(app=self, course=course, video=video, language=language)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +296,113 @@ class CourseBuilder:
 
 
 # ---------------------------------------------------------------------------
-# Builders — private
+# StreamBuilder + LiveStreamHandle
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StreamBuilder:
+    """Immutable builder for live translation streams.
+
+    Browser-plugin scenario: a client feeds raw :class:`Segment` objects as
+    they are captured, and consumes translated :class:`SentenceRecord`
+    objects from an async generator.
+    """
+
+    app: App
+    course: str
+    video: str
+    language: str
+    _translate: _TranslateStage | None = None
+    _error_reporter: ErrorReporter | None = None
+    _split_by_speaker: bool = False
+
+    def translate(
+        self, *, src: str, tgt: str, engine: str = "default"
+    ) -> "StreamBuilder":
+        return replace(self, _translate=_TranslateStage(src=src, tgt=tgt, engine_name=engine))
+
+    def with_error_reporter(self, reporter: ErrorReporter) -> "StreamBuilder":
+        return replace(self, _error_reporter=reporter)
+
+    def split_by_speaker(self, enabled: bool = True) -> "StreamBuilder":
+        return replace(self, _split_by_speaker=enabled)
+
+    def start(self) -> "LiveStreamHandle":
+        """Instantiate the underlying :class:`StreamingOrchestrator`.
+
+        Returns a :class:`LiveStreamHandle` that exposes
+        ``feed/seek/close`` + an ``async for rec in handle.records()``
+        drain generator. Call :meth:`LiveStreamHandle.close` (or use the
+        handle as an async context manager) to shut down cleanly.
+        """
+        if self._translate is None:
+            raise ValueError("StreamBuilder.start() requires .translate(...) stage")
+
+        t = self._translate
+        engine = self.app.engine(t.engine_name)
+        ctx = self.app.context(t.src, t.tgt)
+        checker = self.app.checker(t.src, t.tgt)
+        store = self.app.store(self.course)
+
+        processor = TranslateProcessor(
+            engine,
+            checker,
+            flush_every=self.app.config.runtime.flush_every,
+        )
+        orch = StreamingOrchestrator(
+            language=self.language,
+            processors=[processor],
+            ctx=ctx,
+            store=store,
+            video_key=VideoKey(course=self.course, video=self.video),
+            split_by_speaker=self._split_by_speaker,
+            error_reporter=self._error_reporter,
+        )
+        return LiveStreamHandle(orch)
+
+
+class LiveStreamHandle:
+    """Active handle over a :class:`StreamingOrchestrator`.
+
+    Also usable as an async context manager — :meth:`__aexit__` closes the
+    orchestrator so outstanding buffers flush::
+
+        async with app.stream(...).translate(...) as s:
+            await s.feed(seg)
+            async for rec in s.records():
+                ...
+    """
+
+    def __init__(self, orchestrator: StreamingOrchestrator) -> None:
+        self._orch = orchestrator
+
+    async def feed(self, segment: Segment, *, priority: Priority = Priority.NORMAL) -> None:
+        await self._orch.feed(segment, priority=priority)
+
+    async def seek(self, t: float) -> None:
+        await self._orch.seek(t)
+
+    async def close(self) -> None:
+        await self._orch.close()
+
+    def records(self) -> AsyncIterator[SentenceRecord]:
+        """Async generator yielding translated records as they complete."""
+        return self._orch.run()
+
+    @property
+    def failed(self):
+        return self._orch.failed
+
+    async def __aenter__(self) -> "LiveStreamHandle":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.close()
+
+
+# ---------------------------------------------------------------------------
+# Private
 # ---------------------------------------------------------------------------
 
 
@@ -316,4 +434,4 @@ def _build_engine(entry: EngineEntry) -> OpenAICompatEngine:
     return OpenAICompatEngine(cfg)
 
 
-__all__ = ["App", "CourseBuilder", "VideoBuilder"]
+__all__ = ["App", "CourseBuilder", "LiveStreamHandle", "StreamBuilder", "VideoBuilder"]

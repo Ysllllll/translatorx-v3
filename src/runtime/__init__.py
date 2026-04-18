@@ -54,7 +54,7 @@ from runtime.course import (
     ProcessorsFactory,
     VideoSpec,
 )
-from runtime.app import App, CourseBuilder, VideoBuilder
+from runtime.app import App, CourseBuilder, LiveStreamHandle, StreamBuilder, VideoBuilder
 from runtime.config import (
     AppConfig,
     ContextEntry,
@@ -140,6 +140,8 @@ __all__ = [
     # app + builders
     "App",
     "CourseBuilder",
+    "LiveStreamHandle",
+    "StreamBuilder",
     "VideoBuilder",
     # config
     "AppConfig",
