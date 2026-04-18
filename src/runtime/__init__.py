@@ -7,6 +7,25 @@ Public API will expand as Stage 3..6 land. Stage 2 introduces the
 Workspace (file routing) and Store (state persistence) layers.
 """
 
+from runtime.errors import (
+    EngineError,
+    ErrorCategory,
+    ErrorInfo,
+    ErrorReporter,
+    PermanentEngineError,
+    TransientEngineError,
+)
+from runtime.progress import (
+    ProgressCallback,
+    ProgressEvent,
+    ProgressKind,
+)
+from runtime.protocol import (
+    Priority,
+    Processor,
+    Source,
+    VideoKey,
+)
 from runtime.store import (
     IncompatibleStoreError,
     JsonFileStore,
@@ -15,6 +34,10 @@ from runtime.store import (
     empty_course_data,
     empty_video_data,
     set_nested,
+)
+from runtime.usage import (
+    CompletionResult,
+    Usage,
 )
 from runtime.workspace import (
     SubDir,
@@ -29,6 +52,22 @@ from runtime.workspace import (
 )
 
 __all__ = [
+    # errors
+    "EngineError",
+    "ErrorCategory",
+    "ErrorInfo",
+    "ErrorReporter",
+    "PermanentEngineError",
+    "TransientEngineError",
+    # progress
+    "ProgressCallback",
+    "ProgressEvent",
+    "ProgressKind",
+    # protocol
+    "Priority",
+    "Processor",
+    "Source",
+    "VideoKey",
     # store
     "IncompatibleStoreError",
     "JsonFileStore",
@@ -37,6 +76,9 @@ __all__ = [
     "empty_course_data",
     "empty_video_data",
     "set_nested",
+    # usage
+    "CompletionResult",
+    "Usage",
     # workspace
     "SubDir",
     "SubDirSpec",
