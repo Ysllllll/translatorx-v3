@@ -34,6 +34,7 @@ from llm_ops import (
     OpenAICompatEngine,
     PreloadableTerms,
     TranslationContext,
+    build_frozen_messages,
     default_checker,
     get_default_system_prompt,
     translate_with_verify,
@@ -153,6 +154,16 @@ async def main() -> None:
     print("\n=== Step 3: 术语（翻译前一次性注入） ===")
     frozen_pairs = list(extracted.items())
     print_terms("🔖 frozen term pairs", frozen_pairs)
+
+    # 展示：20 条术语在送进 LLM 前被打包成的紧凑 few-shot 消息
+    # （primer + 2 个拼接对 = 6 条消息，而不是 40 条）。
+    compact = build_frozen_messages(tuple(frozen_pairs))
+    print(f"\n  ↓ 实际注入 LLM 的术语消息（紧凑形式，共 {len(compact)} 条）:")
+    for i, m in enumerate(compact):
+        content = m["content"]
+        if len(content) > 120:
+            content = content[:120] + " …"
+        print(f"    [{i}] {m['role']:9s} | {content}")
 
     print("\n=== Step 4: 逐条翻译 + 窗口观测 ===")
     for idx, src in enumerate(SOURCE_TEXTS, 1):

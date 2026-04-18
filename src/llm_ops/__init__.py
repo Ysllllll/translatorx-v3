@@ -15,6 +15,7 @@ from .context import (
     StaticTerms,
     TermsProvider,
     TranslationContext,
+    build_frozen_messages,
 )
 from .protocol import LLMEngine, Message
 from .prompts import get_default_system_prompt, register_default_prompt
@@ -46,6 +47,7 @@ __all__ = [
     "parse_terms_response",
     "ContextWindow",
     "TranslationContext",
+    "build_frozen_messages",
     # Translate
     "TranslateResult",
     "translate_with_verify",

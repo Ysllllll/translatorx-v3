@@ -95,14 +95,72 @@ class TestContextWindow:
         ]
 
     def test_frozen_pairs_come_first(self):
+        """Compact form: primer + concatenated pair, then dynamic history."""
         w = ContextWindow(size=4)
         w.add("dynamic", "动态")
         frozen = (("fixed_src", "fixed_tgt"),)
         msgs = w.build_messages(frozen_pairs=frozen)
-        assert msgs[0]["content"] == "fixed_src"
-        assert msgs[1]["content"] == "fixed_tgt"
-        assert msgs[2]["content"] == "dynamic"
-        assert msgs[3]["content"] == "动态"
+        # primer pair (0,1), concat pair (2,3), then history (4,5)
+        assert msgs[0]["role"] == "user"  # latex primer
+        assert "gamma" in msgs[1]["content"]
+        assert msgs[2]["content"] == "fixed_src"
+        assert msgs[3]["content"] == "fixed_tgt"
+        assert msgs[4]["content"] == "dynamic"
+        assert msgs[5]["content"] == "动态"
+
+    def test_frozen_pairs_non_compact_form(self):
+        """Opting out of compact_frozen emits one pair per term (legacy)."""
+        w = ContextWindow(size=4)
+        frozen = (("a", "A"), ("b", "B"))
+        msgs = w.build_messages(frozen_pairs=frozen, compact_frozen=False)
+        assert msgs == [
+            {"role": "user", "content": "a"},
+            {"role": "assistant", "content": "A"},
+            {"role": "user", "content": "b"},
+            {"role": "assistant", "content": "B"},
+        ]
+
+    def test_frozen_pairs_compact_concatenation(self):
+        """<8 term pairs: all concatenated into ONE user + ONE assistant message."""
+        w = ContextWindow(size=4)
+        frozen = (("t1", "译1"), ("t2", "译2"), ("t3", "译3"))
+        msgs = w.build_messages(frozen_pairs=frozen)
+        # msgs[0:2] primer, msgs[2:4] concat
+        assert msgs[2]["content"] == "t1, t2, t3"
+        assert msgs[3]["content"] == "译1，译2，译3"
+        assert len(msgs) == 4  # primer (2) + one concat pair (2)
+
+    def test_frozen_pairs_compact_split_when_large(self):
+        """>=8 term pairs: split into two batches (first 5, rest)."""
+        w = ContextWindow(size=4)
+        frozen = tuple((f"s{i}", f"t{i}") for i in range(10))
+        msgs = w.build_messages(frozen_pairs=frozen)
+        # primer (2) + 2 concat pairs (4) = 6
+        assert len(msgs) == 6
+        assert msgs[2]["content"] == "s0, s1, s2, s3, s4"
+        assert msgs[4]["content"] == "s5, s6, s7, s8, s9"
+
+    def test_bulk_eviction_keeps_prefix_stable(self):
+        """size=4 + evict_rate=0.5 → drops 2 pairs at once on overflow."""
+        w = ContextWindow(size=4, evict_rate=0.5)
+        for i in range(4):
+            w.add(f"s{i}", f"t{i}")
+        assert len(w) == 4
+        # Adding pair 5 triggers eviction of 2 pairs → left with 3
+        w.add("s4", "t4")
+        assert len(w) == 3
+        msgs = w.build_messages()
+        # Oldest two (s0, s1) are gone
+        assert msgs[0]["content"] == "s2"
+        assert msgs[4]["content"] == "s4"
+
+    def test_evict_rate_minimum_one(self):
+        """Very small size still evicts at least one pair on overflow."""
+        w = ContextWindow(size=1, evict_rate=0.5)  # int(0.5)=0 → clamp to 1
+        w.add("a", "A")
+        w.add("b", "B")
+        assert len(w) == 1
+        assert w.build_messages()[0]["content"] == "b"
 
     def test_clear(self):
         w = ContextWindow(size=4)
