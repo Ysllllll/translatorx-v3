@@ -8,6 +8,7 @@
   演示 priority feed + seek + async-context-manager
 * 场景 D (Resume/Cache): 再次运行 VideoBuilder — fingerprint 命中, 秒级返回
 * 场景 E (ErrorReporter): 自定义 reporter 收集运行期异常 (D-038)
+* 场景 F (MultiSpeaker): split_by_speaker 按说话人切句, 适合双语字幕/多嘉宾播客
 * 配置来自 inline dict — 无需写 YAML 文件 (也可用 ``App.from_config(path)`` / ``App.from_yaml(text)``)
 * 文件 ``kind`` 由后缀自动推断 (.srt / .json)
 
@@ -213,6 +214,46 @@ async def scenario_error_reporter(app: App, srt_path: Path) -> None:
         print(f"    - [{cat}] {code}")
 
 
+async def scenario_multi_speaker_stream(app: App) -> None:
+    """Live stream where the transcript carries speaker diarisation —
+    :meth:`StreamBuilder.split_by_speaker` makes sure sentence merging
+    never crosses a speaker boundary (so each translated record stays
+    within one speaker's turn)."""
+    print("\n=== Scenario F: multi-speaker stream (split_by_speaker) ===")
+    conversation = [
+        Segment(start=0.0, end=1.2, text="Hi,", speaker="A"),
+        Segment(start=1.2, end=2.5, text="how are you?", speaker="A"),
+        Segment(start=2.5, end=4.0, text="I'm good,", speaker="B"),
+        Segment(start=4.0, end=5.5, text="thanks for asking.", speaker="B"),
+        Segment(start=5.5, end=7.0, text="Great to hear!", speaker="A"),
+    ]
+
+    async with (
+        app.stream(course="demo-course", video="dialog", language="en")
+        .translate(src="en", tgt="zh")
+        .split_by_speaker(True)
+        .start()
+    ) as stream:
+
+        async def producer():
+            for seg in conversation:
+                await stream.feed(seg)
+
+        async def consumer():
+            async for rec in stream.records():
+                print(f"  [{rec.start:4.1f}-{rec.end:4.1f}] {rec.src_text}")
+                print(f"              -> {rec.translations.get('zh', '')}")
+
+        consumer_task = asyncio.create_task(consumer())
+        await producer()
+
+    await consumer_task
+    # With split_by_speaker=True we expect 3 records (A, B, A); without
+    # it the cross-speaker merger could have collapsed A's turns into
+    # one sentence together with B's.
+    print("  (split_by_speaker=True → turns never merged across speakers)")
+
+
 async def main() -> None:
     if not _llm_is_up():
         print(
@@ -238,6 +279,7 @@ async def main() -> None:
         await scenario_stream_builder(app)
         await scenario_resume_cache(app, srt1)
         await scenario_error_reporter(app, srt1)
+        await scenario_multi_speaker_stream(app)
 
         print("\n=== Store inspection ===")
         store_root = ws_root / "demo-course" / "zzz_translation"
