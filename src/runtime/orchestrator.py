@@ -13,14 +13,15 @@ Design refs
   never lost.
 * **D-060**: :class:`StreamingOrchestrator` builds on top of
   :class:`PushQueueSource` + :class:`asyncio.PriorityQueue` to support
-  ``feed(seg, priority)`` and ``seek(t)``. (Deferred to Stage 4.2.2.)
+  ``feed(seg, priority)`` and ``seek(t)``.
 
 Result types
 ------------
-Every ``run()`` returns a :class:`VideoResult` aggregating translated
-records, encountered failures, elapsed time, and a best-effort summary
-of stale-ids reported by downstream processors (so callers can drive
-:meth:`reprocess`).
+:meth:`VideoOrchestrator.run` returns a :class:`VideoResult` aggregating
+translated records, encountered failures, elapsed time, and stale-ids
+reported by downstream processors (so callers can drive
+:meth:`reprocess`). :meth:`StreamingOrchestrator.run` is an async
+generator yielding records as soon as processors emit them.
 """
 
 from __future__ import annotations
@@ -32,10 +33,11 @@ from dataclasses import dataclass, field
 from typing import AsyncIterator, Sequence
 
 from llm_ops import TranslationContext
-from model import SentenceRecord
+from model import SentenceRecord, Segment
 
 from runtime.errors import ErrorInfo, ErrorReporter
-from runtime.protocol import Processor, Source, VideoKey
+from runtime.protocol import Priority, Processor, Source, VideoKey
+from runtime.sources.push import PushQueueSource
 from runtime.store import Store
 
 logger = logging.getLogger(__name__)
@@ -71,6 +73,51 @@ class VideoResult:
 
 
 # ---------------------------------------------------------------------------
+# Internal helper — error-capture wrapper shared by both orchestrators
+# ---------------------------------------------------------------------------
+
+
+def _make_wrapper(
+    ctx: TranslationContext,
+    store: Store,
+    video_key: VideoKey,
+    failed: list[ErrorInfo],
+    reporter: ErrorReporter | None,
+):
+    async def _with_error_capture(
+        upstream: AsyncIterator[SentenceRecord],
+        proc: Processor[SentenceRecord, SentenceRecord],
+    ) -> AsyncIterator[SentenceRecord]:
+        seen: set[int] = set()
+        try:
+            async for rec in proc.process(
+                upstream, ctx=ctx, store=store, video_key=video_key
+            ):
+                errs = rec.extra.get("errors") if rec.extra else None
+                if isinstance(errs, list):
+                    for info in errs:
+                        if not isinstance(info, ErrorInfo):
+                            continue
+                        if info.processor != proc.name:
+                            continue
+                        marker = id(info)
+                        if marker in seen:
+                            continue
+                        seen.add(marker)
+                        failed.append(info)
+                        if reporter is not None:
+                            try:
+                                reporter.report(info, rec, {"video_key": video_key})
+                            except Exception:  # noqa: BLE001
+                                logger.exception("error_reporter.report raised")
+                yield rec
+        finally:
+            await asyncio.shield(proc.aclose())
+
+    return _with_error_capture
+
+
+# ---------------------------------------------------------------------------
 # VideoOrchestrator (batch mode)
 # ---------------------------------------------------------------------------
 
@@ -88,31 +135,6 @@ class VideoOrchestrator:
             video_key=VideoKey(course="c1", video="lec1"),
         )
         result = await orch.run()
-
-    The orchestrator owns **no pipeline-level state** between runs —
-    each call to :meth:`run` creates a fresh async-generator chain. It
-    does collect per-run aggregates (``failed``, ``stale_ids``) and
-    exposes them on :class:`VideoResult`.
-
-    Parameters
-    ----------
-    source:
-        Front of the chain; must yield :class:`SentenceRecord` with
-        ``extra["id"]`` set (built-in sources do this automatically).
-    processors:
-        Ordered list of :class:`Processor` instances. Output of the
-        previous one is piped into the next.
-    ctx:
-        :class:`TranslationContext` shared with every processor (side
-        channel per D-067).
-    store:
-        :class:`Store` used by processors for buffered ``patch_video``.
-    video_key:
-        Addressing key forwarded to every ``process()`` call.
-    error_reporter:
-        Optional :class:`ErrorReporter`; if given, failures observed
-        during the run are forwarded in addition to being included in
-        ``VideoResult.failed``.
     """
 
     def __init__(
@@ -134,55 +156,16 @@ class VideoOrchestrator:
         self._video_key = video_key
         self._error_reporter = error_reporter
 
-    # ---- public API --------------------------------------------------
-
     async def run(self) -> VideoResult:
-        """Drive the full chain and return a :class:`VideoResult`."""
         start = time.monotonic()
         failed: list[ErrorInfo] = []
+        wrap = _make_wrapper(
+            self._ctx, self._store, self._video_key, failed, self._error_reporter
+        )
 
-        async def _with_error_capture(
-            upstream: AsyncIterator[SentenceRecord],
-            proc: Processor[SentenceRecord, SentenceRecord],
-        ) -> AsyncIterator[SentenceRecord]:
-            seen: set[int] = set()
-            try:
-                async for rec in proc.process(
-                    upstream,
-                    ctx=self._ctx,
-                    store=self._store,
-                    video_key=self._video_key,
-                ):
-                    # Harvest any new ErrorInfo this processor attached.
-                    # ``record.extra["errors"]`` is a list, most recent last
-                    # (D-035 / D-038).
-                    errs = rec.extra.get("errors") if rec.extra else None
-                    if isinstance(errs, list):
-                        for info in errs:
-                            if not isinstance(info, ErrorInfo):
-                                continue
-                            if info.processor != proc.name:
-                                continue
-                            marker = id(info)
-                            if marker in seen:
-                                continue
-                            seen.add(marker)
-                            failed.append(info)
-                            if self._error_reporter is not None:
-                                try:
-                                    self._error_reporter.report(
-                                        info, rec, {"video_key": self._video_key}
-                                    )
-                                except Exception:  # noqa: BLE001
-                                    logger.exception("error_reporter.report raised")
-                    yield rec
-            finally:
-                await asyncio.shield(proc.aclose())
-
-        # Build the chain: source -> p1 -> p2 -> ... -> pn.
         stream: AsyncIterator[SentenceRecord] = self._source.read()
         for proc in self._processors:
-            stream = _with_error_capture(stream, proc)
+            stream = wrap(stream, proc)
 
         records: list[SentenceRecord] = []
         try:
@@ -196,7 +179,6 @@ class VideoOrchestrator:
             )
             raise
 
-        # Compute stale_ids by polling every processor (D-003 / D-067).
         stale: set[int] = set()
         for rec in records:
             rid = rec.extra.get("id") if rec.extra else None
@@ -207,16 +189,186 @@ class VideoOrchestrator:
                     stale.add(rid)
                     break
 
-        elapsed = time.monotonic() - start
         return VideoResult(
             records=records,
             stale_ids=tuple(sorted(stale)),
             failed=tuple(failed),
-            elapsed_s=elapsed,
+            elapsed_s=time.monotonic() - start,
         )
 
 
+# ---------------------------------------------------------------------------
+# StreamingOrchestrator (live / browser-plugin mode)
+# ---------------------------------------------------------------------------
+
+
+_PUMP_SENTINEL = object()
+
+
+class StreamingOrchestrator:
+    """Priority-queue driven orchestrator for live streams (D-060).
+
+    Semantics
+    ---------
+    * :meth:`feed` enqueues a raw :class:`Segment` with an optional
+      :class:`Priority`. A background pump task drains the priority
+      queue and forwards segments into an internal
+      :class:`PushQueueSource` that backs the processor chain.
+    * :meth:`seek` takes a playback position and re-orders the pending
+      priority queue by ``abs(segment.start - t)`` within each priority
+      tier, so in-flight work is redirected toward the viewer's focus.
+    * :meth:`close` stops accepting new items and flushes remaining
+      buffers; :meth:`run` is an async generator that completes when
+      the chain drains after close.
+    * On cancellation the pump task is cancelled and every processor's
+      ``aclose`` is shielded (D-045).
+
+    Reprocess / stale-triggered rerun is deferred to the App layer —
+    it is expected to re-:meth:`feed` the underlying segments with
+    :attr:`Priority.HIGH`. Processor fingerprinting (D-043) ensures
+    skip-on-match on the retranslate path.
+    """
+
+    def __init__(
+        self,
+        *,
+        language: str,
+        processors: Sequence[Processor[SentenceRecord, SentenceRecord]],
+        ctx: TranslationContext,
+        store: Store,
+        video_key: VideoKey,
+        split_by_speaker: bool = False,
+        id_start: int = 0,
+        error_reporter: ErrorReporter | None = None,
+    ) -> None:
+        if not processors:
+            raise ValueError("processors must not be empty")
+        self._processors = tuple(processors)
+        self._ctx = ctx
+        self._store = store
+        self._video_key = video_key
+        self._error_reporter = error_reporter
+
+        self._source = PushQueueSource(
+            language, split_by_speaker=split_by_speaker, id_start=id_start
+        )
+        self._pq: asyncio.PriorityQueue = asyncio.PriorityQueue()
+        self._seq = 0
+        self._closed = False
+        self._pump_task: asyncio.Task | None = None
+        self._failed: list[ErrorInfo] = []
+        self._started = False
+
+    # ---- public API --------------------------------------------------
+
+    async def feed(
+        self, segment: Segment, *, priority: Priority = Priority.NORMAL
+    ) -> None:
+        """Push a segment onto the priority queue."""
+        if self._closed:
+            raise RuntimeError("StreamingOrchestrator is closed")
+        self._seq += 1
+        await self._pq.put((int(priority), self._seq, segment))
+
+    async def seek(self, t: float) -> None:
+        """Re-sort pending queue by distance to playback position *t*.
+
+        Items in a higher priority class still outrank lower ones.
+        Within the same priority tier, items closer to ``t`` come first.
+        Sentinel (close) items are preserved at the tail.
+        """
+        items: list[tuple[int, int, object]] = []
+        while not self._pq.empty():
+            items.append(self._pq.get_nowait())
+
+        def score(it):
+            prio, seq, seg = it
+            if seg is _PUMP_SENTINEL or not isinstance(seg, Segment):
+                return (prio, float("inf"), seq)
+            return (prio, abs(seg.start - t), seq)
+
+        items.sort(key=score)
+        # Re-enqueue with fresh sequence numbers so the PriorityQueue
+        # preserves the sorted order (it ties-breaks by the tuple's
+        # second element, which is the sequence).
+        for prio, _old_seq, seg in items:
+            self._seq += 1
+            await self._pq.put((prio, self._seq, seg))
+
+    async def close(self) -> None:
+        """Signal end-of-stream; the pump will flush and terminate."""
+        if self._closed:
+            return
+        self._closed = True
+        self._seq += 1
+        # Sentinel has the lowest priority so genuine items drain first.
+        await self._pq.put((Priority.LOW + 1000, self._seq, _PUMP_SENTINEL))
+
+    @property
+    def failed(self) -> tuple[ErrorInfo, ...]:
+        """Errors collected so far during :meth:`run`."""
+        return tuple(self._failed)
+
+    async def run(self) -> AsyncIterator[SentenceRecord]:
+        """Async generator: yield records as processors emit them.
+
+        Caller concurrently awaits :meth:`feed` / :meth:`seek` /
+        :meth:`close`. Terminates after :meth:`close` has been called
+        and the pipeline drains.
+        """
+        if self._started:
+            raise RuntimeError("StreamingOrchestrator.run may only be called once")
+        self._started = True
+
+        self._pump_task = asyncio.create_task(self._pump(), name="streamorch-pump")
+        wrap = _make_wrapper(
+            self._ctx, self._store, self._video_key, self._failed, self._error_reporter
+        )
+
+        try:
+            stream: AsyncIterator[SentenceRecord] = self._source.read()
+            for proc in self._processors:
+                stream = wrap(stream, proc)
+            async for rec in stream:
+                yield rec
+        finally:
+            if self._pump_task is not None and not self._pump_task.done():
+                self._pump_task.cancel()
+                try:
+                    await asyncio.shield(self._pump_task)
+                except (asyncio.CancelledError, BaseException):
+                    pass
+
+    # ---- internals ---------------------------------------------------
+
+    async def _pump(self) -> None:
+        """Drain the priority queue into the underlying PushQueueSource."""
+        try:
+            while True:
+                _, _, item = await self._pq.get()
+                if item is _PUMP_SENTINEL:
+                    await self._source.close()
+                    return
+                assert isinstance(item, Segment)
+                await self._source.feed(item)
+        except asyncio.CancelledError:
+            # Cancellation path — make sure downstream can terminate.
+            with _suppress():
+                await self._source.close()
+            raise
+
+
+class _suppress:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return True
+
+
 __all__ = [
+    "StreamingOrchestrator",
     "VideoOrchestrator",
     "VideoResult",
 ]
+
