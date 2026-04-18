@@ -124,18 +124,23 @@ class Processor(Protocol[In_contra, Out_co]):
          state such as :class:`ContextWindow`) → yield the record
          unchanged.
       2. Else → compute → return a *replaced* record with the new field
-         filled + ``extra["ctx_version"] = ctx.version`` → append to an
-         internal flush buffer → emit ``store.patch_video(...)`` when
-         the buffer reaches 100 entries or 60s elapsed (D-044 L1) →
-         yield the replaced record.
+         filled (processor-specific markers such as
+         ``extra["terms_ready_at_translate"]`` for TranslateProcessor) →
+         append to an internal flush buffer → emit
+         ``store.patch_video(...)`` when the buffer reaches 100 entries
+         or 60s elapsed (D-044 L1) → yield the replaced record.
       3. In ``finally``, ``await asyncio.shield(self._flush())`` and
          ``await asyncio.shield(self.aclose())`` (D-045).
 
     * ``output_is_stale(rec)`` is the hook :class:`RecordStream` calls
-      when building ``stale_ids``. Default semantics (Stage 3.2
-      base class will implement): ``rec.extra.get("ctx_version", -1) <
-      self._ctx.version``. A processor may override for domain-specific
-      staleness (e.g. TTS goes stale when ``translations`` changes).
+      when building ``stale_ids``. Default semantics (Stage 3.2 base
+      class) is ``return False`` — only processors that participate in
+      the one-shot TermsProvider ready-transition override it. For
+      :class:`TranslateProcessor` the canonical predicate is
+      ``terms_provider.ready and not rec.extra.get(
+      "terms_ready_at_translate", False)``. Per Phase 2.1 the terms
+      state machine has exactly two states (False→True once), so no
+      integer version counter is needed.
     * ``aclose()`` releases resources (HTTP sessions, temp files). Must
       be idempotent; framework invokes it once per run in ``finally``.
     """
