@@ -16,6 +16,7 @@ from runtime.errors import (
     PermanentEngineError,
     TransientEngineError,
 )
+from runtime.processors import TranslateProcessor
 from runtime.progress import (
     ProgressCallback,
     ProgressEvent,
@@ -68,6 +69,8 @@ from runtime.workspace import (
 __all__ = [
     # base
     "ProcessorBase",
+    # processors
+    "TranslateProcessor",
     # errors
     "EngineError",
     "ErrorCategory",
