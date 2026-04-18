@@ -225,80 +225,238 @@ def section_1_checker_matrix() -> None:
 # Section 2 — Direct-translate dict 旁路（纯本地）
 # ═══════════════════════════════════════════════════════════════════════
 
-def section_2_direct_translate() -> None:
-    header("Section 2 — 流水线旁路机制（不需要 LLM）")
+async def section_2_bypasses() -> None:
+    header("Section 2 — 流水线旁路机制（真实 TranslateProcessor + Store）")
     print(
-        "  TranslateProcessor 在调用 LLM 之前会走一系列旁路判断；命中任何\n"
-        "  一条都跳过 LLM。这里展示旧 TranslatorX 保留下来的三种旁路：\n"
-        "    2a  direct_translate dict — 短语字典命中 → 直接返回\n"
-        "    2b  fake_process         — 已有译文（缓存/人工）→ 直接复用\n"
-        "    2c  max_source_len skip  — 源文本过长 → 放弃翻译，原样或空串"
+        "  本节完整跑通 runtime 层:  Workspace → JsonFileStore → TranslateProcessor。\n"
+        "  三条旁路（direct_translate / fingerprint-cache / max_source_len）\n"
+        "  都用真实 processor.process() 走一遍，并把源文本混合成 direct+LLM+\n"
+        "  skip 的复杂组合，便于观察 per-record 命中分布。\n"
+        "  跑完之后打印 workspace 目录树 + zzz_translation/*.json 原始内容。"
     )
 
-    # ── 2a direct_translate
-    sub("2a  direct_translate dict")
-    direct_translate: dict[str, str] = {
-        "ok": "好的",
-        "yeah": "是的",
-        "um": "嗯",
-        "thanks": "谢谢",
-        "welcome back": "欢迎回来",
-    }
-    samples_2a = [
-        "ok", "Thanks", "um", "let's train a model",
-        "welcome back", "please subscribe", "yeah",
-    ]
-    for src in samples_2a:
-        key = src.strip().lower()
-        if key in direct_translate:
-            print(f"    ✓ direct  {src!r:30s} → {direct_translate[key]!r}  (LLM skipped)")
-        else:
-            print(f"    → LLM     {src!r:30s} (fall through to model)")
+    import json as _json
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+    from dataclasses import replace as _replace
 
-    # ── 2b fake_process —— 已有译文直接复用
-    sub("2b  fake_process — 已存在译文直接复用（缓存/人工复核场景）")
-    print(
-        "    场景：Store 已有前一轮翻译结果 / 人工复核填好 translation，\n"
-        "    TranslateProcessor 检测到 record.translation 非空 → 直接跳过\n"
-        "    LLM 调用，但仍然把 (src, tgt) 作为 few-shot 灌入 window，\n"
-        "    保持后续新句子的上下文一致性。"
-    )
-    existing_records = [
-        {"src": "Gradient descent minimizes the loss.", "tgt": "梯度下降最小化损失。"},
-        {"src": "Adam is an adaptive optimizer.",       "tgt": None},  # 无译文 → 走 LLM
-        {"src": "The learning rate is 0.001.",          "tgt": "学习率为 0.001。"},
-        {"src": "We regularize with weight decay.",     "tgt": ""},  # 空串 → 走 LLM
-    ]
-    for rec in existing_records:
-        src, tgt = rec["src"], rec["tgt"]
-        if tgt:
-            print(f"    ✓ fake    {src!r:45s} → {tgt!r}  (window-fed, LLM skipped)")
-        else:
-            print(f"    → LLM     {src!r:45s} (translation empty, fall through)")
+    from model import SentenceRecord
+    from runtime.processors import TranslateProcessor
+    from runtime.processors.prefix import TranslateNodeConfig
+    from runtime.protocol import VideoKey
+    from runtime.store import JsonFileStore
+    from runtime.workspace import Workspace
 
-    # ── 2c max_source_len skip
-    sub("2c  max_source_len skip — 超长源文本放弃翻译")
-    print(
-        "    场景：某条字幕被 ASR 误粘到 500+ 字符（常见于切分错误），\n"
-        "    LLM 容易漏翻或跑飞。TranslateProcessor 设置 max_source_len\n"
-        "    阈值；超过即跳过，返回空串或源文本，交由后续人工修正。"
-    )
-    max_source_len = 120
-    cases_2c = [
-        "Hello world.",
-        "Gradient descent minimizes the loss function iteratively over many steps.",
-        ("Sometimes the ASR system glues many sentences together without "
-         "punctuation and we get this absurdly long run-on text which is "
-         "basically unusable for LLM translation because attention gets "
-         "diluted and the model tends to drop half the content entirely, "
-         "so we skip instead of risking a hallucinated shortcut."),
-    ]
-    for src in cases_2c:
-        L = len(src)
-        if L > max_source_len:
-            print(f"    ⚠ skip    len={L:>4d} > {max_source_len}  {_truncate(src, 70)!r}")
-        else:
-            print(f"    → LLM     len={L:>4d} ≤ {max_source_len}  {_truncate(src, 70)!r}")
+    class _FakeTranslator:
+        """Fake engine that returns a deterministic translation per call.
+
+        We count calls to verify which records hit LLM vs bypassed.
+        """
+
+        def __init__(self, tag: str = "fake-zh-v1") -> None:
+            self.calls = 0
+            self.model = tag
+            self.log: list[tuple[str, str]] = []
+
+        async def complete(self, messages, **_):
+            self.calls += 1
+            src = messages[-1]["content"]
+            out = f"【译·{self.model}】{src}"
+            self.log.append((src, out))
+            return CompletionResult(text=out, usage=Usage())
+
+        async def stream(self, messages, **_):
+            yield (await self.complete(messages)).text
+
+    class _PassChecker(Checker):
+        def __init__(self) -> None:
+            super().__init__(rules=[])
+
+        def check(self, _src, _tgt, _profile=None):
+            return CheckReport(issues=[])
+
+    def _ctx() -> TranslationContext:
+        return TranslationContext(
+            source_lang="en", target_lang="zh",
+            terms_provider=StaticTerms({}), window_size=4,
+        )
+
+    def _rec(rid: int, text: str, **extra):
+        base = {"id": rid, **extra}
+        return SentenceRecord(src_text=text, start=float(rid), end=float(rid) + 1.0, extra=base)
+
+    async def _run(proc, recs, store, vkey):
+        async def src():
+            for r in recs:
+                yield r
+
+        out = []
+        async for r in proc.process(src(), ctx=_ctx(), store=store, video_key=vkey):
+            out.append(r)
+        return out
+
+    def _classify(rec: SentenceRecord) -> str:
+        """Mark how a record was resolved, inferring from translation value."""
+        tgt = rec.translations.get("zh", "")
+        if not tgt:
+            return "EMPTY"
+        if tgt.startswith("【译·"):
+            return "LLM "
+        if tgt == rec.src_text:
+            return "SKIP"
+        return "DIRECT"
+
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        ws = Workspace(root=root, course="ml_101")
+        store = JsonFileStore(ws)
+
+        # ─── 2a direct_translate 混合 LLM 兜底 ────────────────────────────
+        sub("2a  direct_translate 字典命中 + LLM 兜底（混合场景）")
+        print(
+            "    6 条句子：4 条命中字典 → 0 LLM call；\n"
+            "    2 条未命中 → 正常走 LLM。验证字典只是短路逻辑，不是全封顶。"
+        )
+        vkey_a = VideoKey(course="ml_101", video="lec01_intro")
+        eng_a = _FakeTranslator("fake-a")
+        cfg_a = TranslateNodeConfig(direct_translate={
+            "ok": "好的", "yeah": "是的", "um": "嗯",
+            "thanks": "谢谢", "welcome back": "欢迎回来",
+        })
+        proc_a = TranslateProcessor(eng_a, _PassChecker(), config=cfg_a)
+        inputs_a = [
+            _rec(0, "ok"),
+            _rec(1, "Thanks"),
+            _rec(2, "Today we're talking about gradient descent."),
+            _rec(3, "um"),
+            _rec(4, "The optimizer minimizes the loss function."),
+            _rec(5, "welcome back"),
+        ]
+        out_a = await _run(proc_a, inputs_a, store, vkey_a)
+        for r in out_a:
+            kind = _classify(r)
+            print(f"    [{kind}] id={r.extra['id']}  {_truncate(r.src_text, 48)!r:52s} → {_truncate(r.translations.get('zh', '∅'), 30)!r}")
+        direct_hits = sum(1 for r in out_a if _classify(r) == "DIRECT")
+        llm_hits = sum(1 for r in out_a if _classify(r) == "LLM ")
+        print(f"    ⇒ direct={direct_hits}  llm={llm_hits}  engine.calls={eng_a.calls}")
+        assert direct_hits == 4 and eng_a.calls == 2
+
+        # ─── 2b fingerprint cache：三次 run 观察命中 / 失效 ────────────────
+        sub("2b  fingerprint 缓存 — 三次 run 观察命中 → 命中 → 失效重算")
+        print(
+            "    Run1: 全新 store → 全部走 LLM，写入 translations + fingerprint\n"
+            "    Run2: 同 processor 同记录 → fingerprint 匹配 → 全部跳过 LLM\n"
+            "    Run3: 改 system_prompt → fingerprint 变化 → 全部重翻"
+        )
+        vkey_b = VideoKey(course="ml_101", video="lec02_optimizers")
+        eng_b = _FakeTranslator("fake-b")
+        cfg_b1 = TranslateNodeConfig(system_prompt="You translate ML tutorials. v1")
+        proc_b1 = TranslateProcessor(eng_b, _PassChecker(), config=cfg_b1)
+        inputs_b = [
+            _rec(0, "SGD uses a single mini-batch per step."),
+            _rec(1, "Momentum accumulates past gradients."),
+            _rec(2, "Adam combines momentum with RMSProp."),
+            _rec(3, "Weight decay is L2 regularization."),
+            _rec(4, "The learning rate schedule matters a lot."),
+        ]
+
+        n_before = eng_b.calls
+        await _run(proc_b1, inputs_b, store, vkey_b)
+        run1_delta = eng_b.calls - n_before
+        print(f"    Run1  engine.calls +{run1_delta}  (全部新翻，应为 5)")
+
+        # Run 2: feed ORIGINAL inputs (no translations), processor reads
+        # store for translations + compares fingerprint → cache hit.
+        n_before = eng_b.calls
+        out_b2 = await _run(proc_b1, inputs_b, store, vkey_b)
+        run2_delta = eng_b.calls - n_before
+        cached_zh = [r.translations.get("zh", "") for r in out_b2]
+        print(f"    Run2  engine.calls +{run2_delta}  (fingerprint 命中，应为 0)")
+        print(f"          cached[0] = {_truncate(cached_zh[0], 60)!r}")
+        assert run2_delta == 0
+
+        # Run 3: change system_prompt → fingerprint changes → re-translate all
+        cfg_b2 = TranslateNodeConfig(system_prompt="You translate ML tutorials. v2 — concise")
+        proc_b2 = TranslateProcessor(eng_b, _PassChecker(), config=cfg_b2)
+        assert proc_b1.fingerprint() != proc_b2.fingerprint()
+        n_before = eng_b.calls
+        await _run(proc_b2, inputs_b, store, vkey_b)
+        run3_delta = eng_b.calls - n_before
+        print(f"    Run3  engine.calls +{run3_delta}  (fingerprint 失效，应为 5)")
+        assert run3_delta == 5
+
+        # ─── 2c max_source_len skip + direct + LLM 三者混合 ────────────────
+        sub("2c  max_source_len skip + direct_translate + LLM（三路混合）")
+        print(
+            "    5 条字幕：1 direct 命中、2 普通长度走 LLM、2 超长被 skip。\n"
+            "    skip 的 translation 字段应保留原文或空，方便后续人工修正。"
+        )
+        vkey_c = VideoKey(course="ml_101", video="lec03_messy_asr")
+        eng_c = _FakeTranslator("fake-c")
+        long_a = (
+            "Sometimes the ASR glues many sentences together without "
+            "punctuation and we get this absurdly long run-on text which "
+            "is basically unusable for LLM translation because attention "
+            "gets diluted and the model drops half the content entirely."
+        )
+        long_b = (
+            "Another pathological transcript where forty seconds of speech "
+            "collapses into one paragraph due to a broken VAD threshold, "
+            "with three different speakers overlapping and the whisper "
+            "decoder hallucinating extra clauses that were never spoken."
+        )
+        cfg_c = TranslateNodeConfig(
+            max_source_len=120,
+            direct_translate={"hello.": "你好。"},
+        )
+        proc_c = TranslateProcessor(eng_c, _PassChecker(), config=cfg_c)
+        inputs_c = [
+            _rec(0, "Hello."),
+            _rec(1, "The loss decreased steadily."),
+            _rec(2, long_a),
+            _rec(3, "We trained for 100 epochs."),
+            _rec(4, long_b),
+        ]
+        out_c = await _run(proc_c, inputs_c, store, vkey_c)
+        for r in out_c:
+            kind = _classify(r)
+            L = len(r.src_text)
+            print(f"    [{kind}] id={r.extra['id']}  len={L:>3d}  → {_truncate(r.translations.get('zh', '∅'), 55)!r}")
+        print(f"    ⇒ engine.calls = {eng_c.calls}  (应为 2：两条正常长度的)")
+        assert eng_c.calls == 2
+
+        # ─── 打印 workspace 目录树 ────────────────────────────────────────
+        sub("📁  Workspace 目录结构（JsonFileStore 写入后）")
+        print(f"    root = {root}")
+        for p in sorted(root.rglob("*")):
+            rel = p.relative_to(root)
+            depth = len(rel.parts) - 1
+            indent = "    " + "  " * depth
+            suffix = "/" if p.is_dir() else ""
+            size = f"  ({p.stat().st_size} B)" if p.is_file() else ""
+            print(f"{indent}├─ {rel.parts[-1]}{suffix}{size}")
+
+        # ─── 展示 zzz_translation/*.json 的实际内容 ───────────────────────
+        sub("📜  zzz_translation/*.json 内容（Store 的物理落盘）")
+        tx_dir = root / "ml_101" / "zzz_translation"
+        for jp in sorted(tx_dir.glob("*.json")):
+            print(f"    ── {jp.name} " + "─" * (60 - len(jp.name)))
+            data = _json.loads(jp.read_text(encoding="utf-8"))
+            # Compact top-level view: show meta + first 2 records.
+            meta = data.get("meta", {})
+            recs = data.get("records") or data.get("sentences") or []
+            print(f"      schema_version: {data.get('schema_version')}")
+            print(f"      meta._fingerprints: {meta.get('_fingerprints')}")
+            print(f"      records: {len(recs)} 条")
+            for r in recs[:2]:
+                rid = r.get("id")
+                tgt = _truncate((r.get("translations") or {}).get("zh", ""), 50)
+                extra = r.get("extra", {})
+                print(f"        • id={rid}  zh={tgt!r}")
+                if extra:
+                    print(f"          extra={extra}")
+            if len(recs) > 2:
+                print(f"        … +{len(recs) - 2} more records")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -679,7 +837,7 @@ async def main() -> None:
 
     # 纯本地：永远运行
     section_1_checker_matrix()
-    section_2_direct_translate()
+    await section_2_bypasses()
 
     # 需 LLM
     if alive:
