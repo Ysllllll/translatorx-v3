@@ -58,18 +58,30 @@ SOURCE_TEXTS: list[str] = [
 ]
 
 
-# ── 工具：漂亮打印一条 messages 序列 ────────────────────────────────────
+# ── 工具：简短显示 (src -> tgt) 对 ────────────────────────────────────
 
-def print_messages(label: str, messages: list[dict]) -> None:
-    print(f"\n  ── {label} (共 {len(messages)} 条) ──")
-    for i, msg in enumerate(messages):
-        role = msg["role"]
-        content = msg["content"]
-        # 折行显示，截断过长内容
-        if len(content) > 200:
-            content = content[:200] + " …"
-        marker = {"system": "🧭", "user": "👤", "assistant": "🤖"}.get(role, "•")
-        print(f"  [{i:2d}] {marker} {role:9s} | {content}")
+def _truncate(text: str, limit: int = 80) -> str:
+    text = text.replace("\n", " ")
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def print_terms(title: str, pairs: list[tuple[str, str]]) -> None:
+    print(f"\n  {title} (共 {len(pairs)} 条)")
+    for src, tgt in pairs:
+        print(f"    • {src}  →  {tgt}")
+
+
+def print_window(window: ContextWindow) -> None:
+    if len(window) == 0:
+        print("    (空)")
+        return
+    # _history is private; use build_messages() which returns pairs as role messages.
+    pairs = window.build_messages()
+    for i in range(0, len(pairs), 2):
+        src = _truncate(pairs[i]["content"])
+        tgt = _truncate(pairs[i + 1]["content"])
+        print(f"    [{i // 2}] {src}")
+        print(f"        ↳ {tgt}")
 
 
 async def check_llm_alive(base_url: str) -> bool:
@@ -137,36 +149,36 @@ async def main() -> None:
     for line in resolved_prompt.splitlines():
         print(f"  │ {line}")
 
-    # ── 5. 逐条翻译，翻译前打印完整 messages ───────────────────────
-    print("\n=== Step 3: 逐条翻译 + 上下文观测 ===")
+    # ── 5. 逐条翻译：观测 terms (一次) + window (每次) + 结果 ─────
+    print("\n=== Step 3: 术语（翻译前一次性注入） ===")
+    frozen_pairs = list(extracted.items())
+    print_terms("🔖 frozen term pairs", frozen_pairs)
 
-    frozen_pairs = tuple(extracted.items())
-
+    print("\n=== Step 4: 逐条翻译 + 窗口观测 ===")
     for idx, src in enumerate(SOURCE_TEXTS, 1):
         print("\n" + "─" * 72)
         print(f"[#{idx}/{len(SOURCE_TEXTS)}] SRC: {src}")
 
-        # 1) 预演：即将送给 LLM 的完整 messages
-        preview = [{"role": "system", "content": resolved_prompt}]
-        preview.extend(window.build_messages(frozen_pairs))
-        preview.append({"role": "user", "content": src})
-        print_messages(f"about to send (window={len(window)}, frozen={len(frozen_pairs)})", preview)
+        # 翻译前：当前滑动窗口（不含本次）
+        print(f"\n  📜 window BEFORE translate  (size cap={window.size}, 当前={len(window)}):")
+        print_window(window)
 
-        # 2) 真正调用 translate_with_verify（会自己再构造一次相同的 messages）
+        # 调用 translate_with_verify（内部会使用 frozen + window 拼 messages）
         result = await translate_with_verify(src, engine, context, checker, window)
 
+        # 翻译结果
         print(f"\n  ✅ TRANSLATION: {result.translation}")
         print(f"     attempts={result.attempts} accepted={result.accepted} "
               f"passed={result.report.passed}")
 
+        # 翻译后：窗口更新（被追加了本次 src/tgt）
+        print(f"\n  📜 window AFTER  translate  (当前={len(window)}):")
+        print_window(window)
+
     # ── 6. 最终窗口快照 ───────────────────────────────────────────
     print("\n" + "=" * 72)
     print(f"最终窗口积累 (size={window.size}, 实际={len(window)}):")
-    for i, msg in enumerate(window.build_messages()):
-        content = msg["content"]
-        if len(content) > 120:
-            content = content[:120] + " …"
-        print(f"  [{i:2d}] {msg['role']:9s} | {content}")
+    print_window(window)
 
 
 if __name__ == "__main__":
