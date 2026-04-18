@@ -48,6 +48,12 @@ from runtime.resource_manager import (
     UserTier,
 )
 from runtime.orchestrator import StreamingOrchestrator, VideoOrchestrator, VideoResult
+from runtime.course import (
+    CourseOrchestrator,
+    CourseResult,
+    ProcessorsFactory,
+    VideoSpec,
+)
 from runtime.sources import (
     PushQueueSource,
     SrtSource,
@@ -118,6 +124,11 @@ __all__ = [
     "StreamingOrchestrator",
     "VideoOrchestrator",
     "VideoResult",
+    # course
+    "CourseOrchestrator",
+    "CourseResult",
+    "ProcessorsFactory",
+    "VideoSpec",
     # sources
     "PushQueueSource",
     "SrtSource",
