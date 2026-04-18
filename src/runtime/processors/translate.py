@@ -195,8 +195,11 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         target = ctx.target_lang
         fp = self.fingerprint()
 
-        # Load existing video meta once to learn whether the cached
-        # translations are fingerprint-compatible (D-043 R4).
+        # Load existing video meta + records once to learn whether the
+        # cached translations are fingerprint-compatible (D-043 R4) and
+        # to hydrate upstream records with their persisted translations
+        # (otherwise Source emits fresh records with empty ``translations``
+        # and the cache-hit branch below is unreachable).
         existing = await store.load_video(video_key.video)
         existing_meta = existing.get("meta", {}) if isinstance(existing, dict) else {}
         existing_fps = (
@@ -205,6 +208,12 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             else {}
         )
         fp_matches = existing_fps.get(self.name) == fp
+        stored_by_id: dict[int, dict[str, Any]] = {}
+        if fp_matches and isinstance(existing, dict):
+            for stored in existing.get("records", []) or []:
+                rid = stored.get("id") if isinstance(stored, dict) else None
+                if isinstance(rid, int):
+                    stored_by_id[rid] = stored
 
         window = ContextWindow(ctx.window_size)
         buffer: dict[int, dict[str, Any]] = {}
@@ -220,6 +229,15 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         try:
             async for rec in upstream:
                 rec_id = rec.extra.get("id")
+
+                # Hydrate from store: merge persisted translations into the
+                # upstream record so the cache-hit check below can fire.
+                if isinstance(rec_id, int) and rec_id in stored_by_id:
+                    stored = stored_by_id[rec_id]
+                    stored_tr = stored.get("translations") if isinstance(stored, dict) else None
+                    if isinstance(stored_tr, dict) and stored_tr:
+                        merged_tr = {**stored_tr, **rec.translations}
+                        rec = replace(rec, translations=merged_tr)
 
                 # 1. cache hit — fingerprint matches and translation present
                 if (

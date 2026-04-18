@@ -180,6 +180,41 @@ class TestHitPath:
         assert [r.translations["zh"] for r in out] == ["你好。", "再见。"]
 
     @pytest.mark.asyncio
+    async def test_hit_hydrates_from_store_records(self, store, video_key):
+        """Round-2 scenario: upstream Source emits records with empty
+        ``translations`` (like :class:`SrtSource`). The processor must
+        hydrate them from the persisted ``records[]`` so the cache-hit
+        branch fires — otherwise every rerun re-pays the LLM cost.
+        """
+        engine = _RecordingEngine()
+        proc = TranslateProcessor(engine, _PassChecker())
+
+        # Seed the store as if a previous run had completed: records
+        # persisted + fingerprint stamped.
+        await store.patch_video(
+            video_key.video,
+            records={
+                0: {"translations.zh": "你好。"},
+                1: {"translations.zh": "再见。"},
+            },
+            meta={"_fingerprints": {"translate": proc.fingerprint()}},
+        )
+
+        # Upstream now emits *fresh* records (empty translations) — what
+        # SrtSource does in practice.
+        recs = [_rec(0, "Hello."), _rec(1, "Bye.")]
+
+        async def src():
+            for r in recs:
+                yield r
+
+        out = await _drain(
+            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
+        )
+        assert engine.calls == 0
+        assert [r.translations["zh"] for r in out] == ["你好。", "再见。"]
+
+    @pytest.mark.asyncio
     async def test_miss_when_fingerprint_mismatch(self, store, video_key):
         engine = _RecordingEngine()
         proc = TranslateProcessor(engine, _PassChecker())
