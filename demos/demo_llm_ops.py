@@ -1,37 +1,101 @@
-"""llm_ops — LLM 翻译引擎和上下文管理演示。
+"""llm_ops — LLM 翻译引擎 + 术语摘要 + 上下文观测演示。
 
-展示 EngineConfig、OpenAICompatEngine、TranslationContext、
-ContextWindow、translate_with_verify 翻译微循环。
+本 demo 覆盖完整翻译链路：
 
-运行 (需要可用的 LLM API):
+1. 构造 :class:`OpenAICompatEngine`；
+2. 用 :class:`PreloadableTerms` 从一整段源文本里一次性抽取
+   topic / title / description 与 {src→tgt} 术语表；
+3. 用抽取到的 metadata 驱动 :func:`get_default_system_prompt`
+   生成 system prompt；
+4. 逐条翻译多条源文本，**每次翻译前打印实际送入 LLM 的完整
+   messages**（system + 窗口历史 + few-shot 术语对 + user），方便
+   肉眼校验上下文积累与术语注入是否符合预期。
+
+如果 LLM 端点 (默认 ``http://localhost:26592/v1``) 不可达，demo 会
+直接打印错误并跳过，不影响其它 demo。
+
+运行::
+
     python demos/demo_llm_ops.py
-
-注意：需要一个 OpenAI 兼容 API 端点。可修改下方 config 指向你的服务。
 """
+
+from __future__ import annotations
 
 import _bootstrap  # noqa: F401
 
 import asyncio
+from contextlib import suppress
+
+import httpx
 
 from llm_ops import (
-    OpenAICompatEngine,
-    EngineConfig,
-    StaticTerms,
     ContextWindow,
+    EngineConfig,
+    OpenAICompatEngine,
+    PreloadableTerms,
     TranslationContext,
-    translate_with_verify,
     default_checker,
+    get_default_system_prompt,
+    translate_with_verify,
 )
 
 
-async def main():
-    # ── 1. 引擎配置 ──────────────────────────────────────────────────
+LLM_BASE_URL = "http://localhost:26592/v1"
+LLM_MODEL = "Qwen/Qwen3-32B"
 
-    print("=== 引擎配置 ===")
+# ── 源文本：一段 AI 公开课转录，覆盖多条跨句上下文 ──────────────────────
+SOURCE_TEXTS: list[str] = [
+    "Welcome back everyone, today we are going to talk about reinforcement learning from human feedback, or RLHF.",
+    "RLHF is the key ingredient that turned raw large language models into helpful assistants like ChatGPT.",
+    "The pipeline has three stages: supervised fine-tuning, reward model training, and policy optimization with PPO.",
+    "In the reward model stage, we collect pairs of responses and ask human labelers which one is better.",
+    "We then train a reward model to predict the human preference, giving a scalar score to any response.",
+    "Finally, the policy network is updated to maximize the expected reward, while a KL penalty keeps it close to the SFT model.",
+    "One common failure mode is reward hacking: the policy exploits quirks of the reward model instead of actually being helpful.",
+    "To mitigate this, practitioners use techniques like reward model ensembling and careful preference data curation.",
+    "Let's now look at the PPO objective function and unpack each term.",
+    "You will see the clipped surrogate objective, a value function loss, and an entropy bonus.",
+]
 
-    config = EngineConfig(
-        model="Qwen/Qwen3-32B",
-        base_url="http://localhost:26592/v1",
+
+# ── 工具：漂亮打印一条 messages 序列 ────────────────────────────────────
+
+def print_messages(label: str, messages: list[dict]) -> None:
+    print(f"\n  ── {label} (共 {len(messages)} 条) ──")
+    for i, msg in enumerate(messages):
+        role = msg["role"]
+        content = msg["content"]
+        # 折行显示，截断过长内容
+        if len(content) > 200:
+            content = content[:200] + " …"
+        marker = {"system": "🧭", "user": "👤", "assistant": "🤖"}.get(role, "•")
+        print(f"  [{i:2d}] {marker} {role:9s} | {content}")
+
+
+async def check_llm_alive(base_url: str) -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            r = await client.get(f"{base_url}/models")
+            return r.status_code == 200
+    except Exception:
+        return False
+
+
+async def main() -> None:
+    # ── 1. 连通性检查 ───────────────────────────────────────────────
+    print("=" * 72)
+    print("demo_llm_ops — 翻译引擎 + 摘要填充 + 上下文观测")
+    print("=" * 72)
+
+    if not await check_llm_alive(LLM_BASE_URL):
+        print(f"\n❌ LLM 不可达 ({LLM_BASE_URL})，跳过 demo。")
+        return
+    print(f"\n✅ LLM 在线: {LLM_MODEL} @ {LLM_BASE_URL}")
+
+    # ── 2. 引擎 ────────────────────────────────────────────────────
+    engine = OpenAICompatEngine(EngineConfig(
+        model=LLM_MODEL,
+        base_url=LLM_BASE_URL,
         api_key="EMPTY",
         temperature=0.3,
         max_tokens=2048,
@@ -40,58 +104,71 @@ async def main():
             "min_p": 0,
             "chat_template_kwargs": {"enable_thinking": False},
         },
-    )
-    engine = OpenAICompatEngine(config)
-    print(f"Engine: {engine.model}")
-    print()
+    ))
 
-    # ── 2. 翻译上下文 + 窗口 ─────────────────────────────────────────
+    # ── 3. Summary / 术语预加载 ────────────────────────────────────
+    #
+    # PreloadableTerms 对应旧系统的 TopicAgent + SummaryAgent：
+    # 一次性消化全部源文本，抽取 topic / title / description / terms，
+    # 翻译阶段再通过 context.terms_provider.metadata 回填 system prompt。
+    #
+    print("\n=== Step 1: PreloadableTerms 预加载摘要 + 术语 ===")
+    terms = PreloadableTerms(engine, source_lang="en", target_lang="zh")
+    await terms.preload(SOURCE_TEXTS)
 
-    print("=== 翻译上下文 ===")
+    print(f"  ready    : {terms.ready}")
+    print(f"  metadata : {terms.metadata}")
+    extracted = await terms.get_terms()
+    print(f"  terms    : {extracted}")
 
-    terms = StaticTerms({"machine learning": "机器学习", "neural network": "神经网络"})
-    window = ContextWindow(size=5)
+    # ── 4. 构造翻译上下文 ──────────────────────────────────────────
     context = TranslationContext(
         source_lang="en",
         target_lang="zh",
         terms_provider=terms,
-        window_size=5,
+        window_size=4,
     )
-    print(f"Context: {context.source_lang} → {context.target_lang}")
-    print(f"Terms: {await terms.get_terms()}")
-    print(f"Window capacity: {window.size}")
-    print()
-
-    # ── 3. 翻译微循环 ────────────────────────────────────────────────
-
-    print("=== translate_with_verify ===")
-
+    window = ContextWindow(size=context.window_size)
     checker = default_checker("en", "zh")
 
-    source_text = "Hello everyone, welcome to the course."
-    result = await translate_with_verify(
-        source_text,
-        engine,
-        context,
-        checker,
-        window,
-    )
+    # 打印将被使用的 system prompt（语言对默认 + metadata 注入）
+    print("\n=== Step 2: 默认 system prompt（带 metadata 注入） ===")
+    resolved_prompt = get_default_system_prompt(context)
+    for line in resolved_prompt.splitlines():
+        print(f"  │ {line}")
 
-    print(f"Source:      {source_text}")
-    print(f"Translation: {result.translation}")
-    print(f"Accepted:    {result.accepted}")
-    print(f"Attempts:    {result.attempts}")
-    print(f"Report:      passed={result.report.passed}")
-    print()
+    # ── 5. 逐条翻译，翻译前打印完整 messages ───────────────────────
+    print("\n=== Step 3: 逐条翻译 + 上下文观测 ===")
 
-    # ── 4. 上下文窗口 ────────────────────────────────────────────────
+    frozen_pairs = tuple(extracted.items())
 
-    print("=== 上下文窗口 (自动积累) ===")
-    print(f"Window size after translate: {len(window)}")
-    messages = window.build_messages()
-    for msg in messages:
-        print(f"  [{msg['role']}] {msg['content']}")
+    for idx, src in enumerate(SOURCE_TEXTS, 1):
+        print("\n" + "─" * 72)
+        print(f"[#{idx}/{len(SOURCE_TEXTS)}] SRC: {src}")
+
+        # 1) 预演：即将送给 LLM 的完整 messages
+        preview = [{"role": "system", "content": resolved_prompt}]
+        preview.extend(window.build_messages(frozen_pairs))
+        preview.append({"role": "user", "content": src})
+        print_messages(f"about to send (window={len(window)}, frozen={len(frozen_pairs)})", preview)
+
+        # 2) 真正调用 translate_with_verify（会自己再构造一次相同的 messages）
+        result = await translate_with_verify(src, engine, context, checker, window)
+
+        print(f"\n  ✅ TRANSLATION: {result.translation}")
+        print(f"     attempts={result.attempts} accepted={result.accepted} "
+              f"passed={result.report.passed}")
+
+    # ── 6. 最终窗口快照 ───────────────────────────────────────────
+    print("\n" + "=" * 72)
+    print(f"最终窗口积累 (size={window.size}, 实际={len(window)}):")
+    for i, msg in enumerate(window.build_messages()):
+        content = msg["content"]
+        if len(content) > 120:
+            content = content[:120] + " …"
+        print(f"  [{i:2d}] {msg['role']:9s} | {content}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    with suppress(KeyboardInterrupt):
+        asyncio.run(main())
