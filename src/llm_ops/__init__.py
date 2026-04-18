@@ -17,6 +17,7 @@ from .context import (
     TranslationContext,
 )
 from .protocol import LLMEngine, Message
+from .prompts import get_default_system_prompt, register_default_prompt
 from .providers import OneShotTerms, PreloadableTerms
 from .translate import TranslateResult, translate_with_verify
 from checker import (
@@ -48,6 +49,9 @@ __all__ = [
     # Translate
     "TranslateResult",
     "translate_with_verify",
+    # Prompt defaults
+    "get_default_system_prompt",
+    "register_default_prompt",
     # Engine
     "OpenAICompatEngine",
     "EngineConfig",

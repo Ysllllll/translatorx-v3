@@ -18,6 +18,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from .context import ContextWindow, TranslationContext
+from .prompts import get_default_system_prompt
 from .protocol import LLMEngine, Message
 from checker import CheckReport, Checker
 
@@ -179,14 +180,30 @@ async def translate_with_verify(
 
 
 def _resolve_system_prompt(system_prompt: str, context: TranslationContext) -> str:
-    """Interpolate ``context.system_prompt_template`` with provider metadata.
+    """Resolve the final system prompt used for translation.
 
-    If the template is empty the caller's ``system_prompt`` is returned as-is.
-    Otherwise the template is filled via ``str.format_map`` with the provider's
-    metadata; missing keys become empty strings.
+    Priority (highest wins):
+
+    1. ``context.system_prompt_template`` interpolated with provider
+       metadata — application-level override that supersedes the
+       per-call ``system_prompt`` (e.g. a runtime that rewrites the
+       prompt per topic/field).
+    2. Non-empty ``system_prompt`` passed by the caller (typically the
+       ``TranslateNodeConfig.system_prompt`` on the translate processor).
+    3. Language-pair default from :mod:`llm_ops.prompts`, interpolated
+       with provider metadata (``topic`` / ``field`` / ``scope_line``).
+       This guarantees the LLM always receives *some* instruction,
+       matching the legacy TranslatorX behaviour (cf.
+       ``get_system_prompt_with_topic``).
     """
     template = context.system_prompt_template
-    if not template:
+    if template:
+        metadata = (
+            context.terms_provider.metadata
+            if context.terms_provider.ready
+            else {}
+        )
+        return template.format_map(defaultdict(str, metadata))
+    if system_prompt:
         return system_prompt
-    metadata = context.terms_provider.metadata if context.terms_provider.ready else {}
-    return template.format_map(defaultdict(str, metadata))
+    return get_default_system_prompt(context)
