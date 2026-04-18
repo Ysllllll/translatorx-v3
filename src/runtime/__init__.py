@@ -54,6 +54,14 @@ from runtime.course import (
     ProcessorsFactory,
     VideoSpec,
 )
+from runtime.app import App, CourseBuilder, VideoBuilder
+from runtime.config import (
+    AppConfig,
+    ContextEntry,
+    EngineEntry,
+    RuntimeConfig,
+    StoreConfig,
+)
 from runtime.sources import (
     PushQueueSource,
     SrtSource,
@@ -129,6 +137,16 @@ __all__ = [
     "CourseResult",
     "ProcessorsFactory",
     "VideoSpec",
+    # app + builders
+    "App",
+    "CourseBuilder",
+    "VideoBuilder",
+    # config
+    "AppConfig",
+    "ContextEntry",
+    "EngineEntry",
+    "RuntimeConfig",
+    "StoreConfig",
     # sources
     "PushQueueSource",
     "SrtSource",
