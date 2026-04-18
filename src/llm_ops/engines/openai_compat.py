@@ -12,6 +12,8 @@ from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
+from model.usage import CompletionResult, Usage
+
 from ..protocol import Message
 
 
@@ -89,8 +91,8 @@ class OpenAICompatEngine:
         temperature: float | None = None,
         max_tokens: int | None = None,
         json_mode: bool = False,
-    ) -> str:
-        """Send messages and return the full response text."""
+    ) -> CompletionResult:
+        """Send messages and return the full response wrapped in CompletionResult."""
         kwargs: dict = {
             "model": self._config.model,
             "messages": messages,
@@ -102,8 +104,25 @@ class OpenAICompatEngine:
         if self._config.extra_body:
             kwargs["extra_body"] = self._config.extra_body
         response = await self._client.chat.completions.create(**kwargs)
-        content = response.choices[0].message.content or ""
-        return _clean_response(content)
+        choice = response.choices[0]
+        content = choice.message.content or ""
+        text = _clean_response(content)
+
+        usage: Usage | None = None
+        raw_usage = getattr(response, "usage", None)
+        if raw_usage is not None:
+            prompt = getattr(raw_usage, "prompt_tokens", 0) or 0
+            completion = getattr(raw_usage, "completion_tokens", 0) or 0
+            usage = Usage(
+                prompt_tokens=int(prompt),
+                completion_tokens=int(completion),
+                cost_usd=None,  # cost lookup lives at the Orchestrator layer
+                model=self._config.model,
+                requests=1,
+            )
+
+        finish_reason = getattr(choice, "finish_reason", None)
+        return CompletionResult(text=text, usage=usage, finish_reason=finish_reason)
 
     async def stream(
         self,

@@ -134,7 +134,8 @@ class TestOpenAICompatEngineLive:
         )
         engine = OpenAICompatEngine(cfg)
         result = await engine.complete([{"role": "user", "content": "Say hello in Chinese"}])
-        assert len(result) > 0
+        assert len(result.text) > 0
+        assert result.usage is None or result.usage.model == "Qwen/Qwen3-32B"
 
     @pytest.mark.asyncio
     async def test_stream(self):

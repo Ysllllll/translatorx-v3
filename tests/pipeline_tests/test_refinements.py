@@ -20,6 +20,7 @@ from pipeline import (
     EN_ZH_PREFIX_RULES,
 )
 from model import SentenceRecord
+from model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------
@@ -34,14 +35,14 @@ class _MockEngine:
         self.call_count = 0
         self.captured_texts: list[str] = []
 
-    async def complete(self, messages, **kwargs) -> str:
+    async def complete(self, messages, **kwargs) -> CompletionResult:
         self.call_count += 1
         user_msg = messages[-1]["content"]
         self.captured_texts.append(user_msg)
-        return f"{self._prefix}{user_msg}"
+        return CompletionResult(text=f"{self._prefix}{user_msg}")
 
     async def stream(self, messages, **kwargs) -> AsyncIterator[str]:
-        yield await self.complete(messages)
+        yield (await self.complete(messages)).text
 
 
 class _PassChecker(Checker):

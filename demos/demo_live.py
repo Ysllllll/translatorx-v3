@@ -112,7 +112,9 @@ async def main():
         {"role": "system", "content": "将英文翻译成中文，只返回译文。"},
         {"role": "user", "content": "The future belongs to those who believe in the beauty of their dreams."},
     ])
-    print(f"  Translation: {response}")
+    print(f"  Translation: {response.text}")
+    if response.usage is not None:
+        print(f"  Usage: prompt={response.usage.prompt_tokens}, completion={response.usage.completion_tokens}")
     print()
 
     # ── 3. 流式输出 ──────────────────────────────────────────────────

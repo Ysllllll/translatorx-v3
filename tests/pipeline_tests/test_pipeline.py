@@ -15,6 +15,7 @@ from llm_ops import (
 )
 from pipeline import Pipeline, translate_node
 from model import SentenceRecord
+from model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------
@@ -35,10 +36,10 @@ class _MockEngine:
         temperature: float | None = None,
         max_tokens: int | None = None,
         json_mode: bool = False,
-    ) -> str:
+    ) -> CompletionResult:
         self.call_count += 1
         user_msg = messages[-1]["content"]
-        return f"{self._prefix}{user_msg}"
+        return CompletionResult(text=f"{self._prefix}{user_msg}")
 
     async def stream(
         self,
@@ -47,7 +48,7 @@ class _MockEngine:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> AsyncIterator[str]:
-        yield await self.complete(messages)
+        yield (await self.complete(messages)).text
 
 
 class _AlwaysPassChecker(Checker):
@@ -166,7 +167,7 @@ class TestTranslateNode:
         class _CapturingEngine:
             async def complete(self, messages, **kwargs):
                 captured_messages.append(messages)
-                return "翻译"
+                return CompletionResult(text="翻译")
 
             async def stream(self, messages, **kwargs):
                 yield "翻译"

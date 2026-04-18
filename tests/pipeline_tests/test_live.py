@@ -131,8 +131,8 @@ class TestLiveTranslation:
             {"role": "system", "content": "Translate to Chinese. Output ONLY the translation."},
             {"role": "user", "content": "Hello world."},
         ])
-        assert len(result) > 0
-        print(f"\n  Engine complete: 'Hello world.' → '{result}'")
+        assert len(result.text) > 0
+        print(f"\n  Engine complete: 'Hello world.' → '{result.text}'")
 
     @pytest.mark.asyncio
     async def test_engine_stream(self, engine: OpenAICompatEngine):

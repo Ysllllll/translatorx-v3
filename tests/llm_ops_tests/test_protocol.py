@@ -7,6 +7,7 @@ from typing import AsyncIterator
 import pytest
 
 from llm_ops.protocol import LLMEngine
+from model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------
@@ -23,8 +24,8 @@ class _GoodEngine:
         temperature: float | None = None,
         max_tokens: int | None = None,
         json_mode: bool = False,
-    ) -> str:
-        return "ok"
+    ) -> CompletionResult:
+        return CompletionResult(text="ok")
 
     async def stream(
         self,
@@ -40,8 +41,8 @@ class _GoodEngine:
 class _BadEngine:
     """Missing stream method — should NOT satisfy the Protocol."""
 
-    async def complete(self, messages: list[dict[str, str]]) -> str:
-        return "ok"
+    async def complete(self, messages: list[dict[str, str]]) -> CompletionResult:
+        return CompletionResult(text="ok")
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +60,8 @@ class TestLLMEngineProtocol:
     async def test_complete(self):
         engine = _GoodEngine()
         result = await engine.complete([{"role": "user", "content": "hi"}])
-        assert result == "ok"
+        assert result.text == "ok"
+        assert result.usage is None
 
     @pytest.mark.asyncio
     async def test_stream(self):

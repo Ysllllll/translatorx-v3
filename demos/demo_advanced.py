@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 
 import trx
+from model.usage import CompletionResult
 
 
 # ── Mock engine ─────────────────────────────────────────────────────
@@ -25,25 +26,25 @@ class MockEngine:
     def __init__(self):
         self.call_count = 0
 
-    async def complete(self, messages: list[dict[str, str]], **kwargs) -> str:
+    async def complete(self, messages: list[dict[str, str]], **kwargs) -> CompletionResult:
         self.call_count += 1
         system = messages[0].get("content", "") if messages else ""
         user_msg = messages[-1]["content"] if messages else ""
 
         # 术语提取请求 — 识别 TermsAgent 的 system prompt
         if "terminology-extraction" in system:
-            return (
+            return CompletionResult(text=(
                 '{"topic":"deep learning",'
                 '"title":"Intro to neural networks",'
                 '"description":"Lecture on gradient descent.",'
                 '"terms":{"neural network":"神经网络","gradient descent":"梯度下降"}}'
-            )
+            ))
 
         # 翻译
-        return f"[翻译]{user_msg}"
+        return CompletionResult(text=f"[翻译]{user_msg}")
 
     async def stream(self, messages, **kwargs):
-        yield await self.complete(messages, **kwargs)
+        yield (await self.complete(messages, **kwargs)).text
 
 
 class MockAlwaysPassChecker(trx.Checker):

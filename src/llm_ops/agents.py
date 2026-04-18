@@ -85,7 +85,7 @@ class TermsAgent:
             {"role": "system", "content": system},
             {"role": "user", "content": body},
         ])
-        return parse_terms_response(response)
+        return parse_terms_response(response.text)
 
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)

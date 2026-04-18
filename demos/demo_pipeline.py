@@ -11,6 +11,7 @@
 import asyncio
 
 import trx
+from model.usage import CompletionResult
 
 
 # ── Mock engine ─────────────────────────────────────────────────────
@@ -18,12 +19,12 @@ import trx
 class MockEngine:
     """模拟 LLM 引擎，返回 [翻译] + 原文。"""
 
-    async def complete(self, messages: list[dict[str, str]], **kwargs) -> str:
+    async def complete(self, messages: list[dict[str, str]], **kwargs) -> CompletionResult:
         user_msg = messages[-1]["content"] if messages else ""
-        return f"[翻译]{user_msg}"
+        return CompletionResult(text=f"[翻译]{user_msg}")
 
     async def stream(self, messages, **kwargs):
-        yield await self.complete(messages, **kwargs)
+        yield (await self.complete(messages, **kwargs)).text
 
 
 # ── 示例 SRT ────────────────────────────────────────────────────────

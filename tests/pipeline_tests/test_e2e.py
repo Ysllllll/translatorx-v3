@@ -17,6 +17,7 @@ from llm_ops import (
 from pipeline import Pipeline
 from subtitle import Subtitle, Segment
 from subtitle.io import parse_srt
+from model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------
@@ -32,12 +33,12 @@ class _MockTranslator:
         "Goodbye!": "再见！",
     }
 
-    async def complete(self, messages, **kwargs) -> str:
+    async def complete(self, messages, **kwargs) -> CompletionResult:
         user_msg = messages[-1]["content"]
-        return self._TRANSLATIONS.get(user_msg, f"[翻译]{user_msg}")
+        return CompletionResult(text=self._TRANSLATIONS.get(user_msg, f"[翻译]{user_msg}"))
 
     async def stream(self, messages, **kwargs) -> AsyncIterator[str]:
-        yield await self.complete(messages)
+        yield (await self.complete(messages)).text
 
 
 class _PassChecker(Checker):

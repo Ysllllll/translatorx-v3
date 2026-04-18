@@ -25,6 +25,7 @@ from checker import (
     Severity,
     default_checker,
 )
+from model.usage import CompletionResult, Usage
 from .engines import OpenAICompatEngine
 from .engines.openai_compat import EngineConfig
 
@@ -32,6 +33,8 @@ __all__ = [
     # Protocol
     "LLMEngine",
     "Message",
+    "CompletionResult",
+    "Usage",
     # Context
     "TermsProvider",
     "StaticTerms",

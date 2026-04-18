@@ -15,6 +15,7 @@ from llm_ops.translate import (
     translate_with_verify,
 )
 from checker import CheckReport, Checker, Issue, Severity
+from model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------
@@ -29,15 +30,15 @@ class _MockEngine:
         self._call_count = 0
         self.calls: list[list[dict[str, str]]] = []
 
-    async def complete(self, messages: list[dict[str, str]]) -> str:
+    async def complete(self, messages: list[dict[str, str]]) -> "CompletionResult":
         self.calls.append(messages)
         idx = min(self._call_count, len(self._responses) - 1)
         self._call_count += 1
-        return self._responses[idx]
+        return CompletionResult(text=self._responses[idx])
 
     async def stream(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
         result = await self.complete(messages)
-        yield result
+        yield result.text
 
 
 class _AlwaysPassChecker:

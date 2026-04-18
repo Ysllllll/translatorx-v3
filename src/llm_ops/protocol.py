@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import AsyncIterator, Protocol, runtime_checkable
 
+from model.usage import CompletionResult
+
 # OpenAI-compatible message: {"role": "system"|"user"|"assistant", "content": str}
 Message = dict[str, str]
 
@@ -29,17 +31,18 @@ class LLMEngine(Protocol):
         temperature: float | None = None,
         max_tokens: int | None = None,
         json_mode: bool = False,
-    ) -> str:
-        """Return the full assistant response for *messages*.
+    ) -> CompletionResult:
+        """Return the assistant response wrapped in a :class:`CompletionResult`.
+
+        The ``.text`` attribute carries the generated string; ``.usage``
+        carries optional token / cost accounting (``None`` when the
+        engine cannot populate it — e.g. mock engines in tests).
 
         Args:
             messages: Conversation in OpenAI dict format.
             temperature: Sampling temperature (None = engine default).
             max_tokens: Max generation tokens (None = engine default).
             json_mode: Force JSON output format.
-
-        Returns:
-            The assistant's reply as a plain string.
         """
         ...
 

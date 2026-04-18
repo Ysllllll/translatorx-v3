@@ -13,6 +13,8 @@ from typing import Any
 
 from lang_ops._core._punctuation import strip_punct as _strip_punct
 
+from model.usage import CompletionResult, Usage  # noqa: F401  re-export
+
 
 def _fmt_time(value: float) -> str:
     return f"{value:.2f}"

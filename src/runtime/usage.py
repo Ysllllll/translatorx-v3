@@ -1,119 +1,14 @@
-"""Token / cost accounting — :class:`Usage` + :class:`CompletionResult`.
+"""Re-export of :class:`Usage` / :class:`CompletionResult` from the
+:mod:`model` package (L0) to keep ``from runtime import Usage`` working.
 
-Design refs
------------
-* **D-048**: Breaking change to :class:`LLMEngine.complete` — returns
-  :class:`CompletionResult` instead of ``str``. Aggregation happens at
-  four levels:
-
-  1. Engine per request (reads ``response.usage``, looks up cost table).
-  2. Processor per record (``record.extra["usage"]``).
-  3. Orchestrator per run (``result.stats`` — summed across processors).
-  4. Store per video (``meta.total_usage`` + ``by_model`` map).
-
-  :class:`Usage` is itself a frozen dataclass with ``__add__`` so
-  aggregation is a straight ``sum(..., Usage())``.
-
-* **Budget control** (processor-level, D-048):
-  ``TranslateProcessor(budget_usd=10.0)`` — exceeding the budget raises
-  ``fatal`` by default (stops the run); ``budget_per_record=True``
-  degrades to ``permanent`` (skip the record, keep going).
-
-* **Local models**: ``cost_usd`` may be ``None`` when no price entry is
-  available; ``tiktoken`` provides token counts regardless so model
-  comparison stays meaningful.
-
-* **Progress events do not carry usage** — :class:`ProgressEvent` stays
-  lean; UIs that care about cost read ``processor.stats`` or
-  ``result.stats``.
+Historically these types lived in ``runtime.usage``; they were promoted
+to ``model.usage`` so :mod:`llm_ops` (L2) can import them without
+depending on :mod:`runtime` (L3). See ``model/usage.py`` for the
+implementation and D-048 design notes.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from model.usage import CompletionResult, Usage
 
-
-@dataclass(frozen=True, slots=True)
-class Usage:
-    """Per-request (or aggregated) token / cost counters (D-048).
-
-    ``cost_usd`` is ``None`` for local models with no price table entry;
-    aggregation preserves ``None`` when *both* operands are ``None``,
-    otherwise the ``None`` side contributes ``0.0``. ``model`` identifies
-    the source model; aggregations across different models drop it (``""``)
-    and callers populate ``meta.total_usage.by_model`` at the store layer
-    instead.
-
-    ``requests`` counts how many API calls this instance represents.
-    :meth:`zero` returns the additive identity (all counters zero).
-    """
-
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cost_usd: float | None = None
-    model: str = ""
-    requests: int = 1
-    extra: dict = field(default_factory=dict)
-
-    @classmethod
-    def zero(cls) -> "Usage":
-        """Return the additive identity (``requests=0``, all tokens 0)."""
-        return cls(requests=0)
-
-    def __add__(self, other: object) -> "Usage":
-        if not isinstance(other, Usage):
-            return NotImplemented
-
-        # cost: None only if both are None
-        if self.cost_usd is None and other.cost_usd is None:
-            cost: float | None = None
-        else:
-            cost = (self.cost_usd or 0.0) + (other.cost_usd or 0.0)
-
-        # model: drop to "" when operands disagree; empty is absorbed
-        if not self.model:
-            model = other.model
-        elif not other.model:
-            model = self.model
-        elif self.model == other.model:
-            model = self.model
-        else:
-            model = ""
-
-        # extra: shallow merge with later wins
-        extra = {**self.extra, **other.extra} if (self.extra or other.extra) else {}
-
-        return Usage(
-            prompt_tokens=self.prompt_tokens + other.prompt_tokens,
-            completion_tokens=self.completion_tokens + other.completion_tokens,
-            cost_usd=cost,
-            model=model,
-            requests=self.requests + other.requests,
-            extra=extra,
-        )
-
-    def __radd__(self, other: object) -> "Usage":
-        # Support ``sum(iterable)`` which starts from 0.
-        if other == 0:
-            return self
-        return self.__add__(other)  # type: ignore[arg-type]
-
-
-@dataclass(frozen=True, slots=True)
-class CompletionResult:
-    """Return value of :meth:`LLMEngine.complete` (D-048).
-
-    ``usage`` is optional because not every engine can fill it
-    (local models without tiktoken, mock engines in tests). Callers
-    should treat ``usage is None`` as "unknown, do not aggregate".
-    """
-
-    text: str
-    usage: Usage | None = None
-    finish_reason: str | None = None
-
-
-__all__ = [
-    "CompletionResult",
-    "Usage",
-]
+__all__ = ["CompletionResult", "Usage"]

@@ -10,6 +10,7 @@ from checker import CheckReport, Issue, Severity
 from llm_ops.context import StaticTerms, TranslationContext
 from llm_ops.providers import OneShotTerms
 from model import Segment, SentenceRecord, Word
+from model.usage import CompletionResult
 from pipeline.stream import STREAM_ID_KEY, FeedResult, StreamAdapter
 
 
@@ -28,10 +29,10 @@ class _EchoEngine:
         # Return the user content with a prefix so retranslate can be detected
         user = next((m for m in reversed(messages) if m["role"] == "user"), None)
         src = user["content"] if user else ""
-        return f"[T{self.calls}]{src}"
+        return CompletionResult(text=f"[T{self.calls}]{src}")
 
     async def stream(self, messages, **_) -> AsyncIterator[str]:
-        yield await self.complete(messages)
+        yield (await self.complete(messages)).text
 
 
 class _AlwaysPassChecker:

@@ -7,6 +7,7 @@ from typing import AsyncIterator
 import pytest
 
 from llm_ops.agents import TermsAgent, TermsAgentResult, parse_terms_response
+from model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------
@@ -65,12 +66,12 @@ class _StubEngine:
         self.response = response
         self.calls: list[list[dict[str, str]]] = []
 
-    async def complete(self, messages, **_kwargs) -> str:
+    async def complete(self, messages, **_kwargs):
         self.calls.append(messages)
-        return self.response
+        return CompletionResult(text=self.response)
 
     async def stream(self, messages, **_kwargs) -> AsyncIterator[str]:
-        yield await self.complete(messages)
+        yield (await self.complete(messages)).text
 
 
 class TestTermsAgent:

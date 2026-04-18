@@ -153,8 +153,8 @@ async def translate_with_verify(
             context_messages = window.build_messages(effective_pairs)
 
         messages = builder(resolved_system_prompt, context_messages, source)
-        translation = await engine.complete(messages)
-        translation = translation.strip()
+        result = await engine.complete(messages)
+        translation = result.text.strip()
 
         report = checker.check(source, translation)
         last_translation = translation

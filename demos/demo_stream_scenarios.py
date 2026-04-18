@@ -18,6 +18,7 @@ import asyncio
 
 import trx
 from model import Segment, Word
+from model.usage import CompletionResult
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -41,7 +42,7 @@ class MockEngine:
         user = messages[-1]["content"] if messages else ""
 
         if "terminology-extraction" in system:
-            return self.terms_json
+            return CompletionResult(text=self.terms_json)
 
         # 检查术语对是否出现在消息历史中
         has_terms = any(
@@ -53,10 +54,10 @@ class MockEngine:
         else:
             prefix = "zh"
         mark = "★" if has_terms else ""
-        return f"[{prefix}{mark}]{user}"
+        return CompletionResult(text=f"[{prefix}{mark}]{user}")
 
     async def stream(self, messages, **_):
-        yield await self.complete(messages)
+        yield (await self.complete(messages)).text
 
 
 class FailingTermsEngine(MockEngine):
