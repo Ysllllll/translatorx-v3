@@ -251,9 +251,12 @@ class TestTranslateWithVerify:
         assert engine.calls[2][0]["role"] == "system"
         assert engine.calls[2][1]["role"] == "user"
 
-        # Attempt 3: still minimal (clamped to last level)
-        assert len(engine.calls[3]) == 2
-        assert engine.calls[3][0]["role"] == "system"
+        # Attempt 3: bare fallback (single user message, inline instruction,
+        # target-language localized). No system message.
+        assert len(engine.calls[3]) == 1
+        assert engine.calls[3][0]["role"] == "user"
+        assert "简体中文" in engine.calls[3][0]["content"]
+        assert "hello" in engine.calls[3][0]["content"]
 
     @pytest.mark.asyncio
     async def test_zero_retries(self):

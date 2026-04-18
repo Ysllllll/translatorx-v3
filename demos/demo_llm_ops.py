@@ -1,452 +1,489 @@
-"""llm_ops — 完整翻译链路可观测 demo。
+"""Observability demo for the ``llm_ops`` stack — ordered simple → complex.
 
-四个章节，分别聚焦不同维度：
+Six sections:
 
-A. **真实 LLM 翻译**：PreloadableTerms 预加载摘要/术语 → 逐条翻译，
-   **打印实际送入 LLM 的完整 messages** + 窗口 before/after + 翻译结果。
-B. **Prompt 降级**：用伪造的 FailingEngine 触发 Level 0 → 1 → 2 → fallback
-   四级降级，**打印每一级送入 LLM 的 messages 结构差异**。
-C. **Checker 触发场景**：用伪造的 ScriptedEngine 故意返回坏翻译，演示
-   每条规则（length_ratio / format / question_mark / keyword）被触发时
-   的 CheckReport。
-D. **流式翻译**：真实 LLM，engine.stream() 实时 yield chunks。
+1. **Checker matrix** — pure quality rules, no LLM. Shows every built-in rule
+   firing on crafted cases, plus a passing + WARNING-only scenario.
+2. **Direct-translate bypass** — dict lookup shortcut that skips the LLM
+   entirely (legacy ``direct_translate`` pattern).
+3. **Single sentence translate** — smallest possible real LLM call:
+   one sentence, no context, no terms. Prints the outgoing messages array.
+4. **Full pipeline** — preloaded terms + frozen few-shot + sliding window,
+   translating 4 sentences and showing the window evolve.
+5. **Prompt degradation** — scripted engine replays the 4-level degradation
+   (full → compressed → minimal → bare) driven by a forcing checker.
+6. **Streaming scenarios** —
+   6a. ``OneShotTerms`` threshold-triggered extraction in the background,
+       observed flipping ``ready=False → True`` during translation.
+   6b. ``engine.stream(...)`` token-by-token output.
 
-如果 LLM 端点不可达，仅 B/C 章节（纯本地模拟）会运行；A/D 会跳过。
+LLM endpoint: ``http://localhost:26592/v1``. Sections 3/4/6 are skipped if
+the server is unreachable. Run with::
 
-运行::
-
-    python demos/demo_llm_ops.py
+    PYTHONPATH=src python demos/demo_llm_ops.py
 """
 
 from __future__ import annotations
 
-import _bootstrap  # noqa: F401
-
 import asyncio
-from contextlib import suppress
-from dataclasses import dataclass
-
 import httpx
 
-from checker import Checker, FormatRule, KeywordRule, LengthRatioRule, QuestionMarkRule, Severity
+from checker import CheckReport, Severity, default_checker
+from checker.checkers import Checker as CheckerImpl
+from checker.rules import KeywordRule, LengthRatioRule
 from llm_ops import (
     ContextWindow,
-    EngineConfig,
-    OpenAICompatEngine,
+    OneShotTerms,
     PreloadableTerms,
-    StaticTerms,
     TranslationContext,
     build_frozen_messages,
-    default_checker,
-    get_default_system_prompt,
     translate_with_verify,
 )
-from llm_ops.protocol import Message
-from model.usage import CompletionResult
+from model.usage import CompletionResult, Usage
+import trx
 
 
 LLM_BASE_URL = "http://localhost:26592/v1"
 LLM_MODEL = "Qwen/Qwen3-32B"
 
-SEP = "=" * 72
-SUB = "─" * 72
+
+# ---------------------------------------------------------------------------
+# Presentation helpers
+# ---------------------------------------------------------------------------
+
+def hr(title: str = "", char: str = "=") -> None:
+    if title:
+        print(f"\n{char * 4} {title} {char * max(4, 72 - len(title) - 6)}")
+    else:
+        print(char * 72)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Utilities: formatted printers
-# ═══════════════════════════════════════════════════════════════════════
-
-def _truncate(text: str, limit: int = 100) -> str:
-    text = text.replace("\n", " ⏎ ")
-    return text if len(text) <= limit else text[: limit - 1] + "…"
+def sub(title: str) -> None:
+    print(f"\n  --- {title} ---")
 
 
-def print_messages(messages: list[Message], *, limit: int = 120) -> None:
-    """以紧凑形式打印一次 engine.complete 的 messages。"""
-    if not messages:
-        print("    (空)")
-        return
-    for i, m in enumerate(messages):
-        role = m["role"]
-        content = m["content"]
-        if len(content) > limit:
-            content = content[: limit - 1] + "…"
-        content = content.replace("\n", " ⏎ ")
-        print(f"    [{i:2d}] {role:9s} | {content}")
+def print_messages(messages: list[dict]) -> None:
+    for i, msg in enumerate(messages):
+        role = msg["role"]
+        content = msg["content"]
+        one_line = content.replace("\n", " ¶ ")
+        head = one_line[:110] + ("…" if len(one_line) > 110 else "")
+        print(f"    [{i}] {role:9s} │ {head}")
 
 
-def print_window(window: ContextWindow) -> None:
-    if len(window) == 0:
-        print("    (空)")
-        return
-    pairs = window.build_messages()
-    for i in range(0, len(pairs), 2):
-        print(f"    [{i // 2}] src: {_truncate(pairs[i]['content'], 90)}")
-        print(f"        tgt: {_truncate(pairs[i + 1]['content'], 90)}")
-
-
-def print_report(report) -> None:
+def print_report(report: CheckReport) -> None:
     if not report.issues:
-        print("    (无 issue)")
+        print(f"    report: {'✓ passed' if report.passed else '✗ failed'} (no issues)")
         return
-    for iss in report.issues:
-        print(f"    • [{iss.severity.value:7s}] {iss.rule}: {iss.message}")
+    status = "✓ passed" if report.passed else "✗ failed"
+    print(f"    report: {status}  ({len(report.issues)} issue(s))")
+    for issue in report.issues:
+        sev = issue.severity.name
+        marker = "!" if issue.severity == Severity.ERROR else "·"
+        print(f"      {marker} [{sev:7s}] {issue.rule}: {issue.message}")
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Engines for local simulation (no real LLM needed)
-# ═══════════════════════════════════════════════════════════════════════
+def print_window(window: ContextWindow, label: str = "") -> None:
+    pairs = list(window._history)  # intentional internal peek for observability
+    if not pairs:
+        print(f"    window{(' ' + label) if label else ''}: (empty)")
+        return
+    print(f"    window{(' ' + label) if label else ''}: {len(pairs)} pair(s)")
+    for src, dst in pairs:
+        print(f"      • {src[:40]:40s} → {dst[:30]}")
 
-@dataclass
-class LoggingEngine:
-    """装饰真实 engine，拦截 complete() 记录最近一次 messages。"""
 
-    inner: OpenAICompatEngine
-    last_messages: list[Message] | None = None
+async def _probe_llm() -> bool:
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            r = await client.get(LLM_BASE_URL.rsplit("/", 1)[0] + "/health")
+            return r.status_code < 500
+    except Exception:
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                r = await client.get(LLM_BASE_URL + "/models")
+                return r.status_code < 500
+        except Exception:
+            return False
 
-    async def complete(self, messages, *, temperature=None, max_tokens=None, json_mode=False):
+
+# ---------------------------------------------------------------------------
+# Section 1 — Checker matrix (no LLM)
+# ---------------------------------------------------------------------------
+
+def section_1_checker_matrix() -> None:
+    hr("Section 1 — Checker rule matrix (no LLM needed)")
+    print(
+        "  Each case sends a fabricated (src, translation) pair through the\n"
+        "  default en→zh checker and prints the verdict + triggered rules."
+    )
+
+    checker = default_checker("en", "zh")
+    # A secondary checker with the length-ratio rule as WARNING, used for
+    # the final WARNING-only case so we can show passed=True with issues.
+    warning_ratio_checker = CheckerImpl(
+        rules=[LengthRatioRule(severity=Severity.WARNING)],
+    )
+
+    cases: list[tuple[str, str, str, CheckerImpl | None]] = [
+        ("1.1 Clean pass",
+         "Hello, world.", "你好，世界。", None),
+        ("1.2 LengthRatio — translation absurdly long",
+         "Hi.", "你好" * 60 + "。", None),
+        ("1.3 Format — hallucinated lead-in",
+         "Compute the gradient.",
+         "好的，这是翻译：计算梯度。", None),
+        ("1.4 Format — bracket mismatch (translation starts with bracket)",
+         "See figure a.", "（图a）。", None),
+        ("1.5 Format — markdown bold leaked",
+         "The loss is minimized.", "**损失** 被最小化。", None),
+        ("1.6 Format — unexpected newline",
+         "Step one. Step two.", "第一步。\n第二步。", None),
+        ("1.7 QuestionMark — source has '?', translation dropped it (WARNING)",
+         "Is this correct?", "这是对的。", None),
+        ("1.8 Keyword — forbidden target term",
+         "We train a model on the data.",
+         "我们在数据上狗狗模型。",
+         CheckerImpl(rules=[KeywordRule(forbidden_terms=["狗狗"])])),
+        ("1.9 TrailingAnnotation — translator note appended",
+         "The activation function is ReLU.",
+         "激活函数是 ReLU（注：这里指整流线性单元激活函数）。", None),
+        ("1.10 Multi-rule — length + hallucination fire together",
+         "Hi.", "好的，这是翻译：" + "你好" * 50 + "。", None),
+        ("1.11 WARNING only — issues present but report.passed=True",
+         "Hello.", "你好" * 30 + "。", warning_ratio_checker),
+    ]
+
+    for title, src, tgt, custom in cases:
+        sub(title)
+        print(f"    src: {src}")
+        print(f"    tgt: {tgt}")
+        c = custom or checker
+        report = c.check(src, tgt)
+        print_report(report)
+
+
+# ---------------------------------------------------------------------------
+# Section 2 — Direct-translate dict bypass (no LLM)
+# ---------------------------------------------------------------------------
+
+def section_2_direct_translate() -> None:
+    hr("Section 2 — Direct-translate dict bypass (no LLM)")
+    print(
+        "  Pattern from legacy translatorx: a dict of exact-match short phrases\n"
+        "  that skip the LLM entirely. Useful for interjections, filler words,\n"
+        "  channel-specific jargon. The pipeline TranslateProcessor applies\n"
+        "  this before the LLM call.\n"
+    )
+
+    direct_translate: dict[str, str] = {
+        "ok": "好的",
+        "yeah": "是的",
+        "um": "嗯",
+        "thanks": "谢谢",
+        "welcome back": "欢迎回来",
+    }
+
+    samples = [
+        "ok", "Thanks", "um", "let's train a model",
+        "welcome back", "please subscribe", "yeah",
+    ]
+    for src in samples:
+        key = src.strip().lower()
+        if key in direct_translate:
+            print(f"    ✓ direct  {src!r:30s} → {direct_translate[key]!r}   (LLM skipped)")
+        else:
+            print(f"    → LLM     {src!r:30s} (would be translated by model)")
+
+
+# ---------------------------------------------------------------------------
+# Section 3 — Smallest real LLM translation
+# ---------------------------------------------------------------------------
+
+async def section_3_single_sentence() -> None:
+    hr("Section 3 — Single-sentence translate (real LLM, no context)")
+    print(
+        "  Empty window, no terms. Shows exactly what gets sent to the LLM\n"
+        "  when the pipeline is bare: just the resolved system prompt + user."
+    )
+
+    engine = _make_logging_engine()
+    ctx = TranslationContext(source_lang="en", target_lang="zh", max_retries=2)
+    checker = default_checker("en", "zh")
+    window = ContextWindow(size=6)
+
+    source = "Gradient descent minimizes the loss function iteratively."
+    print(f"\n  source: {source}")
+    result = await translate_with_verify(source, engine, ctx, checker, window)
+
+    sub("outgoing messages")
+    print_messages(engine.last_messages)
+    sub("result")
+    print(f"    translation: {result.translation}")
+    print(f"    attempts={result.attempts}  accepted={result.accepted}")
+    print_report(result.report)
+
+
+# ---------------------------------------------------------------------------
+# Section 4 — Full pipeline with preloaded terms + sliding window
+# ---------------------------------------------------------------------------
+
+async def section_4_full_pipeline() -> None:
+    hr("Section 4 — Full pipeline: preloaded terms + window (real LLM)")
+    print(
+        "  PreloadableTerms extracts terminology from all sources ahead of time.\n"
+        "  build_frozen_messages folds them into a compact few-shot primer.\n"
+        "  ContextWindow accumulates translated pairs, feeding later calls."
+    )
+
+    base_engine = trx.create_engine(
+        model=LLM_MODEL, base_url=LLM_BASE_URL,
+        api_key="EMPTY", temperature=0.3,
+        extra_body={
+            "top_k": 20, "min_p": 0,
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+    )
+    engine = _LoggingEngine(base_engine)
+
+    sources = [
+        "Gradient descent is the workhorse of deep learning.",
+        "Adam is an adaptive learning-rate optimizer.",
+        "Batch normalization stabilizes training across layers.",
+        "Dropout prevents overfitting by randomly masking activations.",
+    ]
+
+    terms = PreloadableTerms(base_engine, "en", "zh")
+    print("\n  [1/3] preloading terms from 4 source lines…")
+    await terms.preload(sources)
+    print(f"    ready={terms.ready}  terms={terms._terms}")
+    print(f"    metadata={terms.metadata}")
+
+    frozen = build_frozen_messages(tuple(terms._terms.items()))
+    sub("frozen few-shot (compact form)")
+    print_messages(frozen)
+
+    ctx = TranslationContext(
+        source_lang="en", target_lang="zh",
+        max_retries=2, terms_provider=terms,
+    )
+    checker = default_checker("en", "zh")
+    window = ContextWindow(size=6)
+
+    print("\n  [2/3] translating sequentially; window grows each call.")
+    for i, src in enumerate(sources, 1):
+        sub(f"step {i}: {src}")
+        print_window(window, "BEFORE")
+        result = await translate_with_verify(src, engine, ctx, checker, window)
+        print(f"    translation: {result.translation}")
+        print(f"    attempts={result.attempts}  accepted={result.accepted}")
+        print_window(window, "AFTER")
+
+    sub("[3/3] final outgoing messages (last call)")
+    print_messages(engine.last_messages)
+
+
+# ---------------------------------------------------------------------------
+# Section 5 — Prompt degradation (scripted, no LLM)
+# ---------------------------------------------------------------------------
+
+class _ScriptedEngine:
+    """Replays scripted replies + records every outgoing messages list."""
+
+    def __init__(self, replies: list[str]) -> None:
+        self._replies = list(replies)
+        self.call_log: list[list[dict]] = []
+
+    async def complete(self, messages, **_kwargs) -> CompletionResult:
+        self.call_log.append(list(messages))
+        text = self._replies.pop(0) if self._replies else ""
+        return CompletionResult(text=text, usage=Usage())
+
+    async def stream(self, messages, **_kwargs):
+        yield ""
+
+
+class _AlwaysFailChecker:
+    """Checker that rejects the first N attempts and accepts the N+1-th."""
+
+    def __init__(self, accept_after: int) -> None:
+        self._i = 0
+        self._accept_after = accept_after
+
+    def check(self, src: str, tgt: str) -> CheckReport:
+        self._i += 1
+        if self._i > self._accept_after:
+            return CheckReport.ok()
+        from checker.types import Issue
+        return CheckReport(issues=[Issue(
+            "demo_force_fail", Severity.ERROR,
+            f"forcing retry #{self._i}",
+        )])
+
+
+async def section_5_prompt_degradation() -> None:
+    hr("Section 5 — Prompt degradation on checker failure (scripted engine)")
+    print(
+        "  Reject every reply so the translator cycles through all 4 levels:\n"
+        "    L0 full → L1 compressed → L2 minimal → L3 bare (no system msg).\n"
+        "  Each attempt prints the exact messages array sent to the engine."
+    )
+
+    engine = _ScriptedEngine(["bad"] * 6)
+    ctx = TranslationContext(
+        source_lang="en", target_lang="zh", max_retries=3,
+    )
+    checker = _AlwaysFailChecker(accept_after=99)
+    window = ContextWindow(size=6)
+    window.add("Gradient descent minimizes the loss.", "梯度下降最小化损失。")
+    window.add("Adam is an optimizer.", "Adam 是一个优化器。")
+
+    result = await translate_with_verify(
+        "Batch normalization stabilizes training.",
+        engine, ctx, checker, window,
+        system_prompt="You are a translation assistant.",
+    )
+
+    level_names = ["L0 full", "L1 compressed", "L2 minimal", "L3 bare"]
+    for i, messages in enumerate(engine.call_log):
+        sub(f"attempt {i}  ({level_names[i]})")
+        print_messages(messages)
+
+    sub("final")
+    print(f"    attempts={result.attempts}  accepted={result.accepted}")
+    print("    (accepted=False → translation NOT added to window)")
+
+
+# ---------------------------------------------------------------------------
+# Section 6 — Streaming scenarios
+# ---------------------------------------------------------------------------
+
+async def section_6a_oneshot_terms() -> None:
+    hr("Section 6a — OneShotTerms (incremental accumulation, real LLM)")
+    print(
+        "  Simulates a browser-plugin feed: sentences stream in one at a time.\n"
+        "  OneShotTerms accumulates until char_threshold is crossed, then\n"
+        "  extracts terms in the background while translation proceeds."
+    )
+
+    engine = trx.create_engine(
+        model=LLM_MODEL, base_url=LLM_BASE_URL, api_key="EMPTY",
+        temperature=0.3,
+        extra_body={
+            "top_k": 20, "min_p": 0,
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+    )
+
+    stream_texts = [
+        "Gradient descent is the workhorse of deep learning.",
+        "It updates weights proportional to the loss gradient.",
+        "Adam builds on this by adapting the learning rate per parameter.",
+        "In practice you tune beta1, beta2 and epsilon.",
+        "Batch normalization further stabilizes deep networks.",
+    ]
+
+    terms = OneShotTerms(engine, "en", "zh", char_threshold=100)
+    ctx = TranslationContext(
+        source_lang="en", target_lang="zh",
+        max_retries=2, terms_provider=terms,
+    )
+    checker = default_checker("en", "zh")
+    window = ContextWindow(size=6)
+
+    for i, src in enumerate(stream_texts, 1):
+        sub(f"stream {i}: {src[:60]}")
+        await terms.request_generation([src])
+        # Give any just-launched background extraction a scheduling slot so
+        # the ready flag can flip before the next translate call.
+        await asyncio.sleep(0)
+        print(f"    provider.ready BEFORE translate = {terms.ready}")
+        result = await translate_with_verify(src, engine, ctx, checker, window)
+        print(f"    provider.ready AFTER  translate = {terms.ready}")
+        print(f"    translation: {result.translation}")
+        if terms.ready:
+            print(f"    extracted terms so far: {await terms.get_terms()}")
+
+    await terms.wait_until_ready()
+    sub("final term extraction")
+    print(f"    ready={terms.ready}  terms={await terms.get_terms()}")
+
+
+async def section_6b_engine_stream() -> None:
+    hr("Section 6b — engine.stream (token-by-token, real LLM)")
+    print("  Prints raw chunks as they arrive from the model.\n")
+    engine = trx.create_engine(
+        model=LLM_MODEL, base_url=LLM_BASE_URL, api_key="EMPTY",
+        temperature=0.3,
+        extra_body={
+            "top_k": 20, "min_p": 0,
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+    )
+    messages = [
+        {"role": "system", "content": "You are a translator. Translate English to Chinese."},
+        {"role": "user", "content": "Deep learning has transformed computer vision."},
+    ]
+    print("    chunks: ", end="", flush=True)
+    async for chunk in engine.stream(messages):
+        print(repr(chunk), end=" ", flush=True)
+    print()
+
+
+# ---------------------------------------------------------------------------
+# Logging engine wrapper (used by sections 3 & 4)
+# ---------------------------------------------------------------------------
+
+class _LoggingEngine:
+    """Wraps a real engine and records the last messages list."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+        self.last_messages: list[dict] = []
+
+    async def complete(self, messages, **kwargs):
         self.last_messages = list(messages)
-        return await self.inner.complete(
-            messages, temperature=temperature, max_tokens=max_tokens, json_mode=json_mode,
-        )
+        return await self._inner.complete(messages, **kwargs)
 
-    async def stream(self, messages, *, temperature=None, max_tokens=None):
+    async def stream(self, messages, **kwargs):
         self.last_messages = list(messages)
-        async for chunk in self.inner.stream(
-            messages, temperature=temperature, max_tokens=max_tokens,
-        ):
+        async for chunk in self._inner.stream(messages, **kwargs):
             yield chunk
 
 
-class ScriptedEngine:
-    """按脚本依次返回结果的假 engine，支持观察每次调用的 messages。"""
-
-    def __init__(self, scripted_replies: list[str]) -> None:
-        self._replies = list(scripted_replies)
-        self.call_log: list[list[Message]] = []
-
-    async def complete(self, messages, *, temperature=None, max_tokens=None, json_mode=False):
-        self.call_log.append(list(messages))
-        reply = self._replies.pop(0) if self._replies else "(empty)"
-        return CompletionResult(text=reply)
-
-    async def stream(self, messages, *, temperature=None, max_tokens=None):
-        self.call_log.append(list(messages))
-        reply = self._replies.pop(0) if self._replies else "(empty)"
-        for tok in reply:
-            yield tok
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Section A — Real LLM: 完整可观测翻译
-# ═══════════════════════════════════════════════════════════════════════
-
-SOURCE_TEXTS: list[str] = [
-    "Welcome back everyone, today we are going to talk about reinforcement learning from human feedback, or RLHF.",
-    "RLHF is the key ingredient that turned raw large language models into helpful assistants like ChatGPT.",
-    "The pipeline has three stages: supervised fine-tuning, reward model training, and policy optimization with PPO.",
-    "In the reward model stage, we collect pairs of responses and ask human labelers which one is better.",
-    "We then train a reward model to predict the human preference, giving a scalar score to any response.",
-    "Finally, the policy network is updated to maximize the expected reward, while a KL penalty keeps it close to the SFT model.",
-]
-
-
-async def section_a_real_llm() -> None:
-    print("\n" + SEP)
-    print("Section A — 真实 LLM 完整翻译链路（可观测 messages）")
-    print(SEP)
-
-    inner = OpenAICompatEngine(EngineConfig(
-        model=LLM_MODEL,
-        base_url=LLM_BASE_URL,
-        api_key="EMPTY",
+def _make_logging_engine() -> _LoggingEngine:
+    base = trx.create_engine(
+        model=LLM_MODEL, base_url=LLM_BASE_URL, api_key="EMPTY",
         temperature=0.3,
-        max_tokens=2048,
         extra_body={
-            "top_k": 20,
-            "min_p": 0,
+            "top_k": 20, "min_p": 0,
             "chat_template_kwargs": {"enable_thinking": False},
         },
-    ))
-    engine = LoggingEngine(inner=inner)
-
-    # A.1 预加载摘要 + 术语
-    print("\n[A.1] PreloadableTerms 预加载 summary + terms")
-    terms = PreloadableTerms(inner, source_lang="en", target_lang="zh")
-    await terms.preload(SOURCE_TEXTS)
-    print(f"  metadata : {terms.metadata}")
-    extracted = await terms.get_terms()
-    print(f"  terms    : {len(extracted)} 条")
-
-    # A.2 上下文 / 窗口 / checker
-    context = TranslationContext(
-        source_lang="en", target_lang="zh",
-        terms_provider=terms, window_size=4,
     )
-    window = ContextWindow(size=context.window_size)
-    checker = default_checker("en", "zh")
-
-    # A.3 打印 system prompt + 术语紧凑消息（送入 LLM 前的静态部分）
-    print("\n[A.2] 默认 system prompt（metadata 已注入）")
-    for line in get_default_system_prompt(context).splitlines():
-        print(f"  │ {line}")
-
-    print("\n[A.3] 术语紧凑消息（primer + 拼接对）")
-    compact = build_frozen_messages(tuple(extracted.items()))
-    print_messages(compact, limit=110)
-
-    # A.4 逐条翻译：**打印实际送入 LLM 的 messages** + window + 结果
-    print("\n[A.4] 逐条翻译")
-    for idx, src in enumerate(SOURCE_TEXTS, 1):
-        print("\n" + SUB)
-        print(f"[#{idx}/{len(SOURCE_TEXTS)}] SRC: {src}")
-
-        print(f"\n  📜 window BEFORE (size={window.size}, 当前={len(window)})")
-        print_window(window)
-
-        result = await translate_with_verify(src, engine, context, checker, window)
-
-        # LoggingEngine 已记录最后一次 messages（即本次翻译实际送 LLM 的内容）
-        print(f"\n  📤 messages sent to LLM (共 {len(engine.last_messages or [])} 条)")
-        print_messages(engine.last_messages or [])
-
-        print(f"\n  ✅ TRANSLATION: {result.translation}")
-        print(f"     attempts={result.attempts} accepted={result.accepted} "
-              f"passed={result.report.passed}")
-
-        print(f"\n  📜 window AFTER  (当前={len(window)})")
-        print_window(window)
+    return _LoggingEngine(base)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Section B — Prompt degradation (simulated)
-# ═══════════════════════════════════════════════════════════════════════
-
-async def section_b_prompt_degradation() -> None:
-    """模拟：前 3 次都返回会被 checker 判不合格的译文 → Level 0/1/2/fallback。
-
-    关键看点：每一级送给 LLM 的 messages 结构不同：
-      Level 0: system + 完整 history + user
-      Level 1: history 压进 system（单轮）
-      Level 2: system + user（无 history）
-      Fallback: 接受最后一次结果但不入窗口
-    """
-    print("\n" + SEP)
-    print("Section B — Prompt 降级（check-fail → Level 0/1/2/fallback）")
-    print(SEP)
-
-    # 场景：源文本是正常英文，但前 3 次故意返回极短译文 → 长度比严重过小
-    # 触发 length_ratio 还不够（它只管 *过长*），所以改用 format 触发：
-    # 让前 3 次都以 "Translation:" 开头（hallucination_start 会命中）。
-    # 第 4 次 fallback 仍然是坏的，但 translate_with_verify 会接受它。
-    source = "What is the capital of France?"
-
-    # 通过自定义 FormatRule 的 hallucination_starts 确保触发
-    custom_format = FormatRule(
-        severity=Severity.ERROR,
-        hallucination_starts=[("translation:", None)],
-    )
-    checker = Checker(rules=[custom_format])
-
-    replies = [
-        "Translation: 法国的首都是什么？",   # bad — level 0 用
-        "Translation: 法国的首都。",         # bad — level 1 用
-        "Translation: 巴黎。",               # bad — level 2 用
-        "巴黎。",                              # 最终 fallback 返回这个（不会再调用）
-    ]
-    engine = ScriptedEngine(scripted_replies=replies)
-
-    context = TranslationContext(
-        source_lang="en", target_lang="zh",
-        terms_provider=StaticTerms({}),      # not ready → no provider metadata
-        frozen_pairs=(("Paris", "巴黎"),),   # 一条 frozen pair，便于观察
-        window_size=3,
-        max_retries=3,
-    )
-    window = ContextWindow(size=3)
-    # 先灌点历史，让 Level 0 和 Level 1 的差别看得见
-    window.add("Hello.", "你好。")
-    window.add("Goodbye.", "再见。")
-
-    print(f"\n  SRC: {source}")
-    print(f"  max_retries: {context.max_retries}")
-    print(f"  window primed with 2 pairs, frozen_pairs=1")
-
-    result = await translate_with_verify(source, engine, context, checker, window)
-
-    print(f"\n  最终结果: translation={result.translation!r}")
-    print(f"          attempts={result.attempts} accepted={result.accepted}")
-
-    # 逐级回放
-    level_names = ["Level 0 (full)", "Level 1 (compressed)", "Level 2 (minimal)", "(no more)"]
-    for i, msgs in enumerate(engine.call_log):
-        print("\n" + SUB)
-        print(f"  attempt #{i + 1} — {level_names[min(i, 3)]}")
-        print(f"  messages sent ({len(msgs)} 条):")
-        print_messages(msgs, limit=140)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Section C — Checker rule matrix
-# ═══════════════════════════════════════════════════════════════════════
-
-async def section_c_checker_scenarios() -> None:
-    """枚举每条内置规则的触发样例（不调用 LLM，直接喂译文给 Checker）。"""
-    print("\n" + SEP)
-    print("Section C — Checker 规则触发场景")
-    print(SEP)
-
-    scenarios: list[tuple[str, Checker, str, str]] = [
-        (
-            "C.1 length_ratio 过长 (short 阈值 5.0，这里 ratio>10)",
-            Checker(rules=[LengthRatioRule()]),
-            "Hi.",
-            "你好呀朋友真的非常非常非常开心能够见到你今天天气也特别好。",
-        ),
-        (
-            "C.2 format — markdown 粗体残留",
-            Checker(rules=[FormatRule()]),
-            "This is important.",
-            "这是 **重要** 的事情。",
-        ),
-        (
-            "C.3 format — 意外换行",
-            Checker(rules=[FormatRule()]),
-            "Hello world.",
-            "你好\n世界。",
-        ),
-        (
-            "C.4 format — 幻觉开头 (译者前缀)",
-            Checker(rules=[FormatRule(hallucination_starts=[("translation:", None)])]),
-            "Hello.",
-            "Translation: 你好。",
-        ),
-        (
-            "C.5 question_mark — 源问句但译文无问号 (WARNING, 不阻断)",
-            Checker(rules=[QuestionMarkRule()]),
-            "What is RLHF?",
-            "RLHF 是什么。",
-        ),
-        (
-            "C.6 keyword — 译文幻觉出源文没有的术语 (target 含 Python，source 无)",
-            Checker(rules=[KeywordRule(keyword_pairs=[(["python"], ["Python", "python"])])]),
-            "The snake slithered through the grass.",
-            "这条 Python 蛇在草丛里滑行。",
-        ),
-        (
-            "C.7 keyword — forbidden 术语出现在译文中",
-            Checker(rules=[KeywordRule(forbidden_terms=["翻译"])]),
-            "Hello world.",
-            "（这是翻译）你好世界。",
-        ),
-    ]
-
-    for title, chk, src, tgt in scenarios:
-        print("\n" + SUB)
-        print(f"  {title}")
-        print(f"    source     : {src}")
-        print(f"    translation: {tgt}")
-        report = chk.check(src, tgt)
-        print(f"    passed     : {report.passed}")
-        print(f"    issues:")
-        print_report(report)
-
-    # C.8 正常放行
-    print("\n" + SUB)
-    print("  C.8 default_checker(en, zh) 正常放行")
-    chk = default_checker("en", "zh")
-    src, tgt = "Hello world.", "你好，世界。"
-    print(f"    source     : {src}")
-    print(f"    translation: {tgt}")
-    report = chk.check(src, tgt)
-    print(f"    passed     : {report.passed}")
-    print(f"    issues:")
-    print_report(report)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Section D — Streaming
-# ═══════════════════════════════════════════════════════════════════════
-
-async def section_d_streaming() -> None:
-    print("\n" + SEP)
-    print("Section D — 流式翻译（engine.stream）")
-    print(SEP)
-
-    engine = OpenAICompatEngine(EngineConfig(
-        model=LLM_MODEL,
-        base_url=LLM_BASE_URL,
-        api_key="EMPTY",
-        temperature=0.3,
-        max_tokens=512,
-        extra_body={
-            "top_k": 20,
-            "min_p": 0,
-            "chat_template_kwargs": {"enable_thinking": False},
-        },
-    ))
-
-    source = "Reinforcement learning from human feedback has become the standard recipe for aligning large language models with human preferences."
-    print(f"\n  SRC: {source}")
-
-    messages: list[Message] = [
-        {"role": "system", "content": "你是英译中意译专家。仅输出中文译文。"},
-        {"role": "user", "content": source},
-    ]
-
-    print("\n  streaming chunks:\n")
-    print("    ", end="", flush=True)
-    buf: list[str] = []
-    chunks = 0
-    async for chunk in engine.stream(messages):
-        buf.append(chunk)
-        chunks += 1
-        print(chunk, end="", flush=True)
-    print(f"\n\n  ✓ 收到 {chunks} 个 chunk, 总长 {sum(len(c) for c in buf)} 字符")
-
-
-# ═══════════════════════════════════════════════════════════════════════
+# ---------------------------------------------------------------------------
 # Main
-# ═══════════════════════════════════════════════════════════════════════
-
-async def check_llm_alive(base_url: str) -> bool:
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.get(f"{base_url}/models")
-            return r.status_code == 200
-    except Exception:
-        return False
-
+# ---------------------------------------------------------------------------
 
 async def main() -> None:
-    print(SEP)
-    print("demo_llm_ops — A/B/C/D 四个章节")
-    print(SEP)
+    section_1_checker_matrix()
+    section_2_direct_translate()
 
-    llm_alive = await check_llm_alive(LLM_BASE_URL)
-    if llm_alive:
-        print(f"\n✅ LLM 在线: {LLM_MODEL} @ {LLM_BASE_URL}")
+    if not await _probe_llm():
+        hr("Sections 3 / 4 / 6 skipped", "!")
+        print(f"  LLM endpoint {LLM_BASE_URL} is unreachable; skipping real-LLM demos.")
     else:
-        print(f"\n⚠️  LLM 不可达 ({LLM_BASE_URL})，Section A/D 将跳过。")
+        await section_3_single_sentence()
+        await section_4_full_pipeline()
 
-    if llm_alive:
-        await section_a_real_llm()
-    else:
-        print("\n(Section A 跳过 — 需要真实 LLM)")
+    await section_5_prompt_degradation()
 
-    await section_b_prompt_degradation()
-    await section_c_checker_scenarios()
-
-    if llm_alive:
-        await section_d_streaming()
-    else:
-        print("\n(Section D 跳过 — 需要真实 LLM)")
-
-    print("\n" + SEP)
-    print("demo_llm_ops 完成。")
-    print(SEP)
+    if await _probe_llm():
+        await section_6a_oneshot_terms()
+        await section_6b_engine_stream()
 
 
 if __name__ == "__main__":
-    with suppress(KeyboardInterrupt):
-        asyncio.run(main())
+    asyncio.run(main())

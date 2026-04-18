@@ -8,8 +8,9 @@ standard — on each attempt:
 
 1. Full context (system prompt + history window + user message)
 2. Compressed context (history folded into system prompt)
-3. Minimal (no history, plain prompt)
-4. Accept whatever the model returns (fallback result not added to history)
+3. Minimal (no history, system prompt + user)
+4. Bare (single user message with inline "translate to <lang>" instruction,
+   no system prompt) — last-resort fallback matching the legacy behaviour.
 """
 
 from __future__ import annotations
@@ -73,6 +74,46 @@ def _build_messages_minimal(
     return messages
 
 
+# Language code → display name used by the bare fallback prompt.
+_TARGET_LANG_NAMES: dict[str, str] = {
+    "zh": "简体中文",
+    "zh-cn": "简体中文",
+    "zh-hans": "简体中文",
+    "zh-tw": "繁體中文",
+    "zh-hant": "繁體中文",
+    "en": "English",
+    "ja": "日本語",
+    "ko": "한국어",
+    "fr": "français",
+    "de": "Deutsch",
+    "es": "español",
+    "ru": "русский",
+    "pt": "português",
+    "vi": "tiếng Việt",
+}
+
+
+def _lang_name(code: str) -> str:
+    return _TARGET_LANG_NAMES.get(code.lower(), code)
+
+
+def _build_messages_bare(target_lang: str, user_text: str) -> list[Message]:
+    """Level 3: single user message, no system prompt, minimal instruction.
+
+    Matches the legacy TranslatorX "last-resort" fallback — a single
+    imperative user turn in the target language, e.g.
+    ``请将以下内容翻译为简体中文：\\n\\n<text>``.
+    """
+    name = _lang_name(target_lang)
+    # Localize the instruction when the target is Chinese; otherwise fall
+    # back to English. This mirrors the old behaviour for zh-target.
+    if target_lang.lower().startswith("zh"):
+        instruction = f"请将以下内容翻译为{name}："
+    else:
+        instruction = f"Translate the following to {name}:"
+    return [{"role": "user", "content": f"{instruction}\n{user_text}"}]
+
+
 _PROMPT_LEVELS = [
     _build_messages_full,
     _build_messages_compressed,
@@ -110,20 +151,16 @@ async def translate_with_verify(
 ) -> TranslateResult:
     """Translate *source* with quality verification and prompt degradation.
 
-    On each retry the prompt structure degrades while the checker
-    standard stays the same.  If all retries are exhausted the last
-    translation is accepted without entering the context window.
+    Prompt structure shrinks on each retry while the checker standard stays
+    constant:
 
-    Args:
-        source: Source-language text to translate.
-        engine: LLM backend.
-        context: Immutable translation context (langs, terms, etc.).
-        checker: Quality checker instance.
-        window: Sliding history window (mutated on success).
-        system_prompt: Optional system-level instruction.
+    * attempt 0 → Level 0 (system + history + user)
+    * attempt 1 → Level 1 (compressed single-turn)
+    * attempt 2 → Level 2 (system + user, no history)
+    * attempt 3+ → Level 3 (bare one-message fallback)
 
-    Returns:
-        A :class:`TranslateResult` with the translation and metadata.
+    If every attempt fails the last translation is returned with
+    ``accepted=False`` and NOT added to the history window.
     """
     max_retries = context.max_retries
 
@@ -144,16 +181,18 @@ async def translate_with_verify(
     last_report = CheckReport.ok()
 
     for attempt in range(max_retries + 1):
-        # Pick prompt builder for this degradation level
-        level = min(attempt, len(_PROMPT_LEVELS) - 1)
-        builder = _PROMPT_LEVELS[level]
+        # Pick prompt builder for this degradation level.
+        # Level 3+ uses the bare fallback (single user message).
+        if attempt >= len(_PROMPT_LEVELS):
+            messages = _build_messages_bare(context.target_lang, source)
+        else:
+            builder = _PROMPT_LEVELS[attempt]
+            # Rebuild context messages only for level 0 (others don't use them
+            # or have them embedded in system prompt).
+            if attempt > 0 and attempt == 0:  # no-op, kept for clarity
+                context_messages = window.build_messages(effective_pairs)
+            messages = builder(resolved_system_prompt, context_messages, source)
 
-        # Rebuild context messages only for level 0 (others don't use them
-        # or have them embedded in system prompt).
-        if attempt > 0 and level == 0:
-            context_messages = window.build_messages(effective_pairs)
-
-        messages = builder(resolved_system_prompt, context_messages, source)
         result = await engine.complete(messages)
         translation = result.text.strip()
 
