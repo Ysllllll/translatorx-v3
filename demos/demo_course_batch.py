@@ -56,6 +56,35 @@ SEP = "═" * 72
 SUB = "─" * 72
 
 
+# Strip the bare-fallback instruction prefix used by translate_with_verify
+# Level 3 (e.g. "请将以下内容翻译为简体中文：\n<src>" or
+# "Translate the following to English:\n<src>").
+_BARE_INSTRUCTION_RE = re.compile(
+    r"^(请将以下内容翻译为[^\n：]+：|Translate the following to [^\n:]+:)\n",
+)
+
+
+def _extract_source(messages: list[dict]) -> str:
+    """Recover the source text from a translate_with_verify message list.
+
+    Handles all four prompt-degradation levels uniformly:
+      L0/L2: source is the last ``user`` message.
+      L1   : source lives inside the single ``system`` message after
+             ``"Translate:\\n"``.
+      L3   : single ``user`` message prefixed with the bare instruction.
+    """
+    for m in messages:
+        content = m.get("content", "")
+        if "Translate:\n" in content:
+            return content.split("Translate:\n", 1)[1].strip()
+    user_msgs = [m["content"] for m in messages if m.get("role") == "user"]
+    if not user_msgs:
+        return ""
+    last = user_msgs[-1]
+    stripped = _BARE_INSTRUCTION_RE.sub("", last, count=1)
+    return stripped
+
+
 def header(t: str) -> None:
     print(f"\n{SEP}\n{t}\n{SEP}")
 
@@ -99,10 +128,7 @@ class ProgressEngine:
             n = self.calls
             elapsed = time.perf_counter() - self.t0
             tot = f"/{self.total}" if self.total else ""
-            src = ""
-            for m in messages:
-                if m.get("role") == "user":
-                    src = m["content"]
+            src = _extract_source(messages)
             src_short = src if len(src) <= 38 else src[:35] + "…"
             tgt = result.text
             tgt_short = tgt if len(tgt) <= 36 else tgt[:33] + "…"
