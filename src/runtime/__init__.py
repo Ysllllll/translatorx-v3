@@ -41,6 +41,7 @@ from runtime.resource_manager import (
     UsageSnapshot,
     UserTier,
 )
+from runtime.orchestrator import VideoOrchestrator, VideoResult
 from runtime.sources import (
     PushQueueSource,
     SrtSource,
@@ -103,6 +104,9 @@ __all__ = [
     "ResourceManager",
     "UsageSnapshot",
     "UserTier",
+    # orchestrator
+    "VideoOrchestrator",
+    "VideoResult",
     # sources
     "PushQueueSource",
     "SrtSource",
