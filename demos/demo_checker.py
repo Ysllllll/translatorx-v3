@@ -6,6 +6,8 @@
     python demos/demo_checker.py
 """
 
+import _bootstrap  # noqa: F401
+
 from checker import (
     default_checker,
     Checker,

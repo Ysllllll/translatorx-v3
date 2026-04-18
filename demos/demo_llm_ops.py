@@ -9,6 +9,8 @@ ContextWindow、translate_with_verify 翻译微循环。
 注意：需要一个 OpenAI 兼容 API 端点。可修改下方 config 指向你的服务。
 """
 
+import _bootstrap  # noqa: F401
+
 import asyncio
 
 from llm_ops import (

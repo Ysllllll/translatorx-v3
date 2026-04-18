@@ -116,7 +116,18 @@ class AppConfig(BaseModel):
         the parsed values (uppercase match, case-insensitive section key).
         """
         data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-        data = _apply_env_overrides(data, prefix="TRX_")
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_yaml(cls, text: str) -> "AppConfig":
+        """Parse YAML *text* (not a path) into an :class:`AppConfig`."""
+        data = yaml.safe_load(text) or {}
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AppConfig":
+        """Construct from a plain dict, applying env overrides."""
+        data = _apply_env_overrides(dict(data), prefix="TRX_")
         return cls.model_validate(data)
 
 

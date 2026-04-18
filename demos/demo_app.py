@@ -1,9 +1,11 @@
 """demo_app — App/Builder/Config 端到端演示 (Stage 4.4).
 
-展示 YAML 驱动的 App 门面 + 链式 Builder API:
+展示 YAML / dict 驱动的 App 门面 + 链式 Builder API:
 
 * 场景 A (VideoBuilder): 翻译单个 SRT 文件
 * 场景 B (CourseBuilder): 批量翻译同一门课程下的多个 SRT
+* 配置来自 inline dict — 无需写 YAML 文件 (也可用 ``App.from_config(path)`` / ``App.from_yaml(text)``)
+* 文件 ``kind`` 由后缀自动推断 (.srt / .json)
 
 运行:
     python demos/demo_app.py
@@ -14,6 +16,8 @@
 
 from __future__ import annotations
 
+import _bootstrap  # noqa: F401
+
 import asyncio
 import os
 import tempfile
@@ -21,7 +25,6 @@ from pathlib import Path
 
 import httpx
 
-import trx  # noqa: F401  确保 runtime 可用
 from runtime import App
 
 
@@ -35,36 +38,6 @@ def _llm_is_up() -> bool:
         return r.status_code < 500
     except Exception:
         return False
-
-
-YAML_TEMPLATE = """
-engines:
-  default:
-    kind: openai_compat
-    model: {model}
-    base_url: {base_url}
-    api_key: EMPTY
-    temperature: 0.3
-    extra_body:
-      top_k: 20
-      min_p: 0
-      chat_template_kwargs:
-        enable_thinking: false
-contexts:
-  en_zh:
-    src: en
-    tgt: zh
-    window_size: 4
-    terms:
-      API: 接口
-store:
-  kind: json
-  root: {ws_root}
-runtime:
-  max_concurrent_videos: 2
-  flush_every: 1
-  default_checker_profile: strict
-"""
 
 
 SAMPLE_SRT = """1
@@ -86,11 +59,36 @@ We discuss advanced topics.
 """
 
 
+def build_app(ws_root: Path) -> App:
+    """Build an App from an inline dict — no YAML file needed."""
+    return App.from_dict({
+        "engines": {
+            "default": {
+                "kind": "openai_compat",
+                "model": LLM_MODEL,
+                "base_url": LLM_BASE_URL,
+                "api_key": "EMPTY",
+                "temperature": 0.3,
+                "extra_body": {
+                    "top_k": 20,
+                    "min_p": 0,
+                    "chat_template_kwargs": {"enable_thinking": False},
+                },
+            },
+        },
+        "contexts": {
+            "en_zh": {"src": "en", "tgt": "zh", "window_size": 4, "terms": {"API": "接口"}},
+        },
+        "store": {"kind": "json", "root": ws_root.as_posix()},
+        "runtime": {"max_concurrent_videos": 2, "flush_every": 1},
+    })
+
+
 async def scenario_video_builder(app: App, srt_path: Path) -> None:
     print("\n=== Scenario A: VideoBuilder (single SRT) ===")
     result = await (
         app.video(course="demo-course", video="lec01")
-        .source(srt_path, language="en", kind="srt")
+        .source(srt_path, language="en")   # kind 由 .srt 自动推断
         .translate(src="en", tgt="zh")
         .run()
     )
@@ -128,23 +126,15 @@ async def main() -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
-        cfg_path = tmp_path / "app.yaml"
         ws_root = tmp_path / "ws"
-
-        cfg_path.write_text(
-            YAML_TEMPLATE.format(
-                model=LLM_MODEL, base_url=LLM_BASE_URL, ws_root=ws_root.as_posix()
-            ),
-            encoding="utf-8",
-        )
-        print(f"=== Loaded config ===\n{cfg_path.read_text()}")
 
         srt1 = tmp_path / "lec01.srt"
         srt1.write_text(SAMPLE_SRT, encoding="utf-8")
         srt2 = tmp_path / "lec03.srt"
         srt2.write_text(SAMPLE_SRT_2, encoding="utf-8")
 
-        app = App.from_config(cfg_path)
+        app = build_app(ws_root)
+        print(f"=== App built (inline dict config) — model={LLM_MODEL} ===")
 
         await scenario_video_builder(app, srt1)
         await scenario_course_builder(app, srt1, srt2)

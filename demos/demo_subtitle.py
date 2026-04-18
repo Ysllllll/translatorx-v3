@@ -6,6 +6,8 @@
     python demos/demo_subtitle.py
 """
 
+import _bootstrap  # noqa: F401
+
 from model import Word, Segment, SentenceRecord
 from subtitle import (
     Subtitle, SubtitleStream,

@@ -153,3 +153,59 @@ class TestCourseBuilder:
         b = app.course(course="c1")
         with pytest.raises(ValueError, match="add_video"):
             await b.run()
+
+
+class TestBuilderEnhancements:
+    """Polish items: from_dict/from_yaml + kind auto-detect."""
+
+    def test_app_from_dict(self, tmp_path: Path):
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+        })
+        assert app.engine("default").config.model == "m"
+
+    def test_app_from_yaml_string(self, tmp_path: Path):
+        text = (
+            "engines:\n"
+            "  default:\n"
+            "    model: m2\n"
+            "    base_url: http://x/v1\n"
+            "    api_key: k\n"
+            f"store:\n  root: {(tmp_path / 'ws').as_posix()}\n"
+        )
+        app = App.from_yaml(text)
+        assert app.engine("default").config.model == "m2"
+
+    @pytest.mark.asyncio
+    async def test_video_source_kind_autodetected_from_suffix(
+        self, app: App, tmp_path: Path, monkeypatch
+    ):
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        srt = tmp_path / "auto.srt"
+        _write_srt(srt, ["Hi."])
+
+        # No kind= — should infer "srt" from .srt suffix.
+        result = await (
+            app.video(course="c1", video="auto")
+            .source(srt, language="en")
+            .translate(src="en", tgt="zh")
+            .run()
+        )
+        assert result.records[0].translations["zh"] == "[Hi.]"
+
+    def test_source_kind_rejects_unknown_suffix(self, app: App, tmp_path: Path):
+        bogus = tmp_path / "foo.xyz"
+        bogus.write_text("", encoding="utf-8")
+        with pytest.raises(ValueError, match="auto-detect"):
+            app.video(course="c1", video="v").source(bogus, language="en")
+
+    def test_course_add_video_kind_autodetect(self, app: App, tmp_path: Path):
+        # Smoke-test: call add_video without kind= for a .srt path.
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["x"])
+        # Should not raise.
+        app.course(course="c1").add_video("x", srt, language="en")

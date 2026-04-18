@@ -20,7 +20,7 @@ pytest tests/subtitle/build_tests/test_english.py -v
 /home/ysl/workspace/.venv/bin/pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
-`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops`, `subtitle`, `model`, `checker`, `llm_ops`, `media`, `pipeline`, and `trx` from `src/`.
+`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops`, `subtitle`, `model`, `checker`, `llm_ops`, `media`, `runtime`, and `trx` from `src/`.
 
 ## Architecture
 
@@ -74,13 +74,23 @@ src/
 │   ├── checkers.py                  # Checker (rule engine, ERROR short-circuit)
 │   ├── factory.py                   # default_checker(src, tgt)
 │   └── lang/                        # 10 per-language LangProfile files
-└── pipeline/                        # Translation pipeline (L3)
-    ├── config.py                    # TranslateNodeConfig, PrefixRule
-    ├── prefix.py                    # PrefixHandler
-    ├── nodes.py                     # translate_node (orchestrates refinements)
-    └── chain.py                     # Pipeline (immutable chain)
+├── runtime/                         # Orchestration + Processors + App (L3)
+│   ├── protocol.py                  # Processor[In,Out] / Source / VideoKey
+│   ├── errors.py                    # ErrorCategory, ErrorInfo, ErrorReporter
+│   ├── progress.py                  # ProgressEvent, ProgressReporter
+│   ├── usage.py                     # Usage, CompletionResult (D-048)
+│   ├── store.py                     # Store Protocol + JsonFileStore (D-041..044)
+│   ├── workspace.py                 # Workspace layout (course/video paths)
+│   ├── resource_manager.py          # InMemoryResourceManager (D-033, D-051)
+│   ├── reporters.py                 # LoggerReporter / JsonlErrorReporter
+│   ├── orchestrator.py              # VideoOrchestrator + StreamingOrchestrator (D-060)
+│   ├── course.py                    # CourseOrchestrator (D-055)
+│   ├── app.py                       # App + VideoBuilder + CourseBuilder (D-059)
+│   ├── config.py                    # AppConfig YAML/dict (Pydantic v2) (D-057)
+│   ├── sources/                     # Source impls: srt, whisperx, push
+│   └── processors/                  # TranslateProcessor + prefix + more
 ├── trx/                             # Unified API facade (L3)
-│   └── __init__.py                  # create_engine, create_context, translate_srt + re-exports
+│   └── __init__.py                  # create_engine, create_context, translate_srt + App/Builders re-exports
 ```
 
 ### Key design decisions
@@ -107,14 +117,15 @@ src/
 L0: model (Word, Segment, SentenceRecord)
 L1: lang_ops, media
 L2: subtitle, llm_ops, checker
-L3: pipeline, trx (facade)
-L4: app (future)
+L3: runtime, trx (facade)
 ```
 
 Dependencies flow downward only. `model` depends on `lang_ops._core._punctuation` for `strip_punct`.
 `subtitle` re-exports model types for backward compatibility.
 `llm_ops` re-exports checker types (`Checker`, `CheckReport`, `Severity`, `default_checker`) for convenience.
 `trx` is a pure facade — re-exports from all lower packages + factory functions. No new logic.
+`runtime` owns all orchestration state (Store, Workspace, Orchestrator, App/Builder).
+The legacy `pipeline/` package was removed in Stage 5 — use `runtime.TranslateProcessor` + `VideoOrchestrator` (or the higher-level `App`/`Builder`) instead.
 
 `subtitle` depends on `lang_ops` via `ChunkPipeline.segments()` (deferred import of `subtitle.align.align_segments`) and `Subtitle` which takes an `ops` or `language` parameter.
 
@@ -163,11 +174,18 @@ tests/
 │   ├── test_ffmpeg.py           # ffprobe + extract_audio
 │   ├── test_protocol.py         # MediaSource Protocol conformance
 │   └── test_ytdlp.py            # yt-dlp source tests
-└── pipeline_tests/              # Pipeline chain + node tests
-    ├── test_e2e.py              # End-to-end translation pipeline
-    ├── test_pipeline.py         # Pipeline chain + build
-    ├── test_prefix.py           # PrefixHandler + rules
-    └── test_refinements.py      # translate_node refinements
+└── runtime_tests/               # Runtime orchestration tests
+    ├── test_app.py              # App + VideoBuilder + CourseBuilder
+    ├── test_config.py           # AppConfig (YAML + dict + env overrides)
+    ├── test_store.py            # JsonFileStore
+    ├── test_workspace.py        # Workspace layout
+    ├── test_resource_manager.py # InMemoryResourceManager
+    ├── test_reporters.py        # Logger / Jsonl reporters
+    ├── test_usage.py            # Usage, CompletionResult
+    ├── test_base.py             # Protocol/errors/progress shape tests
+    ├── orchestrator_tests/      # VideoOrchestrator / Streaming / Course
+    ├── processors_tests/        # TranslateProcessor + prefix
+    └── sources_tests/           # SrtSource, WhisperXSource, PushQueueSource
 ```
 
 Test directory is `lang_ops_tests` (not `lang_ops`) to prevent Python from importing it instead of `src/lang_ops`.
@@ -194,7 +212,29 @@ ctx = trx.create_context("en", "zh", terms={"AI": "人工智能"})
 # One-line SRT translation
 records = await trx.translate_srt(srt_content, engine, src="en", tgt="zh")
 
-# All common types available: trx.Subtitle, trx.Pipeline, trx.Word, trx.Segment, etc.
+# Config-driven App + chainable Builders (recommended for real apps)
+from runtime import App
+
+app = App.from_config("app.yaml")       # or App.from_yaml(text) / App.from_dict({...})
+
+# Single-video builder
+result = await (
+    app.video(course="course-1", video="lec01")
+        .source("lec01.srt", language="en")   # kind auto-detected from .srt / .json
+        .translate(src="en", tgt="zh")
+        .run()
+)
+
+# Course builder — batches many videos with bounded concurrency
+course_result = await (
+    app.course(course="course-1")
+        .add_video("lec01", "lec01.srt", language="en")
+        .add_video("lec02", "lec02.srt", language="en")
+        .translate(src="en", tgt="zh")
+        .run()
+)
+
+# All common types available: trx.Subtitle, trx.Word, trx.Segment, trx.App, trx.VideoBuilder, trx.AppConfig, ...
 ```
 
 ### Language operations
@@ -293,24 +333,46 @@ parse_whisperx(data)             → list[Word]  # parse JSON dict (expects 'wor
 read_whisperx(path)              → list[Word]  # read JSON file
 ```
 
-### Translation Pipeline (async, immutable)
+### Runtime orchestration (async, immutable)
 
 ```
-from pipeline import Pipeline, TranslateNodeConfig
+from runtime import (
+    App, AppConfig,
+    VideoOrchestrator, VideoKey, VideoResult,
+    CourseOrchestrator, VideoSpec, CourseResult,
+    StreamingOrchestrator,
+    TranslateProcessor, TranslateNodeConfig,
+    SrtSource, WhisperXSource, PushQueueSource,
+    Workspace, JsonFileStore,
+)
 
-# Pipeline only holds data (records + results).
-# Each node method takes its own dependencies as arguments.
-p = Pipeline(records)
+# Lower-level: assemble orchestrator manually
+orch = VideoOrchestrator(
+    source=SrtSource(path, language="en"),
+    processors=[TranslateProcessor(engine, checker)],
+    ctx=ctx,
+    store=JsonFileStore(Workspace(root=..., course="c1")),
+    video_key=VideoKey(course="c1", video="lec01"),
+)
+result = await orch.run()
+records = result.records
 
-# translate() takes engine, context, checker as required positional args
-result = await p.translate(engine, context, checker, config=cfg)
-translated = result.build()          → list[SentenceRecord]
-results = result.translate_results   → list[TranslateResult]
+# StreamingOrchestrator — feed segments incrementally (browser-plugin scenario)
+# CourseOrchestrator — batch-translate many videos with bounded concurrency
 
-# Terms are injected via frozen_pairs in TranslationContext
-ctx = trx.create_context("en", "zh", terms={"AI": "人工智能"})
-# terms dict → frozen_pairs tuples → few-shot messages in LLM prompt
+# Configuration (Pydantic v2 with `extra="forbid"`):
+cfg = AppConfig.load("app.yaml")            # file
+cfg = AppConfig.from_yaml("engines:\n ...")  # string
+cfg = AppConfig.from_dict({...})            # dict
+# Env overrides: TRX_<SECTION>__<KEY> (double underscore between levels)
 ```
+
+Key invariants:
+- **Processor stateless** — all state flows through `Store` (JSON-per-video under `<root>/<course>/zzz_translation/<video>.json`)
+- **Immutable Builders** — each stage returns a fresh instance via `dataclasses.replace()`
+- **Auto resolution** — Builders resolve engine/ctx/checker from the App by language pair; users never pass them by hand
+- **Cancel discipline** — `finally` blocks use `asyncio.shield()` for Store flushes so in-flight work is persisted
+- **No print** — all logging goes through `logger` + `ProgressReporter`; demos are the only place stdout is used directly
 
 ## Fonts
 

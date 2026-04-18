@@ -6,6 +6,8 @@
     python demos/demo_lang_ops.py
 """
 
+import _bootstrap  # noqa: F401
+
 from lang_ops import LangOps, ChunkPipeline
 
 # ── 1. 工厂模式 ──────────────────────────────────────────────────────

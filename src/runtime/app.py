@@ -54,6 +54,16 @@ class App:
         """Load YAML config and construct an :class:`App`."""
         return cls(AppConfig.load(path))
 
+    @classmethod
+    def from_yaml(cls, text: str) -> "App":
+        """Construct from a YAML string (useful for inline demos/tests)."""
+        return cls(AppConfig.from_yaml(text))
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "App":
+        """Construct from a plain dict (no YAML needed)."""
+        return cls(AppConfig.from_dict(data))
+
     # -- config access ---------------------------------------------------
 
     @property
@@ -139,15 +149,20 @@ class VideoBuilder:
     _translate: _TranslateStage | None = None
     _error_reporter: ErrorReporter | None = None
 
-    def source(self, path: str | Path, *, language: str, kind: str = "srt") -> "VideoBuilder":
-        """Attach a file-based :class:`Source` (srt or whisperx JSON)."""
+    def source(self, path: str | Path, *, language: str, kind: str | None = None) -> "VideoBuilder":
+        """Attach a file-based :class:`Source`.
+
+        ``kind`` auto-detects from the file extension: ``.srt`` → srt,
+        ``.json`` → whisperx. Pass explicitly to override.
+        """
         p = Path(path)
-        if kind == "srt":
+        resolved = kind or _detect_source_kind(p)
+        if resolved == "srt":
             src: Source = SrtSource(p, language=language)
-        elif kind == "whisperx":
+        elif resolved == "whisperx":
             src = WhisperXSource(p, language=language)
         else:
-            raise ValueError(f"unknown source kind: {kind!r}")
+            raise ValueError(f"unknown source kind: {resolved!r}")
         return replace(self, _source=src)
 
     def translate(
@@ -210,10 +225,12 @@ class CourseBuilder:
         path: str | Path,
         *,
         language: str,
-        kind: str = "srt",
+        kind: str | None = None,
     ) -> "CourseBuilder":
+        p = Path(path)
+        resolved = kind or _detect_source_kind(p)
         entry = _CourseVideoEntry(
-            video=video, path=Path(path), language=language, kind=kind
+            video=video, path=p, language=language, kind=resolved
         )
         return replace(self, _videos=self._videos + (entry,))
 
@@ -269,6 +286,19 @@ class CourseBuilder:
 # ---------------------------------------------------------------------------
 # Builders — private
 # ---------------------------------------------------------------------------
+
+
+def _detect_source_kind(path: Path) -> str:
+    """Infer Source kind from file extension."""
+    suffix = path.suffix.lower()
+    if suffix == ".srt":
+        return "srt"
+    if suffix == ".json":
+        return "whisperx"
+    raise ValueError(
+        f"cannot auto-detect source kind for {path!r} (suffix={suffix!r}); "
+        "pass kind= explicitly"
+    )
 
 
 def _build_engine(entry: EngineEntry) -> OpenAICompatEngine:

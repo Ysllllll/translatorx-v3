@@ -11,6 +11,8 @@
   - 以下示例仅展示 API 结构，实际执行需要真实文件/URL
 """
 
+import _bootstrap  # noqa: F401
+
 import asyncio
 
 from media import (

@@ -86,3 +86,20 @@ class TestAppConfig:
         )
         with pytest.raises(Exception):
             AppConfig.load(cfg_path)
+
+    def test_from_yaml_string(self):
+        cfg = AppConfig.from_yaml(
+            "engines:\n  default:\n    model: m\n    base_url: b\n    api_key: k\n"
+        )
+        assert cfg.engines["default"].model == "m"
+
+    def test_from_dict(self):
+        cfg = AppConfig.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "b", "api_key": "k"}},
+        })
+        assert cfg.engines["default"].base_url == "b"
+
+    def test_from_dict_honors_env_overrides(self, monkeypatch):
+        monkeypatch.setenv("TRX_RUNTIME__MAX_CONCURRENT_VIDEOS", "9")
+        cfg = AppConfig.from_dict({})
+        assert cfg.runtime.max_concurrent_videos == 9
