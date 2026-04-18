@@ -37,12 +37,15 @@ from dataclasses import dataclass, field
 class Usage:
     """Per-request (or aggregated) token / cost counters (D-048).
 
-    ``cost_usd`` is ``None`` for local models with no price table entry
-    — downstream aggregation preserves ``None`` by treating it as
-    zero-contribution (the ``__add__`` stub in Stage 3.2 will make this
-    explicit). ``model`` identifies the source model; aggregations
-    across different models drop it (``""``) and populate
-    ``meta.total_usage.by_model`` at the store layer instead.
+    ``cost_usd`` is ``None`` for local models with no price table entry;
+    aggregation preserves ``None`` when *both* operands are ``None``,
+    otherwise the ``None`` side contributes ``0.0``. ``model`` identifies
+    the source model; aggregations across different models drop it (``""``)
+    and callers populate ``meta.total_usage.by_model`` at the store layer
+    instead.
+
+    ``requests`` counts how many API calls this instance represents.
+    :meth:`zero` returns the additive identity (all counters zero).
     """
 
     prompt_tokens: int = 0
@@ -52,9 +55,48 @@ class Usage:
     requests: int = 1
     extra: dict = field(default_factory=dict)
 
-    def __add__(self, other: "Usage") -> "Usage":
-        """Aggregate two usages. Implementation lands in Stage 3.2."""
-        raise NotImplementedError("Stage 3.2 — implement Usage.__add__")
+    @classmethod
+    def zero(cls) -> "Usage":
+        """Return the additive identity (``requests=0``, all tokens 0)."""
+        return cls(requests=0)
+
+    def __add__(self, other: object) -> "Usage":
+        if not isinstance(other, Usage):
+            return NotImplemented
+
+        # cost: None only if both are None
+        if self.cost_usd is None and other.cost_usd is None:
+            cost: float | None = None
+        else:
+            cost = (self.cost_usd or 0.0) + (other.cost_usd or 0.0)
+
+        # model: drop to "" when operands disagree; empty is absorbed
+        if not self.model:
+            model = other.model
+        elif not other.model:
+            model = self.model
+        elif self.model == other.model:
+            model = self.model
+        else:
+            model = ""
+
+        # extra: shallow merge with later wins
+        extra = {**self.extra, **other.extra} if (self.extra or other.extra) else {}
+
+        return Usage(
+            prompt_tokens=self.prompt_tokens + other.prompt_tokens,
+            completion_tokens=self.completion_tokens + other.completion_tokens,
+            cost_usd=cost,
+            model=model,
+            requests=self.requests + other.requests,
+            extra=extra,
+        )
+
+    def __radd__(self, other: object) -> "Usage":
+        # Support ``sum(iterable)`` which starts from 0.
+        if other == 0:
+            return self
+        return self.__add__(other)  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True, slots=True)

@@ -7,6 +7,7 @@ Public API will expand as Stage 3..6 land. Stage 2 introduces the
 Workspace (file routing) and Store (state persistence) layers.
 """
 
+from runtime.base import ProcessorBase
 from runtime.errors import (
     EngineError,
     ErrorCategory,
@@ -25,6 +26,19 @@ from runtime.protocol import (
     Processor,
     Source,
     VideoKey,
+)
+from runtime.reporters import (
+    ChainReporter,
+    JsonlErrorReporter,
+    LoggerReporter,
+)
+from runtime.resource_manager import (
+    DEFAULT_TIERS,
+    BudgetDecision,
+    InMemoryResourceManager,
+    ResourceManager,
+    UsageSnapshot,
+    UserTier,
 )
 from runtime.store import (
     IncompatibleStoreError,
@@ -52,6 +66,8 @@ from runtime.workspace import (
 )
 
 __all__ = [
+    # base
+    "ProcessorBase",
     # errors
     "EngineError",
     "ErrorCategory",
@@ -68,6 +84,17 @@ __all__ = [
     "Processor",
     "Source",
     "VideoKey",
+    # reporters
+    "ChainReporter",
+    "JsonlErrorReporter",
+    "LoggerReporter",
+    # resource manager
+    "BudgetDecision",
+    "DEFAULT_TIERS",
+    "InMemoryResourceManager",
+    "ResourceManager",
+    "UsageSnapshot",
+    "UserTier",
     # store
     "IncompatibleStoreError",
     "JsonFileStore",
