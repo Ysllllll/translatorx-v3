@@ -5,8 +5,8 @@
 1. **Checker 规则矩阵** — 纯本地质量规则，不调 LLM。每条内置规则都给出
    一个会命中 ERROR 的样例，外加 hallucination-start、bracket、multi-rule、
    WARNING-only passing 等情况。
-2. **Direct-translate dict 旁路** — 字典短语命中直接跳过 LLM，来自旧
-   TranslatorX 的 ``direct_translate`` 模式。
+2. **流水线旁路机制** — 三种不调 LLM 的旁路：direct_translate 字典、
+   fake_process 已有译文复用、max_source_len 超长跳过。
 3. **单句真实翻译** — 空 window、无 terms，打印发给 LLM 的 messages。
 4. **完整流水线** — PreloadableTerms 预加载 summary/terms + compact frozen
    few-shot + 逐条翻译，每步打印 window BEFORE/AFTER。最后一次调用还会
@@ -226,13 +226,17 @@ def section_1_checker_matrix() -> None:
 # ═══════════════════════════════════════════════════════════════════════
 
 def section_2_direct_translate() -> None:
-    header("Section 2 — Direct-translate dict 旁路（不需要 LLM）")
+    header("Section 2 — 流水线旁路机制（不需要 LLM）")
     print(
-        "  旧 TranslatorX 的 direct_translate 模式：字典命中短语直接走 dict，\n"
-        "  跳过 LLM。适合插话词、套语、频道黑话。Pipeline 层的\n"
-        "  TranslateProcessor 会在调用 LLM 之前先做一次字典查找。\n"
+        "  TranslateProcessor 在调用 LLM 之前会走一系列旁路判断；命中任何\n"
+        "  一条都跳过 LLM。这里展示旧 TranslatorX 保留下来的三种旁路：\n"
+        "    2a  direct_translate dict — 短语字典命中 → 直接返回\n"
+        "    2b  fake_process         — 已有译文（缓存/人工）→ 直接复用\n"
+        "    2c  max_source_len skip  — 源文本过长 → 放弃翻译，原样或空串"
     )
 
+    # ── 2a direct_translate
+    sub("2a  direct_translate dict")
     direct_translate: dict[str, str] = {
         "ok": "好的",
         "yeah": "是的",
@@ -240,17 +244,61 @@ def section_2_direct_translate() -> None:
         "thanks": "谢谢",
         "welcome back": "欢迎回来",
     }
-
-    samples = [
+    samples_2a = [
         "ok", "Thanks", "um", "let's train a model",
         "welcome back", "please subscribe", "yeah",
     ]
-    for src in samples:
+    for src in samples_2a:
         key = src.strip().lower()
         if key in direct_translate:
             print(f"    ✓ direct  {src!r:30s} → {direct_translate[key]!r}  (LLM skipped)")
         else:
-            print(f"    → LLM     {src!r:30s} (would be translated by model)")
+            print(f"    → LLM     {src!r:30s} (fall through to model)")
+
+    # ── 2b fake_process —— 已有译文直接复用
+    sub("2b  fake_process — 已存在译文直接复用（缓存/人工复核场景）")
+    print(
+        "    场景：Store 已有前一轮翻译结果 / 人工复核填好 translation，\n"
+        "    TranslateProcessor 检测到 record.translation 非空 → 直接跳过\n"
+        "    LLM 调用，但仍然把 (src, tgt) 作为 few-shot 灌入 window，\n"
+        "    保持后续新句子的上下文一致性。"
+    )
+    existing_records = [
+        {"src": "Gradient descent minimizes the loss.", "tgt": "梯度下降最小化损失。"},
+        {"src": "Adam is an adaptive optimizer.",       "tgt": None},  # 无译文 → 走 LLM
+        {"src": "The learning rate is 0.001.",          "tgt": "学习率为 0.001。"},
+        {"src": "We regularize with weight decay.",     "tgt": ""},  # 空串 → 走 LLM
+    ]
+    for rec in existing_records:
+        src, tgt = rec["src"], rec["tgt"]
+        if tgt:
+            print(f"    ✓ fake    {src!r:45s} → {tgt!r}  (window-fed, LLM skipped)")
+        else:
+            print(f"    → LLM     {src!r:45s} (translation empty, fall through)")
+
+    # ── 2c max_source_len skip
+    sub("2c  max_source_len skip — 超长源文本放弃翻译")
+    print(
+        "    场景：某条字幕被 ASR 误粘到 500+ 字符（常见于切分错误），\n"
+        "    LLM 容易漏翻或跑飞。TranslateProcessor 设置 max_source_len\n"
+        "    阈值；超过即跳过，返回空串或源文本，交由后续人工修正。"
+    )
+    max_source_len = 120
+    cases_2c = [
+        "Hello world.",
+        "Gradient descent minimizes the loss function iteratively over many steps.",
+        ("Sometimes the ASR system glues many sentences together without "
+         "punctuation and we get this absurdly long run-on text which is "
+         "basically unusable for LLM translation because attention gets "
+         "diluted and the model tends to drop half the content entirely, "
+         "so we skip instead of risking a hallucinated shortcut."),
+    ]
+    for src in cases_2c:
+        L = len(src)
+        if L > max_source_len:
+            print(f"    ⚠ skip    len={L:>4d} > {max_source_len}  {_truncate(src, 70)!r}")
+        else:
+            print(f"    → LLM     len={L:>4d} ≤ {max_source_len}  {_truncate(src, 70)!r}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -294,9 +342,14 @@ SOURCE_TEXTS: list[str] = [
     "Welcome back everyone, today we are going to talk about reinforcement learning from human feedback, or RLHF.",
     "RLHF is the key ingredient that turned raw large language models into helpful assistants like ChatGPT.",
     "The pipeline has three stages: supervised fine-tuning, reward model training, and policy optimization with PPO.",
+    "In the supervised fine-tuning stage, we start from a pretrained language model and fine-tune on curated demonstration data.",
+    "The goal of SFT is to teach the model the desired response format before we hand it over to reinforcement learning.",
     "In the reward model stage, we collect pairs of responses and ask human labelers which one is better.",
     "We then train a reward model to predict the human preference, giving a scalar score to any response.",
     "Finally, the policy network is updated to maximize expected reward, with a KL penalty keeping it close to SFT.",
+    "The KL penalty is crucial, otherwise the policy drifts off distribution and the reward model stops being accurate.",
+    "In practice people often replace PPO with DPO or GRPO because they are simpler and avoid training a separate value network.",
+    "Modern variants also add length penalties and safety classifiers directly into the reward signal.",
 ]
 
 
@@ -340,8 +393,8 @@ async def section_4_full_pipeline() -> None:
     compact = build_frozen_messages(tuple(extracted.items()))
     print_messages(compact, limit=110)
 
-    # ── 4.4 逐条翻译，每步打印 window BEFORE / AFTER
-    sub("4.4  逐条翻译")
+    # ── 4.4 逐条翻译，每步打印 window BEFORE / AFTER + 本轮完整 messages
+    sub("4.4  逐条翻译（每句都打印 BEFORE window / messages / TRANSLATION / AFTER window）")
     for idx, src in enumerate(SOURCE_TEXTS, 1):
         print("\n" + SUB)
         print(f"  #{idx}/{len(SOURCE_TEXTS)}  SRC: {_truncate(src, 90)}")
@@ -351,6 +404,9 @@ async def section_4_full_pipeline() -> None:
 
         result = await translate_with_verify(src, engine, ctx, checker, window)
 
+        print(f"\n  📤 messages sent to LLM  (共 {len(engine.last_messages or [])} 条)")
+        print_messages(engine.last_messages or [], limit=100)
+
         print(f"\n  ✅ TRANSLATION: {result.translation}")
         print(f"     attempts={result.attempts} accepted={result.accepted} "
               f"passed={result.report.passed}")
@@ -358,9 +414,9 @@ async def section_4_full_pipeline() -> None:
         print(f"\n  📜 window AFTER  (当前={len(window)})")
         print_window(window)
 
-    # ── 4.5 最后一次调用的完整 messages
-    sub("4.5  最后一次调用完整 messages（system + frozen + window + user）")
-    print_messages(engine.last_messages or [], limit=110)
+    # ── 4.5 最后一次调用的完整 messages（verbose，不截断）
+    sub("4.5  最后一次调用完整 messages（system + frozen + window + user；verbose）")
+    print_messages(engine.last_messages or [], limit=200)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -427,12 +483,43 @@ async def section_5_prompt_degradation() -> None:
 # Section 6a — OneShotTerms 流式术语抽取
 # ═══════════════════════════════════════════════════════════════════════
 
+def _describe_task(t) -> str:
+    if t is None:
+        return "None"
+    if t.done():
+        if t.cancelled():
+            return "cancelled"
+        if t.exception() is not None:
+            return f"error({type(t.exception()).__name__})"
+        return "done"
+    return "pending"
+
+
+def _dump_oneshot_state(terms: OneShotTerms, label: str) -> None:
+    """打印 OneShotTerms 的内部观测量 — 全部私有属性，仅用于 demo。"""
+    char_cnt = getattr(terms, "_char_count", -1)
+    threshold = getattr(terms, "_char_threshold", -1)
+    seen = getattr(terms, "_seen_texts", set())
+    task = getattr(terms, "_task", None)
+    pct = (char_cnt * 100 // threshold) if threshold > 0 else 0
+    print(f"    📊 state @ {label}:")
+    print(f"       ready          = {terms.ready}")
+    print(f"       char_count     = {char_cnt:>4d} / {threshold} ({pct}%)")
+    print(f"       seen_texts     = {len(seen)} 条（累计记录，非去重）")
+    print(f"       bg_task        = {_describe_task(task)}")
+
+
 async def section_6a_oneshot_terms() -> None:
     header("Section 6a — OneShotTerms 流式累积（浏览器插件场景）")
     print(
         "  模拟字幕插件：句子逐条到达 → OneShotTerms 累积到 char_threshold 后\n"
         "  后台抽取术语，期间翻译继续；术语就绪后自动并入后续调用。\n"
-        "  关键观察点：ready 从 False → True 的翻转时刻。"
+        "\n"
+        "  每一步都打印 OneShotTerms 内部状态：\n"
+        "    • ready          — 术语是否已就绪\n"
+        "    • char_count     — 已累积字符数 / 阈值\n"
+        "    • seen_texts     — 累计收到的文本条数（未去重）\n"
+        "    • bg_task        — 后台抽取 Task 的状态 (None / pending / done)"
     )
 
     engine = _make_engine()
@@ -454,34 +541,52 @@ async def section_6a_oneshot_terms() -> None:
     checker = default_checker("en", "zh")
     window = ContextWindow(size=6)
 
+    sub("初始状态（request_generation 之前）")
+    _dump_oneshot_state(terms, "init")
+
+    # 演示累积：多次 request 会把字符数持续累计（seen_texts 全量记录，
+    # 达到 char_threshold 时后台 Task 才被触发）
+    sub("累积演示：两次 request_generation 把 char_count 推近阈值")
+    warmup = "This warms up the accumulator toward the threshold."
+    await terms.request_generation([warmup])
+    _dump_oneshot_state(terms, "after 1st request (warmup)")
+    await terms.request_generation([warmup])
+    _dump_oneshot_state(terms, "after 2nd request (注意：char_count 会继续累加)")
+
     for i, src in enumerate(stream_texts, 1):
         sub(f"stream #{i}: {_truncate(src, 80)}")
+        _dump_oneshot_state(terms, f"before request #{i}")
+
         await terms.request_generation([src])
         # 让后台任务（若刚被触发）有调度机会
         await asyncio.sleep(0)
+        _dump_oneshot_state(terms, f"after request #{i}  (可能刚触发 bg_task)")
+
         before = terms.ready
         # 在第 3 条之后显式等待后台抽取完成，从而让第 4 条开始的翻译
-        # 能观察到 ready=True 的翻转点。生产环境里 ready 会在某次
-        # translate_with_verify 之前或之中异步变为 True — 此处只是为了
-        # 让可观测 demo 稳定呈现翻转。
+        # 能观察到 ready=True 的翻转点。
         if i == 3 and not before:
-            print("    (等待后台术语抽取完成以观察 ready 翻转 …)")
+            print("    ⏳ 等待后台术语抽取完成以观察 ready 翻转 …")
             await terms.wait_until_ready()
             print("    ⚡ READY FLIPPED  (False → True)")
+            _dump_oneshot_state(terms, "after wait_until_ready()")
             before = terms.ready
+
         result = await translate_with_verify(src, engine, ctx, checker, window)
         after = terms.ready
-        flip = "  ⚡ READY FLIPPED" if (not before and after) else ""
-        print(f"    ready: {before} → {after}{flip}")
-        print(f"    translation: {result.translation}")
+        flip = "  ⚡ READY FLIPPED (during translate)" if (not before and after) else ""
+        print(f"    translation: {result.translation}{flip}")
         if after:
             snap = await terms.get_terms()
-            print(f"    terms so far ({len(snap)}): {list(snap.items())[:4]}…")
+            if snap:
+                pair_preview = list(snap.items())[:3]
+                print(f"    terms so far ({len(snap)}): " + ", ".join(f"{k}→{v}" for k, v in pair_preview) + ("…" if len(snap) > 3 else ""))
 
     await terms.wait_until_ready()
-    sub("final term snapshot")
+    sub("final state")
+    _dump_oneshot_state(terms, "final")
     final_terms = await terms.get_terms()
-    print(f"    ready={terms.ready}  terms={len(final_terms)} 条")
+    print(f"    terms ({len(final_terms)} 条):")
     for k, v in list(final_terms.items())[:10]:
         print(f"      {k!r:45s} → {v!r}")
 
