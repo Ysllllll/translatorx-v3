@@ -56,8 +56,7 @@ from llm_ops import (
     translate_with_verify,
 )
 from model import SentenceRecord
-from pipeline.config import TranslateNodeConfig
-from pipeline.prefix import PrefixHandler
+from runtime.processors.prefix import PrefixHandler, TranslateNodeConfig
 
 from runtime.base import ProcessorBase
 

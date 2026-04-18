@@ -33,7 +33,7 @@ from runtime.protocol import VideoKey
 from runtime.store import JsonFileStore
 from runtime.workspace import Workspace
 
-from pipeline.config import EN_ZH_PREFIX_RULES, TranslateNodeConfig
+from runtime.processors.prefix import EN_ZH_PREFIX_RULES, TranslateNodeConfig
 
 
 # ---------------------------------------------------------------------------

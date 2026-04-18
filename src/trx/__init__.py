@@ -13,14 +13,13 @@ Quick start::
         print(f"[{seg.start:.1f}-{seg.end:.1f}] {seg.text}")
 
 The lower-level packages (``lang_ops``, ``subtitle``, ``llm_ops``,
-``checker``, ``pipeline``) remain fully accessible for advanced use.
+``checker``, ``runtime``) remain fully accessible for advanced use.
 """
 
 from __future__ import annotations
 
-# ---------------------------------------------------------------------------
-# Re-exports — common types users need
-# ---------------------------------------------------------------------------
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 # Model types
 from model import Segment, SentenceRecord, Word
@@ -56,21 +55,27 @@ from checker import (
     default_checker,
 )
 
-# Pipeline
-from pipeline import (
+# Runtime (new orchestration layer)
+from runtime import (
     EN_ZH_PREFIX_RULES,
-    FeedResult,
-    Pipeline,
+    JsonFileStore,
     PrefixRule,
-    ProgressCallback,
-    StreamAdapter,
+    PushQueueSource,
+    SrtSource,
     TranslateNodeConfig,
+    TranslateProcessor,
+    VideoKey,
+    VideoOrchestrator,
+    VideoResult,
+    WhisperXSource,
+    Workspace,
 )
 
 
 # ---------------------------------------------------------------------------
 # Factory functions
 # ---------------------------------------------------------------------------
+
 
 def create_engine(
     model: str,
@@ -82,15 +87,7 @@ def create_engine(
     timeout: float = 150.0,
     extra_body: dict | None = None,
 ) -> OpenAICompatEngine:
-    """Create an LLM engine with sensible defaults.
-
-    Example::
-
-        engine = trx.create_engine(
-            model="Qwen/Qwen3-32B",
-            base_url="http://localhost:26592/v1",
-        )
-    """
+    """Create an LLM engine with sensible defaults."""
     config = EngineConfig(
         model=model,
         base_url=base_url,
@@ -114,27 +111,7 @@ def create_context(
     max_retries: int = 3,
     system_prompt_template: str = "",
 ) -> TranslationContext:
-    """Create a translation context.
-
-    Supply terminology in one of two ways:
-
-    * ``terms={...}`` — convenience form; wraps the dict in
-      :class:`StaticTerms` for you.
-    * ``terms_provider=...`` — pass a pre-built provider
-      (e.g. :class:`PreloadableTerms`, :class:`OneShotTerms`).
-
-    ``frozen_pairs`` are extra non-term reference pairs concatenated
-    *after* the provider terms in the few-shot context.
-
-    Example::
-
-        ctx = trx.create_context("en", "zh", terms={"AI": "人工智能"})
-
-        # Or with a dynamic provider:
-        provider = trx.PreloadableTerms(engine, "en", "zh")
-        await provider.preload(all_source_texts)
-        ctx = trx.create_context("en", "zh", terms_provider=provider)
-    """
+    """Create a translation context."""
     if terms is not None and terms_provider is not None:
         raise ValueError("Pass either 'terms' or 'terms_provider', not both.")
 
@@ -165,31 +142,36 @@ async def translate_srt(
     *,
     terms: dict[str, str] | None = None,
     config: TranslateNodeConfig | None = None,
-    progress: ProgressCallback | None = None,
+    workspace_root: Path | str | None = None,
+    course: str = "default",
+    video: str = "srt",
 ) -> list[SentenceRecord]:
     """Translate SRT content end-to-end in one call.
 
-    Returns a list of :class:`SentenceRecord` with translations populated.
-
-    Example::
-
-        records = await trx.translate_srt(
-            srt_content, engine, src="en", tgt="zh",
-            terms={"machine learning": "机器学习"},
-        )
-        for r in records:
-            print(f"{r.src_text} → {r.translations['zh']}")
+    Writes to an ephemeral :class:`Workspace` unless ``workspace_root`` is
+    supplied. Returns the translated records in source order.
     """
-    segments = parse_srt(srt_content)
-    sub = Subtitle(segments, language=src)
-    records = sub.records()
+    with TemporaryDirectory() as tmp:
+        srt_path = Path(tmp) / "in.srt"
+        srt_path.write_text(srt_content, encoding="utf-8")
 
-    ctx = create_context(src, tgt, terms=terms)
-    chk = default_checker(src, tgt)
+        ws_root = Path(workspace_root) if workspace_root else Path(tmp) / "ws"
+        ws = Workspace(root=ws_root, course=course)
+        store = JsonFileStore(ws)
 
-    p = Pipeline(records)
-    translated = await p.translate(engine, ctx, chk, config=config, progress=progress)
-    return translated.build()
+        ctx = create_context(src, tgt, terms=terms)
+        checker = default_checker(src, tgt)
+        processor = TranslateProcessor(engine, checker, config=config)
+
+        orch = VideoOrchestrator(
+            source=SrtSource(srt_path, language=src),
+            processors=[processor],
+            ctx=ctx,
+            store=store,
+            video_key=VideoKey(course=course, video=video),
+        )
+        result = await orch.run()
+        return result.records
 
 
 __all__ = [
@@ -229,12 +211,17 @@ __all__ = [
     "CheckReport",
     "Severity",
     "default_checker",
-    # Pipeline
-    "Pipeline",
+    # Runtime
+    "TranslateProcessor",
     "TranslateNodeConfig",
     "PrefixRule",
-    "ProgressCallback",
     "EN_ZH_PREFIX_RULES",
-    "StreamAdapter",
-    "FeedResult",
+    "VideoOrchestrator",
+    "VideoResult",
+    "VideoKey",
+    "SrtSource",
+    "WhisperXSource",
+    "PushQueueSource",
+    "Workspace",
+    "JsonFileStore",
 ]

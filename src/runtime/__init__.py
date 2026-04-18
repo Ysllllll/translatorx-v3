@@ -17,6 +17,12 @@ from runtime.errors import (
     TransientEngineError,
 )
 from runtime.processors import TranslateProcessor
+from runtime.processors.prefix import (
+    EN_ZH_PREFIX_RULES,
+    PrefixHandler,
+    PrefixRule,
+    TranslateNodeConfig,
+)
 from runtime.progress import (
     ProgressCallback,
     ProgressEvent,
@@ -77,6 +83,10 @@ __all__ = [
     "ProcessorBase",
     # processors
     "TranslateProcessor",
+    "EN_ZH_PREFIX_RULES",
+    "PrefixHandler",
+    "PrefixRule",
+    "TranslateNodeConfig",
     # errors
     "EngineError",
     "ErrorCategory",
