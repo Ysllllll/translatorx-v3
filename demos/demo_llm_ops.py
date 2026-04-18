@@ -440,7 +440,8 @@ async def section_5_prompt_degradation() -> None:
         "    Level 1 compressed  history 压进 system（单轮）\n"
         "    Level 2 minimal     system + user（无 history）\n"
         "    Level 3 bare        单条 user，中文兜底指令，无 system\n"
-        "  每一级都打印完整 messages，方便肉眼 diff 结构差异。"
+        "  每一级都打印完整 messages，方便肉眼 diff 结构差异。\n"
+        "  注意：system_prompt 使用 get_default_system_prompt(ctx) — 与生产一致。"
     )
 
     source = "Batch normalization stabilizes training across layers."
@@ -450,7 +451,7 @@ async def section_5_prompt_degradation() -> None:
 
     ctx = TranslationContext(
         source_lang="en", target_lang="zh",
-        terms_provider=StaticTerms({}),
+        terms_provider=StaticTerms({"gradient descent": "梯度下降"}),
         frozen_pairs=(("gradient descent", "梯度下降"),),
         window_size=4,
         max_retries=3,
@@ -459,19 +460,24 @@ async def section_5_prompt_degradation() -> None:
     window.add("Gradient descent minimizes the loss.", "梯度下降最小化损失。")
     window.add("Adam is an optimizer.", "Adam 是一个优化器。")
 
+    # 使用生产默认 system prompt（会自动注入 source_lang / target_lang）
+    real_prompt = get_default_system_prompt(ctx)
+    sub("resolved system prompt（生产默认模板，注入 en → zh metadata）")
+    print_system_prompt(real_prompt)
+
     print(f"\n  SRC       : {source}")
     print(f"  max_retries: {ctx.max_retries}  (共 {ctx.max_retries + 1} 次尝试)")
     print(f"  window primed with 2 pairs, frozen_pairs=1")
 
     result = await translate_with_verify(
         source, engine, ctx, _AlwaysFailChecker(), window,
-        system_prompt="You are a translation assistant.",
+        system_prompt=real_prompt,
     )
 
     level_names = ["L0 full", "L1 compressed", "L2 minimal", "L3 bare"]
     for i, msgs in enumerate(engine.call_log):
         sub(f"attempt #{i + 1} — {level_names[i]}  ({len(msgs)} msg)")
-        print_messages(msgs, limit=140)
+        print_messages(msgs, limit=200)
 
     sub("最终结果")
     print(f"    translation : {result.translation!r}")
@@ -522,7 +528,8 @@ async def section_6a_oneshot_terms() -> None:
         "    • bg_task        — 后台抽取 Task 的状态 (None / pending / done)"
     )
 
-    engine = _make_engine()
+    engine_inner = _make_engine()
+    engine = LoggingEngine(inner=engine_inner)
 
     stream_texts = [
         "Gradient descent is the workhorse of deep learning.",
@@ -533,7 +540,7 @@ async def section_6a_oneshot_terms() -> None:
         "Dropout regularizes training by randomly masking activations.",
     ]
 
-    terms = OneShotTerms(engine, "en", "zh", char_threshold=100)
+    terms = OneShotTerms(engine_inner, "en", "zh", char_threshold=100)
     ctx = TranslationContext(
         source_lang="en", target_lang="zh",
         max_retries=2, terms_provider=terms,
@@ -576,6 +583,14 @@ async def section_6a_oneshot_terms() -> None:
         after = terms.ready
         flip = "  ⚡ READY FLIPPED (during translate)" if (not before and after) else ""
         print(f"    translation: {result.translation}{flip}")
+
+        # 展示本轮发送给 LLM 的 messages — 重点观察:
+        #   • before ready 翻转：messages 里不含 frozen few-shot
+        #   • after  ready 翻转：messages 开头多出 few-shot pairs（术语对）
+        note = "（含 few-shot 术语对）" if after else "（无 terms，仅 system + window + user）"
+        print(f"    📤 messages sent to LLM {note}:")
+        print_messages(engine.last_messages or [], limit=100)
+
         if after:
             snap = await terms.get_terms()
             if snap:
