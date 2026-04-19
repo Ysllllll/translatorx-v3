@@ -89,8 +89,7 @@ def verify_preprocess_factories() -> None:
     chunker = app2.chunker()
     assert chunker is not None
     print(
-        f"    {ts()} ✓ chunk_mode=llm → LlmChunker "
-        f"(chunk_len={chunker._chunk_len})"
+        f"    {ts()} ✓ chunk_mode=llm → LlmChunker " f"(chunk_len={chunker._chunk_len})"
     )
 
     # Remote punc (no endpoint → error)
@@ -303,9 +302,12 @@ async def main() -> None:
 
     # 7d. 对比 (base 用 punc count 近似)
     compare_preprocess(
-        len(rec_punc), dt_punc,
-        len(rec_punc), dt_punc,
-        len(rec_full), dt_full,
+        len(rec_punc),
+        dt_punc,
+        len(rec_punc),
+        dt_punc,
+        len(rec_full),
+        dt_full,
     )
 
     print(f"\n{ts()} DONE")

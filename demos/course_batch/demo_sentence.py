@@ -40,9 +40,7 @@ def _elapsed(t0: float) -> str:
     return f"{dt:.3f}s"
 
 
-def _print_records_detail(
-    records: list, *, label: str, max_show: int = 10
-) -> None:
+def _print_records_detail(records: list, *, label: str, max_show: int = 10) -> None:
     """Print SentenceRecord list with per-record char counts."""
     print(f"    {ts()} {label}: {len(records)} records")
     lengths = [len(r.src_text) for r in records]
@@ -229,9 +227,15 @@ async def demo_sentence_pipeline(srt_path: Path) -> None:
     print(f"    │  0. SRT       │ {len(segments):>4d} segments       │             │")
     print(f"    │  1. Subtitle  │ {n_pipelines:>4d} pipeline(s)     │             │")
     print(f"    │  2. punc_glob │ text changed: {'yes':4s}  │ {dt_punc:>11s} │")
-    print(f"    │  3. sentences │ {len(sent_records):>4d} sentences      │ {dt_sent:>11s} │")
-    print(f"    │  4. punc_sent │ {len(sent_punc_records):>4d} sentences      │ {dt_sent_punc:>11s} │")
-    print(f"    │  5. chunk     │ {len(chunk_records):>4d} records         │ {dt_chunk:>11s} │")
+    print(
+        f"    │  3. sentences │ {len(sent_records):>4d} sentences      │ {dt_sent:>11s} │"
+    )
+    print(
+        f"    │  4. punc_sent │ {len(sent_punc_records):>4d} sentences      │ {dt_sent_punc:>11s} │"
+    )
+    print(
+        f"    │  5. chunk     │ {len(chunk_records):>4d} records         │ {dt_chunk:>11s} │"
+    )
     print(f"    └─────────────────────────────────────────────────────┘")
     print()
     print(

@@ -66,9 +66,7 @@ class SpacyLlmChunker:
                 ).result()
         return asyncio.run(self._refine_batch(coarse))
 
-    async def _refine_batch(
-        self, coarse: list[list[str]]
-    ) -> list[list[str]]:
+    async def _refine_batch(self, coarse: list[list[str]]) -> list[list[str]]:
         """For each text's coarse chunks, LLM-split any that exceed chunk_len."""
         results: list[list[str]] = []
         for chunks in coarse:

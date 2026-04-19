@@ -49,18 +49,22 @@ async def main() -> None:
 
     if "translate" in demos:
         from demo_translate import main as run_translate
+
         await run_translate()
 
     if "preprocess" in demos:
         from demo_preprocess import main as run_preprocess
+
         await run_preprocess()
 
     if "standalone" in demos:
         from demo_standalone import main as run_standalone
+
         await run_standalone()
 
     if "sentence" in demos:
         from demo_sentence import main as run_sentence
+
         await run_sentence()
 
     dt = time.perf_counter() - t0
