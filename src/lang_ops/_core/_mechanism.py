@@ -30,3 +30,13 @@ class LangOps:
         if cls is not None:
             return cls()
         raise ValueError(f"Unsupported language: {code!r}")
+
+    @staticmethod
+    def detect(text: str) -> str:
+        """Detect language from *text* and return a normalized code.
+
+        Uses ``langdetect`` if available, else a Unicode-range heuristic.
+        """
+        from ._detect import detect_language
+
+        return detect_language(text)

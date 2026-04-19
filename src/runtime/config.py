@@ -96,6 +96,25 @@ class RuntimeConfig(BaseModel):
     flush_every: int = 100
 
 
+class PreprocessConfig(BaseModel):
+    """Preprocessing pipeline configuration (D-073/D-074)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    punc_mode: Literal["none", "ner", "llm", "remote"] = "none"
+    punc_engine: str = "default"
+    punc_endpoint: str | None = None
+    punc_threshold: int = 180
+
+    spacy_model: str | None = None
+
+    chunk_mode: Literal["none", "llm"] = "none"
+    chunk_engine: str = "default"
+    chunk_len: int = 90
+    merge_under: int | None = None
+    max_len: int | None = None
+
+
 class AppConfig(BaseModel):
     """Root configuration model."""
 
@@ -105,6 +124,7 @@ class AppConfig(BaseModel):
     contexts: dict[str, ContextEntry] = Field(default_factory=dict)
     store: StoreConfig = Field(default_factory=StoreConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    preprocess: PreprocessConfig = Field(default_factory=PreprocessConfig)
 
     # -- loaders ---------------------------------------------------------
 
@@ -146,7 +166,7 @@ def _apply_env_overrides(data: dict[str, Any], *, prefix: str) -> dict[str, Any]
     for env_key, env_val in os.environ.items():
         if not env_key.startswith(prefix):
             continue
-        parts = env_key[len(prefix):].lower().split("__")
+        parts = env_key[len(prefix) :].lower().split("__")
         if not parts:
             continue
         cur: dict[str, Any] = data
@@ -164,6 +184,7 @@ __all__ = [
     "AppConfig",
     "ContextEntry",
     "EngineEntry",
+    "PreprocessConfig",
     "RuntimeConfig",
     "StoreConfig",
 ]

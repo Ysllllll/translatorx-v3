@@ -57,29 +57,33 @@ from checker import (
 
 # Runtime (new orchestration layer)
 from runtime import (
-    App,
     AppConfig,
-    CourseBuilder,
     CourseOrchestrator,
     CourseResult,
     EN_ZH_PREFIX_RULES,
     JsonFileStore,
-    LiveStreamHandle,
     PrefixRule,
     PushQueueSource,
     SrtSource,
-    StreamBuilder,
     StreamingOrchestrator,
     SummaryProcessor,
     TranslateNodeConfig,
     TranslateProcessor,
-    VideoBuilder,
     VideoKey,
     VideoOrchestrator,
     VideoResult,
     VideoSpec,
     WhisperXSource,
     Workspace,
+)
+
+# App (top-level facade)
+from app import (
+    App,
+    CourseBuilder,
+    LiveStreamHandle,
+    StreamBuilder,
+    VideoBuilder,
 )
 
 

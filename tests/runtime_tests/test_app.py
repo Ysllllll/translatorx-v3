@@ -16,9 +16,7 @@ from runtime import App, AppConfig
 def _write_srt(path: Path, lines: list[str]) -> None:
     body = []
     for i, text in enumerate(lines, start=1):
-        body.append(
-            f"{i}\n00:00:0{i - 1},000 --> 00:00:0{i},000\n{text}\n"
-        )
+        body.append(f"{i}\n00:00:0{i - 1},000 --> 00:00:0{i},000\n{text}\n")
     path.write_text("\n".join(body), encoding="utf-8")
 
 
@@ -159,10 +157,14 @@ class TestBuilderEnhancements:
     """Polish items: from_dict/from_yaml + kind auto-detect."""
 
     def test_app_from_dict(self, tmp_path: Path):
-        app = App.from_dict({
-            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-            "store": {"root": (tmp_path / "ws").as_posix()},
-        })
+        app = App.from_dict(
+            {
+                "engines": {
+                    "default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}
+                },
+                "store": {"root": (tmp_path / "ws").as_posix()},
+            }
+        )
         assert app.engine("default").config.model == "m"
 
     def test_app_from_yaml_string(self, tmp_path: Path):
@@ -258,6 +260,7 @@ class TestStreamBuilder:
                     collected.append(rec)
 
             import asyncio as _aio
+
             task = _aio.create_task(drain())
             # Let the pump flush; __aexit__ closes the stream, drain ends.
 
@@ -269,3 +272,316 @@ class TestStreamBuilder:
         b = app.stream(course="c1", video="live", language="en")
         with pytest.raises(ValueError, match="translate"):
             b.start()
+
+
+class TestNewAPIFeatures:
+    """Tests for Phase 2/3/4 API changes."""
+
+    @pytest.mark.asyncio
+    async def test_translate_without_src(self, app: App, tmp_path: Path, monkeypatch):
+        """translate(tgt=...) without src= should infer src from source language."""
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        srt = tmp_path / "t.srt"
+        _write_srt(srt, ["Hello world."])
+
+        result = await (
+            app.video(course="c1", video="t")
+            .source(srt, language="en")
+            .translate(tgt="zh")
+            .run()
+        )
+        assert len(result.records) == 1
+
+    @pytest.mark.asyncio
+    async def test_translate_tgt_tuple(self, app: App, tmp_path: Path, monkeypatch):
+        """translate(tgt=("zh", "ja")) should accept a tuple (uses first for now)."""
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        srt = tmp_path / "t.srt"
+        _write_srt(srt, ["Hello world."])
+
+        result = await (
+            app.video(course="c1", video="t")
+            .source(srt, language="en")
+            .translate(tgt=("zh", "ja"))
+            .run()
+        )
+        assert len(result.records) == 1
+
+    @pytest.mark.asyncio
+    async def test_source_language_auto_detect(
+        self, app: App, tmp_path: Path, monkeypatch
+    ):
+        """source(path) without language= should auto-detect."""
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        srt = tmp_path / "t.srt"
+        _write_srt(srt, ["Hello world. This is a test."])
+
+        result = await (
+            app.video(course="c1", video="t")
+            .source(srt)  # no language=
+            .translate(tgt="zh")
+            .run()
+        )
+        assert len(result.records) >= 1
+
+    def test_scan_dir(self, app: App, tmp_path: Path):
+        """scan_dir() should discover SRT files and add them as videos."""
+        d = tmp_path / "srts"
+        d.mkdir()
+        _write_srt(d / "a.srt", ["Alpha."])
+        _write_srt(d / "b.srt", ["Bravo."])
+
+        builder = app.course(course="c1").scan_dir(d, language="en")
+        assert len(builder._videos) == 2
+        assert builder._videos[0].video == "a"
+        assert builder._videos[1].video == "b"
+
+    def test_scan_dir_with_pattern(self, app: App, tmp_path: Path):
+        """scan_dir(pattern=...) should filter files."""
+        d = tmp_path / "srts"
+        d.mkdir()
+        _write_srt(d / "P1.srt", ["One."])
+        _write_srt(d / "P2.srt", ["Two."])
+        _write_srt(d / "notes.srt", ["Notes."])
+
+        builder = app.course(course="c1").scan_dir(d, pattern="P*.srt", language="en")
+        assert len(builder._videos) == 2
+        keys = [v.video for v in builder._videos]
+        assert "P1" in keys
+        assert "P2" in keys
+
+    def test_scan_dir_with_key_fn(self, app: App, tmp_path: Path):
+        """scan_dir(key_fn=...) should customize video keys."""
+        d = tmp_path / "srts"
+        d.mkdir()
+        _write_srt(d / "P1[abc].srt", ["One."])
+        _write_srt(d / "P2[xyz].srt", ["Two."])
+
+        import re as _re
+        key_fn = lambda p: _re.match(r"^(P\d+)", p.name).group(1)  # noqa: E731
+        builder = app.course(course="c1").scan_dir(d, pattern="P*.srt", language="en", key_fn=key_fn)
+        assert len(builder._videos) == 2
+        keys = [v.video for v in builder._videos]
+        assert "P1" in keys
+        assert "P2" in keys
+
+    def test_scan_dir_empty_raises(self, app: App, tmp_path: Path):
+        """scan_dir() on empty dir should raise ValueError."""
+        d = tmp_path / "empty"
+        d.mkdir()
+        with pytest.raises(ValueError, match="no files"):
+            app.course(course="c1").scan_dir(d, language="en")
+
+    @pytest.mark.asyncio
+    async def test_course_translate_without_src(
+        self, app: App, tmp_path: Path, monkeypatch
+    ):
+        """CourseBuilder.translate(tgt=...) without src= infers from first video."""
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        a = tmp_path / "a.srt"
+        _write_srt(a, ["Alpha."])
+
+        result = await (
+            app.course(course="c1")
+            .add_video("a", a, language="en")
+            .translate(tgt="zh")
+            .run()
+        )
+        assert len(result.succeeded) == 1
+
+    @pytest.mark.asyncio
+    async def test_course_scan_dir_and_translate(
+        self, app: App, tmp_path: Path, monkeypatch
+    ):
+        """Full scan_dir → translate → run flow."""
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        d = tmp_path / "srts"
+        d.mkdir()
+        _write_srt(d / "a.srt", ["Alpha."])
+        _write_srt(d / "b.srt", ["Bravo."])
+
+        result = await (
+            app.course(course="c1").scan_dir(d, language="en").translate(tgt="zh").run()
+        )
+        assert len(result.succeeded) == 2
+
+    def test_preprocess_config_default(self, app: App):
+        """Default PreprocessConfig has no preprocessing enabled."""
+        cfg = app.config.preprocess
+        assert cfg.punc_mode == "none"
+        assert cfg.chunk_mode == "none"
+
+    def test_preprocess_config_from_dict(self, tmp_path: Path):
+        """PreprocessConfig can be set via dict."""
+        app = App.from_dict(
+            {
+                "engines": {
+                    "default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}
+                },
+                "store": {"root": (tmp_path / "ws").as_posix()},
+                "preprocess": {
+                    "punc_mode": "llm",
+                    "chunk_mode": "llm",
+                    "chunk_len": 120,
+                },
+            }
+        )
+        assert app.config.preprocess.punc_mode == "llm"
+        assert app.config.preprocess.chunk_mode == "llm"
+        assert app.config.preprocess.chunk_len == 120
+
+    def test_stream_translate_without_src(self, app: App, monkeypatch):
+        """Stream translate(tgt=...) without src= infers from language."""
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        # Should not raise — src inferred from stream's language="en"
+        handle = (
+            app.stream(course="c1", video="live", language="en")
+            .translate(tgt="zh")
+            .start()
+        )
+        assert handle is not None
+
+
+class TestPreprocessIntegration:
+    """Verify preprocess factory methods and Builder wiring."""
+
+    def test_punc_restorer_none_by_default(self, app: App):
+        assert app.punc_restorer() is None
+
+    def test_chunker_none_by_default(self, app: App):
+        assert app.chunker() is None
+
+    def test_punc_restorer_llm(self, tmp_path: Path, monkeypatch):
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"punc_mode": "llm"},
+        })
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        restorer = app.punc_restorer()
+        assert restorer is not None
+        from preprocess import LlmPuncRestorer
+        assert isinstance(restorer, LlmPuncRestorer)
+
+    def test_punc_restorer_remote_requires_endpoint(self, tmp_path: Path):
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"punc_mode": "remote"},
+        })
+        with pytest.raises(ValueError, match="punc_endpoint"):
+            app.punc_restorer()
+
+    def test_punc_restorer_remote_with_endpoint(self, tmp_path: Path):
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"punc_mode": "remote", "punc_endpoint": "http://localhost:8080/restore"},
+        })
+        restorer = app.punc_restorer()
+        assert restorer is not None
+        from preprocess import RemotePuncRestorer
+        assert isinstance(restorer, RemotePuncRestorer)
+
+    def test_chunker_llm(self, tmp_path: Path, monkeypatch):
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"chunk_mode": "llm"},
+        })
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        chunker = app.chunker()
+        assert chunker is not None
+        from preprocess import LlmChunker
+        assert isinstance(chunker, LlmChunker)
+
+    def test_punc_threshold_propagated(self, tmp_path: Path, monkeypatch):
+        """punc_threshold in config reaches the LlmPuncRestorer instance."""
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"punc_mode": "llm", "punc_threshold": 200},
+        })
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        restorer = app.punc_restorer()
+        assert restorer._threshold == 200
+
+    def test_chunk_len_propagated(self, tmp_path: Path, monkeypatch):
+        """chunk_len in config reaches the LlmChunker instance."""
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"chunk_mode": "llm", "chunk_len": 120},
+        })
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        chunker = app.chunker()
+        assert chunker._chunk_len == 120
+
+    @pytest.mark.asyncio
+    async def test_video_run_with_llm_punc(self, tmp_path: Path, monkeypatch):
+        """Video builder with punc_mode=llm wires restorer through to source."""
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"punc_mode": "llm", "punc_threshold": 0},
+        })
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        srt = tmp_path / "test.srt"
+        _write_srt(srt, ["hello world"])
+
+        result = await (
+            app.video(course="c1", video="test")
+            .source(srt, language="en")
+            .translate(tgt="zh")
+            .run()
+        )
+        assert len(result.records) >= 1
+
+    @pytest.mark.asyncio
+    async def test_video_run_with_llm_chunk(self, tmp_path: Path, monkeypatch):
+        """Video builder with chunk_mode=llm wires chunker through to source."""
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"chunk_mode": "llm", "chunk_len": 20},
+        })
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        srt = tmp_path / "test.srt"
+        _write_srt(srt, ["This is a long sentence that needs chunking"])
+
+        result = await (
+            app.video(course="c1", video="test")
+            .source(srt, language="en")
+            .translate(tgt="zh")
+            .run()
+        )
+        # Should have records regardless of how chunking split them
+        assert len(result.records) >= 1
