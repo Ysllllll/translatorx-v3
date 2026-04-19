@@ -36,6 +36,23 @@ class _FailingChunkEngine:
         yield "a\nb\nc"
 
 
+class _WordChangingChunkEngine:
+    """Engine that changes words while splitting (should be rejected)."""
+
+    model = "bad-chunk"
+
+    async def complete(self, messages, **_):
+        user_text = messages[-1]["content"]
+        words = user_text.split()
+        mid = len(words) // 2
+        part1 = " ".join(words[:mid])
+        part2 = " ".join(words[mid:]).replace("somehow", "somehow indeed")
+        return CompletionResult(text=f"{part1}\n{part2}")
+
+    async def stream(self, messages, **_):
+        yield (await self.complete(messages)).text
+
+
 class TestLlmChunker:
     def test_short_text_no_split(self) -> None:
         from preprocess import LlmChunker
@@ -95,6 +112,23 @@ class TestLlmChunker:
         assert len(result) == 1
         chunks = result[0]
         assert len(chunks) >= 2
+
+    def test_rejects_content_changing_split(self) -> None:
+        """Chunk must fall back when LLM changes word content."""
+        from preprocess import LlmChunker
+
+        chunker = LlmChunker(_WordChangingChunkEngine(), chunk_len=20)
+        text = "This is a sentence that needs to be split somehow"
+        result = chunker([text])
+        assert len(result) == 1
+        chunks = result[0]
+        # LLM output is rejected → falls back to rule split
+        # Verify reconstructed text matches source (alnum-wise)
+        src_alnum = "".join(ch for ch in text.lower() if ch.isalnum())
+        out_alnum = "".join(
+            ch for p in chunks for ch in p.lower() if ch.isalnum()
+        )
+        assert src_alnum == out_alnum
 
     def test_applyfn_conformance(self) -> None:
         from preprocess import LlmChunker

@@ -24,6 +24,21 @@ class _FakePuncEngine:
         yield (await self.complete(messages)).text
 
 
+class _FakeWordChangingEngine:
+    """Fake engine that changes word content (should be rejected)."""
+
+    model = "fake-bad-punc"
+
+    async def complete(self, messages, **_):
+        user_text = messages[-1]["content"]
+        # Simulate LLM changing words: "gonna" → "going to"
+        restored = user_text.replace("gonna", "going to")
+        return CompletionResult(text=restored)
+
+    async def stream(self, messages, **_):
+        yield (await self.complete(messages)).text
+
+
 class TestLlmPuncRestorer:
     def test_basic_restore(self) -> None:
         from preprocess import LlmPuncRestorer
@@ -33,6 +48,15 @@ class TestLlmPuncRestorer:
         assert len(result) == 1
         assert len(result[0]) == 1
         assert result[0][0] == "Hello world."
+
+    def test_rejects_word_content_change(self) -> None:
+        """Punc restorer must discard results that change word content."""
+        from preprocess import LlmPuncRestorer
+
+        restorer = LlmPuncRestorer(_FakeWordChangingEngine())
+        result = restorer(["im gonna do it"])
+        # Should return original text since words changed
+        assert result == [["im gonna do it"]]
 
     def test_empty_input(self) -> None:
         from preprocess import LlmPuncRestorer

@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 _OMIT_PUNCT_RE = re.compile(r"[{}@#^&*~\\|<>]")
 
 
+def _punc_content_matches(before: str, after: str) -> bool:
+    """Verify punc restoration only added punctuation, not changed words."""
+    a = "".join(ch for ch in before.lower() if ch.isalnum())
+    b = "".join(ch for ch in after.lower() if ch.isalnum())
+    return a == b
+
+
 class NerPuncRestorer:
     """Punctuation restoration via HuggingFace NER model.
 
@@ -71,6 +78,13 @@ class NerPuncRestorer:
             result = self._model.restore_punctuation(text)
         # Strip unusual punctuation that the model may introduce.
         result = _OMIT_PUNCT_RE.sub("", result)
+        if not _punc_content_matches(text, result):
+            logger.warning(
+                "NER punc changed word content, "
+                "discarding result: %r → %r",
+                text[:80], result[:80],
+            )
+            return text
         return result
 
 

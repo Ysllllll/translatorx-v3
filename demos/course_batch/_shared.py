@@ -5,7 +5,15 @@ Used by all demos in ``demos/course_batch/``.
 
 from __future__ import annotations
 
-import _bootstrap  # noqa: F401
+import sys as _sys
+from pathlib import Path as _Path
+
+# Add demos/ to sys.path so _bootstrap can be found
+_DEMOS_DIR = str(_Path(__file__).resolve().parent.parent)
+if _DEMOS_DIR not in _sys.path:
+    _sys.path.insert(0, _DEMOS_DIR)
+
+import _bootstrap  # noqa: F401, E402
 
 import asyncio
 import json
@@ -153,9 +161,9 @@ class ProgressEngine:
             elif kind == "punc":
                 self.puncs += 1
                 user_text = messages[-1].get("content", "")
-                src_short = user_text if len(user_text) <= 38 else user_text[:35] + "…"
+                src_short = user_text
                 out = result.text
-                out_short = out if len(out) <= 36 else out[:33] + "…"
+                out_short = out
                 print(
                     f"    {ts()} [t={elapsed:5.1f}s] ◆ punc  #{self.puncs:>3d}  "
                     f"{src_short!r:42s} → {out_short!r}",
@@ -164,11 +172,11 @@ class ProgressEngine:
             elif kind == "chunk":
                 self.chunks += 1
                 user_text = messages[-1].get("content", "")
-                src_short = user_text if len(user_text) <= 38 else user_text[:35] + "…"
+                src_short = user_text
                 lines = [l for l in result.text.strip().splitlines() if l.strip()]
                 print(
                     f"    {ts()} [t={elapsed:5.1f}s] ◇ chunk #{self.chunks:>3d}  "
-                    f"{src_short!r:42s} → {len(lines)} parts",
+                    f"{src_short!r:42s} → {lines}",
                     flush=True,
                 )
             else:

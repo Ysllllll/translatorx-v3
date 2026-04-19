@@ -17,6 +17,16 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def _punc_content_matches(before: str, after: str) -> bool:
+    """Verify punc restoration only added punctuation, not changed words.
+
+    Strips all non-alphanumeric characters and compares case-insensitively.
+    """
+    a = "".join(ch for ch in before.lower() if ch.isalnum())
+    b = "".join(ch for ch in after.lower() if ch.isalnum())
+    return a == b
+
 _SYSTEM_PROMPT = (
     "You are a punctuation restoration expert. "
     "Add appropriate punctuation to the following text. "
@@ -75,7 +85,15 @@ class LlmPuncRestorer:
                     {"role": "user", "content": text},
                 ]
                 completion = await self._engine.complete(messages)
-                return [completion.text.strip()]
+                restored = completion.text.strip()
+                if not _punc_content_matches(text, restored):
+                    logger.warning(
+                        "LLM punc changed word content, "
+                        "discarding result: %r → %r",
+                        text[:80], restored[:80],
+                    )
+                    return [text]
+                return [restored]
 
         return list(await asyncio.gather(*(_restore(t) for t in texts)))
 

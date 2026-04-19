@@ -28,6 +28,24 @@ _SYSTEM_PROMPT = (
 _STRIP_LEADING_NUM = re.compile(r"^\d+[.)]\s*")
 
 
+def _chunks_match_source(parts: list[str], source: str) -> bool:
+    """Verify that joining chunks reconstructs the source text.
+
+    Tries space-join (for space-delimited languages) and no-space-join
+    (for CJK), then falls back to alphanumeric-only comparison.
+    """
+    if " ".join(parts) == source:
+        return True
+    if "".join(parts) == source:
+        return True
+    # Alphanumeric fallback (handles minor whitespace differences)
+    src_alnum = "".join(ch for ch in source.lower() if ch.isalnum())
+    parts_alnum = "".join(
+        ch for p in parts for ch in p.lower() if ch.isalnum()
+    )
+    return src_alnum == parts_alnum
+
+
 class LlmChunker:
     """Recursive binary LLM chunker conforming to :data:`ApplyFn`.
 
@@ -83,7 +101,15 @@ class LlmChunker:
             if len(text) <= self._chunk_len:
                 return [text]
             async with sem:
-                return await self._chunk_recursive(text, depth=0)
+                parts = await self._chunk_recursive(text, depth=0)
+            if not _chunks_match_source(parts, text):
+                logger.warning(
+                    "Chunk result does not reconstruct source, "
+                    "falling back to rule split: %r",
+                    text[:80],
+                )
+                parts = self._rule_split(text)
+            return parts
 
         return list(await asyncio.gather(*(_chunk_one(t) for t in texts)))
 
@@ -132,12 +158,12 @@ class LlmChunker:
             )
             return None
 
-        # Verify: the two parts should approximately reconstruct the original.
-        joined = " ".join(lines)
-        # Allow minor whitespace differences.
-        if abs(len(joined) - len(text)) > max(5, len(text) * 0.1):
+        # Verify: the two parts must reconstruct the original text.
+        if not _chunks_match_source(lines, text):
             logger.debug(
-                "LLM chunk output length mismatch: %d vs %d", len(joined), len(text)
+                "LLM chunk output does not match source: %r → %r",
+                text[:80],
+                lines,
             )
             return None
 
