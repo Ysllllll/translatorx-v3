@@ -290,7 +290,32 @@ class TestMissPath:
         out = await _drain(
             proc.process(src(), ctx=ctx, store=store, video_key=video_key)
         )
-        assert out[0].extra["terms_ready_at_translate"] is True
+        # Clean case: the marker is absent (terms ready → nothing to record).
+        assert "terms_ready_at_translate" not in out[0].extra
+
+    @pytest.mark.asyncio
+    async def test_terms_not_ready_flag_marks_record(self, store, video_key):
+        class _NotReadyTerms(StaticTerms):
+            @property
+            def ready(self) -> bool:  # type: ignore[override]
+                return False
+
+        engine = _RecordingEngine()
+        proc = TranslateProcessor(engine, _PassChecker())
+        ctx = _ctx(terms_provider=_NotReadyTerms({}))
+
+        recs = [_rec(0, "Hello.")]
+
+        async def src():
+            for r in recs:
+                yield r
+
+        out = await _drain(
+            proc.process(src(), ctx=ctx, store=store, video_key=video_key)
+        )
+        # Only the explicit False marker is recorded — enables future
+        # retranslate when terms arrive.
+        assert out[0].extra["terms_ready_at_translate"] is False
 
 
 # ---------------------------------------------------------------------------

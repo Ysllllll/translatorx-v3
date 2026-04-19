@@ -16,7 +16,7 @@ from runtime.errors import (
     PermanentEngineError,
     TransientEngineError,
 )
-from runtime.processors import TranslateProcessor
+from runtime.processors import SummaryProcessor, TranslateProcessor
 from runtime.processors.prefix import (
     EN_ZH_PREFIX_RULES,
     PrefixHandler,
@@ -68,12 +68,14 @@ from runtime.sources import (
     WhisperXSource,
 )
 from runtime.store import (
+    FINGERPRINT_CHAIN,
     IncompatibleStoreError,
     JsonFileStore,
     SCHEMA_VERSION,
     Store,
     empty_course_data,
     empty_video_data,
+    get_stale_steps,
     set_nested,
 )
 from runtime.usage import (
@@ -96,6 +98,7 @@ __all__ = [
     # base
     "ProcessorBase",
     # processors
+    "SummaryProcessor",
     "TranslateProcessor",
     "EN_ZH_PREFIX_RULES",
     "PrefixHandler",
@@ -154,12 +157,14 @@ __all__ = [
     "SrtSource",
     "WhisperXSource",
     # store
+    "FINGERPRINT_CHAIN",
     "IncompatibleStoreError",
     "JsonFileStore",
     "SCHEMA_VERSION",
     "Store",
     "empty_course_data",
     "empty_video_data",
+    "get_stale_steps",
     "set_nested",
     # usage
     "CompletionResult",

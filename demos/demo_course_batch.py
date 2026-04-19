@@ -198,15 +198,37 @@ def dump_translation_json(path: Path, max_records: int = 3) -> None:
     meta = data.get("meta", {})
     recs = data.get("records", [])
     print(f"      schema_version: {data.get('schema_version')}")
+    print(f"      segment_type:   {data.get('segment_type')}")
+    ref = data.get("raw_segment_ref")
+    if ref:
+        print(
+            f"      raw_segment_ref: file={ref.get('file')} "
+            f"n={ref.get('n')} sha256={str(ref.get('sha256',''))[:16]}…"
+        )
+    punc_cache = data.get("punc_cache") or {}
+    if punc_cache:
+        print(f"      punc_cache: {len(punc_cache)} 条 (展示 1)")
+        k = next(iter(punc_cache))
+        print(f"        • {k[:50]!r} → {str(punc_cache[k])[:50]}")
+    summary = data.get("summary")
+    if summary:
+        cur = summary.get("current") or {}
+        print(
+            f"      summary: v{cur.get('version')} "
+            f"topic={cur.get('topic')!r} title={cur.get('title')!r}"
+        )
     print(f"      meta._fingerprints:")
     for k, v in (meta.get("_fingerprints") or {}).items():
-        print(f"        {k} = {v[:32]}…")
+        print(f"        {k} = {str(v)[:32]}…")
     print(f"      records: {len(recs)} 条 (展示前 {min(max_records, len(recs))} 条)")
     for r in recs[:max_records]:
         rid = r.get("id")
         zh = (r.get("translations") or {}).get("zh", "")
         zh_short = zh if len(zh) <= 80 else zh[:77] + "…"
         print(f"        • id={rid}  zh={zh_short!r}")
+        cc = r.get("chunk_cache") or {}
+        if cc:
+            print(f"          chunk_cache keys: {list(cc.keys())}")
     if len(recs) > max_records:
         print(f"        … +{len(recs) - max_records} more records")
 
@@ -271,7 +293,7 @@ async def main() -> None:
             },
         },
         "store": {"kind": "json", "root": WS_ROOT.as_posix()},
-        "runtime": {"max_concurrent_videos": 2, "flush_every": 1},
+        "runtime": {"max_concurrent_videos": 2, "flush_every": 100},
     })
 
     # 包装 engine 实现进度打印 (App._engines 是私有缓存，触发后替换).
@@ -291,7 +313,7 @@ async def main() -> None:
     for vid, p in srts:
         builder = builder.add_video(vid, p, language="en")
     t0 = time.perf_counter()
-    result = await builder.translate(src="en", tgt="zh").run()
+    result = await builder.translate(src="en", tgt="zh").summary().run()
     dt1 = time.perf_counter() - t0
 
     print(f"\n    ─── 第一次完成 ───")
@@ -327,7 +349,7 @@ async def main() -> None:
     for vid, p in srts:
         builder2 = builder2.add_video(vid, p, language="en")
     t0 = time.perf_counter()
-    result2 = await builder2.translate(src="en", tgt="zh").run()
+    result2 = await builder2.translate(src="en", tgt="zh").summary().run()
     dt2 = time.perf_counter() - t0
     speedup = dt1 / dt2 if dt2 > 0 else float("inf")
     delta_calls = progress_engine.calls - pre_calls

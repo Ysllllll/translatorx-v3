@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import AsyncIterator, Sequence
+from typing import Any, AsyncIterator, Sequence
 
 from checker import Checker, default_checker
 from llm_ops import EngineConfig, OpenAICompatEngine, StaticTerms, TranslationContext
@@ -30,6 +30,7 @@ from runtime.config import AppConfig, EngineEntry
 from runtime.course import CourseOrchestrator, CourseResult, VideoSpec
 from runtime.errors import ErrorReporter
 from runtime.orchestrator import StreamingOrchestrator, VideoOrchestrator, VideoResult
+from runtime.processors.summary import SummaryProcessor
 from runtime.processors.translate import TranslateProcessor
 from runtime.protocol import Priority, Source, VideoKey
 from runtime.sources.srt import SrtSource
@@ -151,6 +152,16 @@ class _TranslateStage:
 
 
 @dataclass(frozen=True)
+class _SummaryStage:
+    """Opt-in incremental summary — runs before translate, persists
+    :class:`llm_ops.agents.IncrementalSummaryState` into the video JSON's
+    ``summary`` field."""
+
+    engine_name: str = "default"
+    window_words: int = 4500
+
+
+@dataclass(frozen=True)
 class VideoBuilder:
     """Immutable per-video builder. Each method returns a new instance."""
 
@@ -159,6 +170,7 @@ class VideoBuilder:
     video: str
     _source: Source | None = None
     _translate: _TranslateStage | None = None
+    _summary: _SummaryStage | None = None
     _error_reporter: ErrorReporter | None = None
 
     def source(self, path: str | Path, *, language: str, kind: str | None = None) -> "VideoBuilder":
@@ -166,13 +178,22 @@ class VideoBuilder:
 
         ``kind`` auto-detects from the file extension: ``.srt`` → srt,
         ``.json`` → whisperx. Pass explicitly to override.
+
+        The Source is bound to the App's Store + VideoKey so the
+        raw_segment sidecar + punc_cache (D-069/D-074) are persisted.
         """
         p = Path(path)
         resolved = kind or _detect_source_kind(p)
+        store = self.app.store(self.course)
+        video_key = VideoKey(course=self.course, video=self.video)
         if resolved == "srt":
-            src: Source = SrtSource(p, language=language)
+            src: Source = SrtSource(
+                p, language=language, store=store, video_key=video_key
+            )
         elif resolved == "whisperx":
-            src = WhisperXSource(p, language=language)
+            src = WhisperXSource(
+                p, language=language, store=store, video_key=video_key
+            )
         else:
             raise ValueError(f"unknown source kind: {resolved!r}")
         return replace(self, _source=src)
@@ -181,6 +202,18 @@ class VideoBuilder:
         self, *, src: str, tgt: str, engine: str = "default"
     ) -> "VideoBuilder":
         return replace(self, _translate=_TranslateStage(src=src, tgt=tgt, engine_name=engine))
+
+    def summary(
+        self,
+        *,
+        engine: str = "default",
+        window_words: int = 4500,
+    ) -> "VideoBuilder":
+        """Attach an incremental :class:`SummaryProcessor` before translate."""
+        return replace(
+            self,
+            _summary=_SummaryStage(engine_name=engine, window_words=window_words),
+        )
 
     def with_error_reporter(self, reporter: ErrorReporter) -> "VideoBuilder":
         return replace(self, _error_reporter=reporter)
@@ -202,9 +235,21 @@ class VideoBuilder:
             checker,
             flush_every=self.app.config.runtime.flush_every,
         )
+        procs: list[Any] = []
+        if self._summary is not None:
+            sum_engine = self.app.engine(self._summary.engine_name)
+            procs.append(
+                SummaryProcessor(
+                    sum_engine,
+                    source_lang=t.src,
+                    target_lang=t.tgt,
+                    window_words=self._summary.window_words,
+                )
+            )
+        procs.append(processor)
         orch = VideoOrchestrator(
             source=self._source,
-            processors=[processor],
+            processors=procs,
             ctx=ctx,
             store=store,
             video_key=VideoKey(course=self.course, video=self.video),
@@ -229,6 +274,7 @@ class CourseBuilder:
     course: str
     _videos: tuple[_CourseVideoEntry, ...] = field(default_factory=tuple)
     _translate: _TranslateStage | None = None
+    _summary: _SummaryStage | None = None
     _error_reporter: ErrorReporter | None = None
 
     def add_video(
@@ -251,6 +297,18 @@ class CourseBuilder:
     ) -> "CourseBuilder":
         return replace(self, _translate=_TranslateStage(src=src, tgt=tgt, engine_name=engine))
 
+    def summary(
+        self,
+        *,
+        engine: str = "default",
+        window_words: int = 4500,
+    ) -> "CourseBuilder":
+        """Enable incremental summary for every video in the course."""
+        return replace(
+            self,
+            _summary=_SummaryStage(engine_name=engine, window_words=window_words),
+        )
+
     def with_error_reporter(self, reporter: ErrorReporter) -> "CourseBuilder":
         return replace(self, _error_reporter=reporter)
 
@@ -266,21 +324,38 @@ class CourseBuilder:
         checker = self.app.checker(t.src, t.tgt)
         store = self.app.store(self.course)
 
-        def factory() -> Sequence[TranslateProcessor]:
-            return [
+        def factory() -> Sequence[Any]:
+            procs: list[Any] = []
+            if self._summary is not None:
+                sum_engine = self.app.engine(self._summary.engine_name)
+                procs.append(
+                    SummaryProcessor(
+                        sum_engine,
+                        source_lang=t.src,
+                        target_lang=t.tgt,
+                        window_words=self._summary.window_words,
+                    )
+                )
+            procs.append(
                 TranslateProcessor(
                     engine,
                     checker,
                     flush_every=self.app.config.runtime.flush_every,
                 )
-            ]
+            )
+            return procs
 
         specs: list[VideoSpec] = []
         for v in self._videos:
+            vk = VideoKey(course=self.course, video=v.video)
             if v.kind == "srt":
-                src_obj: Source = SrtSource(v.path, language=v.language)
+                src_obj: Source = SrtSource(
+                    v.path, language=v.language, store=store, video_key=vk
+                )
             elif v.kind == "whisperx":
-                src_obj = WhisperXSource(v.path, language=v.language)
+                src_obj = WhisperXSource(
+                    v.path, language=v.language, store=store, video_key=vk
+                )
             else:
                 raise ValueError(f"unknown source kind: {v.kind!r}")
             specs.append(VideoSpec(video=v.video, source=src_obj))

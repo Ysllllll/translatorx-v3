@@ -9,7 +9,14 @@ import from ``checker`` directly::
     from checker import LengthRatioRule, LangProfile, get_profile
 """
 
-from .agents import TermsAgent, TermsAgentResult, parse_terms_response
+from .agents import (
+    IncrementalSummaryAgent,
+    IncrementalSummaryState,
+    SummarySnapshot,
+    TermsAgent,
+    TermsAgentResult,
+    parse_terms_response,
+)
 from .context import (
     ContextWindow,
     StaticTerms,
@@ -45,6 +52,9 @@ __all__ = [
     "TermsAgent",
     "TermsAgentResult",
     "parse_terms_response",
+    "IncrementalSummaryAgent",
+    "IncrementalSummaryState",
+    "SummarySnapshot",
     "ContextWindow",
     "TranslationContext",
     "build_frozen_messages",

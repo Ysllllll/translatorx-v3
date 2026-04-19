@@ -245,6 +245,14 @@ register_subdir(
     types=(".json",),
     default_suffix=".json",
 )
+# Sidecar raw_segment jsonl files (D-069). File stems look like
+# ``<video>.words.jsonl`` or ``<video>.segments.jsonl`` — two-part suffix;
+# we don't default-index/stat-lookup these, callers pass the full suffix.
+register_subdir(
+    call="subtitle_jsonl",
+    name="zzz_subtitle_jsonl",
+    types=(".jsonl",),
+)
 register_subdir(
     call="official_translation",
     name="zzz_official_translation",

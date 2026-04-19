@@ -114,8 +114,8 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         checker: Checker,
         *,
         config: TranslateNodeConfig | None = None,
-        flush_every: int = 100,
-        flush_interval_s: float = 60.0,
+        flush_every: int | float = float("inf"),
+        flush_interval_s: float = float("inf"),
     ) -> None:
         self._engine = engine
         self._checker = checker
@@ -177,7 +177,10 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         provider = self._terms_provider
         if provider is None or not getattr(provider, "ready", False):
             return False
-        return not rec.extra.get("terms_ready_at_translate", False)
+        # Absent (the common case) = terms were ready → not stale.
+        # Only an explicit False marker means the record was translated
+        # without terms and should be retranslated.
+        return rec.extra.get("terms_ready_at_translate", True) is False
 
     # ------------------------------------------------------------------
     # process
@@ -261,12 +264,24 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
 
                 # 3. buffered flush (only records with id survive to disk)
                 if isinstance(rec_id, int):
-                    buffer[rec_id] = {
+                    rec_payload = new_rec.to_dict()
+                    patch: dict[str, Any] = {
                         f"translations.{target}": new_rec.translations[target],
-                        "extra.terms_ready_at_translate": new_rec.extra.get(
-                            "terms_ready_at_translate", False
-                        ),
+                        "src_text": rec_payload["src_text"],
+                        "start": rec_payload["start"],
+                        "end": rec_payload["end"],
                     }
+                    # Only persist the "terms not ready" marker when actually
+                    # set — the clean case keeps the JSON free of this field.
+                    if new_rec.extra.get("terms_ready_at_translate", True) is False:
+                        patch["extra.terms_ready_at_translate"] = False
+                    if "segments" in rec_payload:
+                        patch["segments"] = rec_payload["segments"]
+                    if "words" in rec_payload:
+                        patch["words"] = rec_payload["words"]
+                    if "chunk_cache" in rec_payload:
+                        patch["chunk_cache"] = rec_payload["chunk_cache"]
+                    buffer[rec_id] = patch
                     now = time.monotonic()
                     if (
                         len(buffer) >= self._flush_every
@@ -280,11 +295,11 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             # D-045: shield the terminal writes so cancel doesn't lose
             # pending records or leave the fingerprint stale.
             await asyncio.shield(_flush())
-            merged_fps = {**existing_fps, self.name: fp}
+            # Use set_fingerprints (merge) rather than patch_video(meta=)
+            # so we don't clobber sibling processors' fingerprints that
+            # were written concurrently (e.g. SummaryProcessor).
             await asyncio.shield(
-                store.patch_video(
-                    video_key.video, meta={"_fingerprints": merged_fps}
-                )
+                store.set_fingerprints(video_key.video, {self.name: fp})
             )
             await asyncio.shield(self.aclose())
 
@@ -361,12 +376,13 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             )
 
         new_translations = {**record.translations, target: translation}
-        new_extra = {
-            **record.extra,
-            "terms_ready_at_translate": bool(
-                getattr(context.terms_provider, "ready", False)
-            ),
-        }
+        # Only record the "terms not ready" marker explicitly; absence
+        # means terms were ready (the default, clean case).
+        new_extra = dict(record.extra)
+        if getattr(context.terms_provider, "ready", False):
+            new_extra.pop("terms_ready_at_translate", None)
+        else:
+            new_extra["terms_ready_at_translate"] = False
         return (
             replace(record, translations=new_translations, extra=new_extra),
             result,

@@ -87,7 +87,7 @@ class Subtitle:
     operates on the token array.
     """
 
-    __slots__ = ("_ops", "_pipelines", "_words")
+    __slots__ = ("_ops", "_pipelines", "_words", "_chunk_caches", "_sentence_split")
 
     # ---- construction ------------------------------------------------
 
@@ -119,6 +119,8 @@ class Subtitle:
 
         self._pipelines: list[ChunkPipeline] = [pipeline]
         self._words: list[list[Word]] = [all_words]
+        self._chunk_caches: list[dict[str, list[str]]] = [{}]
+        self._sentence_split: bool = False
 
     @classmethod
     def from_words(
@@ -142,16 +144,88 @@ class Subtitle:
             return cls([seg], ops=ops)
         return cls([seg], language=language)
 
+    @classmethod
+    def from_records(
+        cls,
+        records: list[SentenceRecord],
+        ops: _BaseOps | None = None,
+        *,
+        language: str | None = None,
+        chunk_cache_key: str | None = None,
+    ) -> Subtitle:
+        """Rehydrate from already-processed :class:`SentenceRecord` list (D-073).
+
+        Useful for resumable reruns: each record's ``segments`` carry the
+        original words, and its ``chunk_cache`` carries prior ``apply_*``
+        outputs (e.g. ``chunk_cache["chunk_llm"]``). The returned Subtitle
+        has one pipeline per record — it behaves as if ``sentences()`` has
+        already been called.
+
+        If *chunk_cache_key* is given and present in a record's
+        ``chunk_cache``, the pipeline is seeded with those exact chunks
+        (so downstream ``split`` / ``apply_per_sentence`` skips the
+        expensive step).
+        """
+        from lang_ops import LangOps
+        from lang_ops.chunk._pipeline import ChunkPipeline
+
+        if ops is not None:
+            resolved_ops = ops
+        elif language is not None:
+            resolved_ops = LangOps.for_language(language)
+        else:
+            raise TypeError("from_records requires either ops or language")
+
+        new = object.__new__(Subtitle)
+        new._ops = resolved_ops
+        pipelines: list[ChunkPipeline] = []
+        words_list: list[list[Word]] = []
+        caches: list[dict[str, list[str]]] = []
+        for rec in records:
+            rec_words: list[Word] = []
+            for seg in rec.segments:
+                rec_words.extend(seg.words)
+            words_list.append(rec_words)
+            caches.append({k: list(v) for k, v in rec.chunk_cache.items()})
+            if (
+                chunk_cache_key is not None
+                and chunk_cache_key in rec.chunk_cache
+                and rec.chunk_cache[chunk_cache_key]
+            ):
+                pipelines.append(
+                    ChunkPipeline.from_chunks(
+                        list(rec.chunk_cache[chunk_cache_key]), ops=resolved_ops
+                    )
+                )
+            else:
+                pipelines.append(ChunkPipeline(rec.src_text, ops=resolved_ops))
+        new._pipelines = pipelines
+        new._words = words_list
+        new._chunk_caches = caches
+        new._sentence_split = True
+        return new
+
     def _with_pipelines(
         self,
         pipelines: list[object],
         words: list[list[Word]] | None = None,
+        chunk_caches: list[dict[str, list[str]]] | None = None,
+        sentence_split: bool | None = None,
     ) -> Subtitle:
         """Create a new Subtitle with updated pipelines (and optionally words)."""
         new = object.__new__(Subtitle)
         new._ops = self._ops
         new._pipelines = pipelines
         new._words = words if words is not None else self._words
+        if chunk_caches is not None:
+            new._chunk_caches = chunk_caches
+        elif len(pipelines) == len(self._chunk_caches):
+            new._chunk_caches = [dict(c) for c in self._chunk_caches]
+        else:
+            new._chunk_caches = [{} for _ in pipelines]
+        new._sentence_split = (
+            sentence_split if sentence_split is not None else self._sentence_split
+        )
         return new
 
     # ---- text operations (delegated to ChunkPipeline) ----------------
@@ -191,7 +265,7 @@ class Subtitle:
                     )
                     new_words.append(wg)
 
-        return self._with_pipelines(new_pipelines, new_words)
+        return self._with_pipelines(new_pipelines, new_words, sentence_split=True)
 
     def clauses(self, merge_under: int | None = None) -> Subtitle:
         """Split each chunk into clauses (sentence-aware).
@@ -299,6 +373,66 @@ class Subtitle:
 
         return self._with_pipelines(new_pipelines)
 
+    def apply_global(
+        self,
+        name: str,
+        fn: ApplyFn,
+        cache: ApplyCache | None = None,
+        batch_size: int = 1,
+        workers: int = 1,
+        skip_if: Callable[[str], bool] | None = None,
+    ) -> Subtitle:
+        """Apply *fn* before sentence splitting (D-073).
+
+        *name* is a human-readable step label (e.g. ``"restore_punc"``)
+        used purely for diagnostics / fingerprinting. The actual cache is
+        still supplied by the caller (video-level for punc).
+
+        Must be called before :meth:`sentences` — raises ``RuntimeError``
+        if pipelines have already been split per-sentence.
+        """
+        if self._sentence_split:
+            raise RuntimeError(
+                f"apply_global('{name}') must run before sentences()"
+            )
+        return self.apply(
+            fn, cache=cache, batch_size=batch_size,
+            workers=workers, skip_if=skip_if,
+        )
+
+    def apply_per_sentence(
+        self,
+        name: str,
+        fn: ApplyFn,
+        batch_size: int = 1,
+        workers: int = 1,
+        skip_if: Callable[[str], bool] | None = None,
+    ) -> Subtitle:
+        """Apply *fn* per sentence and stamp result under ``chunk_cache[name]`` (D-073).
+
+        Must be called after :meth:`sentences`. The outcome of *fn* for
+        each sentence is recorded so :meth:`records` can emit it as
+        ``SentenceRecord.chunk_cache[name]`` — enabling resumable reruns
+        that skip *fn* entirely when the cache matches.
+        """
+        if not self._sentence_split:
+            raise RuntimeError(
+                f"apply_per_sentence('{name}') requires sentences() to have "
+                f"been called first"
+            )
+        new_sub = self.apply(
+            fn, cache=None, batch_size=batch_size,
+            workers=workers, skip_if=skip_if,
+        )
+        # Stamp per-sentence chunk_cache entries.
+        new_caches: list[dict[str, list[str]]] = []
+        for i, pipeline in enumerate(new_sub._pipelines):
+            c = dict(new_sub._chunk_caches[i]) if i < len(new_sub._chunk_caches) else {}
+            c[name] = list(pipeline.result())
+            new_caches.append(c)
+        new_sub._chunk_caches = new_caches
+        return new_sub
+
     # ---- output ------------------------------------------------------
 
     def build(self) -> list[Segment]:
@@ -321,10 +455,10 @@ class Subtitle:
             sub.sentences().clauses(merge_under=60).split(40).records()
         """
         # Ensure we're at sentence granularity
-        sub = self if len(self._pipelines) > 1 or not self._pipelines else self.sentences()
+        sub = self if self._sentence_split else self.sentences()
 
         records: list[SentenceRecord] = []
-        for pipeline, words in zip(sub._pipelines, sub._words):
+        for i, (pipeline, words) in enumerate(zip(sub._pipelines, sub._words)):
             src_text = sub._ops.join(
                 [sub._ops.join(g) for g in pipeline._groups]  # noqa: SLF001
             )
@@ -335,11 +469,17 @@ class Subtitle:
 
             sub_segments = align_segments(sub_chunks, words)
             if sub_segments:
+                cc = (
+                    dict(sub._chunk_caches[i])
+                    if i < len(sub._chunk_caches) and sub._chunk_caches[i]
+                    else {}
+                )
                 records.append(SentenceRecord(
                     src_text=src_text,
                     start=sub_segments[0].start,
                     end=sub_segments[-1].end,
                     segments=sub_segments,
+                    chunk_cache=cc,
                 ))
 
         return records
