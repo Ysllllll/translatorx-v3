@@ -32,6 +32,7 @@ def _all_in(s: str, charset: frozenset[str]) -> bool:
 # attach_punct_words
 # ------------------------------------------------------------------
 
+
 def attach_punct_words(words: list[Word]) -> list[Word]:
     """Merge standalone punctuation Words into adjacent text Words.
 
@@ -47,8 +48,9 @@ def attach_punct_words(words: list[Word]) -> list[Word]:
     for w in words:
         if merged and not w.content and _all_in(w.word.strip(), _CLOSE):
             p = merged[-1]
-            merged[-1] = replace(p, word=p.word + w.word.lstrip(),
-                                 end=max(p.end, w.end))
+            merged[-1] = replace(
+                p, word=p.word + w.word.lstrip(), end=max(p.end, w.end)
+            )
         else:
             merged.append(w)
 
@@ -58,15 +60,21 @@ def attach_punct_words(words: list[Word]) -> list[Word]:
     for w in merged:
         if not w.content and _all_in(w.word.strip(), _OPENING):
             if pending:
-                pending = replace(pending,
-                                  word=pending.word + w.word.lstrip(),
-                                  end=max(pending.end, w.end))
+                pending = replace(
+                    pending,
+                    word=pending.word + w.word.lstrip(),
+                    end=max(pending.end, w.end),
+                )
             else:
                 pending = w
         elif pending:
-            result.append(replace(w,
-                                  word=pending.word + w.word.lstrip(),
-                                  start=min(pending.start, w.start)))
+            result.append(
+                replace(
+                    w,
+                    word=pending.word + w.word.lstrip(),
+                    start=min(pending.start, w.start),
+                )
+            )
             pending = None
         else:
             result.append(w)
@@ -80,8 +88,11 @@ def attach_punct_words(words: list[Word]) -> list[Word]:
 # normalize_words / fill_words
 # ------------------------------------------------------------------
 
+
 def _synthesize_words(
-    tokens: list[str], start: float, end: float,
+    tokens: list[str],
+    start: float,
+    end: float,
 ) -> list[Word]:
     """Create evenly-spaced Words from text tokens."""
     duration = end - start
@@ -135,8 +146,11 @@ def fill_words(
     cases (only-text, only-words, both) and returns a new Segment.
     """
     text, words = normalize_words(
-        segment.text, segment.words, split_fn,
-        start=segment.start, end=segment.end,
+        segment.text,
+        segment.words,
+        split_fn,
+        start=segment.start,
+        end=segment.end,
     )
     if text == segment.text and words is segment.words:
         return segment
@@ -147,6 +161,37 @@ def fill_words(
 # find_words / distribute_words / align_segments
 # ------------------------------------------------------------------
 
+
+def _find_word_boundary(
+    text: str,
+    needle: str,
+    start: int,
+) -> int:
+    """Find *needle* in *text* at a word boundary.
+
+    A match is valid only when the character before it (if any) and the
+    character after it (if any) are NOT alphanumeric.  This prevents
+    matching ``"you"`` inside ``"your"``.
+
+    Falls back to ordinary ``str.find`` if no boundary-respecting match
+    exists (handles edge cases where the word really is embedded, e.g.
+    CJK characters).
+    """
+    pos = start
+    while True:
+        idx = text.find(needle, pos)
+        if idx < 0:
+            return -1
+        # Left boundary: start of string or non-alnum before match
+        left_ok = idx == 0 or not text[idx - 1].isalnum()
+        # Right boundary: end of string or non-alnum after match
+        end = idx + len(needle)
+        right_ok = end >= len(text) or not text[end].isalnum()
+        if left_ok and right_ok:
+            return idx
+        pos = idx + 1
+
+
 def find_words(
     words: list[Word],
     sub_text: str,
@@ -154,17 +199,40 @@ def find_words(
 ) -> tuple[int, int]:
     """Find the contiguous slice of *words* covering *sub_text*.
 
-    Three-level tolerant matching (exact → content → case-insensitive).
+    Four-level tolerant matching:
+      1. exact word → 2. stripped content → 3. case-insensitive →
+      4. alphanumeric-only (handles punctuation changes from punc
+         restoration, e.g. ``dont`` matching ``don't``).
+
+    Levels 1–3 require word-boundary matches to avoid matching short
+    words inside longer ones (e.g. ``"you"`` inside ``"your"``).
+
+    If alphanumeric matching also fails, the text and words are
+    fundamentally misaligned — break immediately with no tolerance.
+
     Returns ``(start_idx, end_idx)`` or ``(start, start)`` if not found.
     """
     if not sub_text or not sub_text.strip() or start >= len(words):
         return (start, start)
 
     sub_lower = sub_text.lower()
+
+    # Pre-compute alphanumeric mapping for level 4:
+    # alnum_chars[i] → the i-th alnum character (lowered)
+    # alnum_to_orig[i] → its position in the original sub_text
+    alnum_chars: list[str] = []
+    alnum_to_orig: list[int] = []
+    for orig_i, ch in enumerate(sub_text):
+        if ch.isalnum():
+            alnum_chars.append(ch.lower())
+            alnum_to_orig.append(orig_i)
+    sub_alnum = "".join(alnum_chars)
+
     first: int | None = None
     last = start
     pos = 0
     pos_low = 0
+    pos_alnum = 0
 
     for i in range(start, len(words)):
         w = words[i]
@@ -173,31 +241,53 @@ def find_words(
                 last = i + 1
             continue
 
-        # Three-level tolerant matching: exact → content → case-insensitive
-        idx = sub_text.find(w.word, pos)
+        # Level 1: exact word match (word-boundary)
+        idx = _find_word_boundary(sub_text, w.word, pos)
         if idx >= 0:
-            needle_len = len(w.word)
+            pos = pos_low = idx + len(w.word)
         else:
-            idx = sub_text.find(w.content, pos)
+            # Level 2: content (punctuation-stripped word, word-boundary)
+            idx = _find_word_boundary(sub_text, w.content, pos)
             if idx >= 0:
-                needle_len = len(w.content)
+                pos = pos_low = idx + len(w.content)
             else:
-                idx = sub_lower.find(w.content.lower(), pos_low)
+                # Level 3: case-insensitive content (word-boundary)
+                idx = _find_word_boundary(sub_lower, w.content.lower(), pos_low)
                 if idx >= 0:
-                    needle_len = len(w.content)
+                    pos = pos_low = idx + len(w.content)
                 else:
-                    break  # no match at any level → stop
+                    # Level 4: alphanumeric-only — strip all non-alnum
+                    # from both word and text, then match.
+                    w_alnum = "".join(ch for ch in w.content.lower() if ch.isalnum())
+                    if not w_alnum:
+                        break
+                    idx_a = sub_alnum.find(w_alnum, pos_alnum)
+                    if idx_a < 0:
+                        break  # text and words are misaligned
+                    # Map alnum position back to original text position
+                    end_alnum = idx_a + len(w_alnum)
+                    orig_end = alnum_to_orig[end_alnum - 1] + 1
+                    pos = pos_low = orig_end
+                    pos_alnum = end_alnum
+                    if first is None:
+                        first = i
+                    last = i + 1
+                    continue
+
+        # Advance alnum position to stay in sync
+        while pos_alnum < len(alnum_to_orig) and alnum_to_orig[pos_alnum] < pos:
+            pos_alnum += 1
 
         if first is None:
             first = i
         last = i + 1
-        pos = pos_low = idx + needle_len
 
     return (first, last) if first is not None else (start, start)
 
 
 def distribute_words(
-    words: list[Word], texts: list[str],
+    words: list[Word],
+    texts: list[str],
 ) -> list[list[Word]]:
     """Assign *words* to consecutive *texts* via :func:`find_words`."""
     result: list[list[Word]] = []
@@ -210,7 +300,8 @@ def distribute_words(
 
 
 def align_segments(
-    chunks: list[str], words: list[Word],
+    chunks: list[str],
+    words: list[Word],
 ) -> list[Segment]:
     """Align text chunks with timed words → list of Segments."""
     groups = distribute_words(words, chunks)
