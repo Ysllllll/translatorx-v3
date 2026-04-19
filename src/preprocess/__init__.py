@@ -39,5 +39,6 @@ if _ner_available:
 
 if _spacy_available:
     from preprocess._spacy import SpacySplitter
+    from preprocess._spacy_llm_chunk import SpacyLlmChunker
 
-    __all__.append("SpacySplitter")
+    __all__ += ["SpacySplitter", "SpacyLlmChunker"]

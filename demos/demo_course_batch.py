@@ -64,6 +64,7 @@ SUB = "─" * 72
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _extract_video_id(p: Path) -> str:
     """Extract short video ID (e.g. ``P10``) from SRT file name."""
     m = _P_INDEX_RE.match(p.name)
@@ -137,6 +138,7 @@ def count_sentence_records(p: Path, language: str = "en") -> int:
 # ---------------------------------------------------------------------------
 # ProgressEngine
 # ---------------------------------------------------------------------------
+
 
 class ProgressEngine:
     """Wraps an LLMEngine to print per-call progress.
@@ -235,6 +237,7 @@ class ProgressEngine:
 # Display helpers
 # ---------------------------------------------------------------------------
 
+
 def print_tree(root: Path, max_files_per_dir: int = 5) -> None:
     if not root.exists():
         print(f"    (no such directory: {root})")
@@ -308,6 +311,7 @@ def dump_translation_json(path: Path, max_records: int = 3) -> None:
 # App 配置工厂
 # ---------------------------------------------------------------------------
 
+
 def _default_engine_config() -> dict:
     return {
         "kind": "openai_compat",
@@ -343,6 +347,7 @@ def _default_context_config() -> dict:
 # ---------------------------------------------------------------------------
 # Demo sections
 # ---------------------------------------------------------------------------
+
 
 def prepare_data() -> tuple[list[Path], dict[str, int], int] | None:
     """Section 0: 数据校验 + 计数.
@@ -396,16 +401,18 @@ def build_app(total_records: int) -> tuple[App, ProgressEngine]:
         f"(course={COURSE_NAME})"
     )
 
-    app = App.from_dict({
-        "engines": {"default": _default_engine_config()},
-        "contexts": _default_context_config(),
-        "store": {"kind": "json", "root": WS_ROOT.as_posix()},
-        "runtime": {
-            "max_concurrent_videos": 2,
-            "flush_every": 100,
-            "default_checker_profile": "lenient",
-        },
-    })
+    app = App.from_dict(
+        {
+            "engines": {"default": _default_engine_config()},
+            "contexts": _default_context_config(),
+            "store": {"kind": "json", "root": WS_ROOT.as_posix()},
+            "runtime": {
+                "max_concurrent_videos": 2,
+                "flush_every": 100,
+                "default_checker_profile": "lenient",
+            },
+        }
+    )
 
     real_engine = app.engine("default")
     progress_engine = ProgressEngine(real_engine, total_records=total_records)
@@ -465,13 +472,8 @@ async def run_first_pass(
             n = len(outcome.records)
             sample = outcome.records[0] if outcome.records else None
             sample_zh = sample.translations.get("zh", "") if sample else ""
-            sample_zh_s = (
-                sample_zh if len(sample_zh) <= 60 else sample_zh[:57] + "…"
-            )
-            print(
-                f"      ✓ {video:>4s}  {n:>4d} records   "
-                f"sample: {sample_zh_s!r}"
-            )
+            sample_zh_s = sample_zh if len(sample_zh) <= 60 else sample_zh[:57] + "…"
+            print(f"      ✓ {video:>4s}  {n:>4d} records   " f"sample: {sample_zh_s!r}")
         else:
             print(f"      ✗ {video:>4s}  ERROR: {outcome!r}")
     return result, dt
@@ -534,42 +536,50 @@ def verify_preprocess_factories() -> None:
     }
 
     # 默认 — 无预处理
-    app0 = App.from_dict({
-        "engines": {"default": engine_cfg},
-        "store": {"root": tmp_root},
-    })
+    app0 = App.from_dict(
+        {
+            "engines": {"default": engine_cfg},
+            "store": {"root": tmp_root},
+        }
+    )
     assert app0.punc_restorer() is None
     assert app0.chunker() is None
     print("    ✓ punc_mode=none → punc_restorer()=None")
     print("    ✓ chunk_mode=none → chunker()=None")
 
     # LLM punc
-    app1 = App.from_dict({
-        "engines": {"default": engine_cfg},
-        "store": {"root": tmp_root},
-        "preprocess": {"punc_mode": "llm", "punc_threshold": 180},
-    })
+    app1 = App.from_dict(
+        {
+            "engines": {"default": engine_cfg},
+            "store": {"root": tmp_root},
+            "preprocess": {"punc_mode": "llm", "punc_threshold": 180},
+        }
+    )
     restorer = app1.punc_restorer()
     assert restorer is not None
     print(f"    ✓ punc_mode=llm → LlmPuncRestorer (threshold={restorer._threshold})")
 
     # LLM chunk
-    app2 = App.from_dict({
-        "engines": {"default": engine_cfg},
-        "store": {"root": tmp_root},
-        "preprocess": {"chunk_mode": "llm", "chunk_len": 90},
-    })
+    app2 = App.from_dict(
+        {
+            "engines": {"default": engine_cfg},
+            "store": {"root": tmp_root},
+            "preprocess": {"chunk_mode": "llm", "chunk_len": 90},
+        }
+    )
     chunker = app2.chunker()
     assert chunker is not None
     print(f"    ✓ chunk_mode=llm → LlmChunker (chunk_len={chunker._chunk_len})")
 
     # Remote punc (no endpoint → error)
     try:
-        app3 = App.from_dict({
-            "engines": {"default": engine_cfg},
-            "store": {"root": tmp_root},
-            "preprocess": {"punc_mode": "remote"},
-        })
+        app3 = App.from_dict(
+            {
+                "engines": {"default": engine_cfg},
+                "store": {"root": tmp_root},
+                "preprocess": {"punc_mode": "remote"},
+            }
+        )
         app3.punc_restorer()
         print("    ✗ remote without endpoint should have raised")
     except ValueError as e:
@@ -599,16 +609,18 @@ async def run_preprocess_punc(
     first_srt = srt_files[0]
     first_count = counts[first_srt.stem]
 
-    app = App.from_dict({
-        "engines": {"default": _default_engine_config()},
-        "contexts": _default_context_config(),
-        "store": {"kind": "json", "root": ws.as_posix()},
-        "runtime": {"flush_every": 100, "default_checker_profile": "lenient"},
-        "preprocess": {
-            "punc_mode": "llm",
-            "punc_threshold": 0,
-        },
-    })
+    app = App.from_dict(
+        {
+            "engines": {"default": _default_engine_config()},
+            "contexts": _default_context_config(),
+            "store": {"kind": "json", "root": ws.as_posix()},
+            "runtime": {"flush_every": 100, "default_checker_profile": "lenient"},
+            "preprocess": {
+                "punc_mode": "llm",
+                "punc_threshold": 0,
+            },
+        }
+    )
 
     real_engine = app.engine("default")
     prog = ProgressEngine(real_engine, total_records=first_count)
@@ -660,18 +672,20 @@ async def run_preprocess_full(
     first_srt = srt_files[0]
     first_count = counts[first_srt.stem]
 
-    app = App.from_dict({
-        "engines": {"default": _default_engine_config()},
-        "contexts": _default_context_config(),
-        "store": {"kind": "json", "root": ws.as_posix()},
-        "runtime": {"flush_every": 100, "default_checker_profile": "lenient"},
-        "preprocess": {
-            "punc_mode": "llm",
-            "punc_threshold": 0,
-            "chunk_mode": "llm",
-            "chunk_len": 90,
-        },
-    })
+    app = App.from_dict(
+        {
+            "engines": {"default": _default_engine_config()},
+            "contexts": _default_context_config(),
+            "store": {"kind": "json", "root": ws.as_posix()},
+            "runtime": {"flush_every": 100, "default_checker_profile": "lenient"},
+            "preprocess": {
+                "punc_mode": "llm",
+                "punc_threshold": 0,
+                "chunk_mode": "llm",
+                "chunk_len": 90,
+            },
+        }
+    )
 
     real_engine = app.engine("default")
     prog = ProgressEngine(real_engine, total_records=first_count)
@@ -705,9 +719,12 @@ async def run_preprocess_full(
 
 
 def compare_preprocess(
-    base_recs: int, dt_base: float,
-    punc_recs: int, dt_punc: float,
-    full_recs: int, dt_full: float,
+    base_recs: int,
+    dt_base: float,
+    punc_recs: int,
+    dt_punc: float,
+    full_recs: int,
+    dt_full: float,
 ) -> None:
     """Section 7d: 三种模式对比."""
     sub("7d  预处理对比")
@@ -717,8 +734,291 @@ def compare_preprocess(
 
 
 # ---------------------------------------------------------------------------
+# Standalone preprocessor demos (8a-8f)
+# ---------------------------------------------------------------------------
+
+SAMPLE_TEXTS = [
+    "hello world this is a test of the punctuation system",
+    "we need to make sure that the AI can restore the correct punctuation marks",
+    "this sentence has no punctuation at all and it is very confusing to read",
+]
+
+LONG_TEXT = (
+    "In this lecture we are going to cover how to use Stripe API "
+    "to handle payments in our web application and we will also look at "
+    "how Vercel deploys our code automatically whenever we push to the main branch "
+    "which is really convenient for the development workflow"
+)
+
+
+def _print_punc_comparison(
+    inputs: list[str], results: list[list[str]], label: str
+) -> None:
+    """Print a detailed before/after comparison for punc restoration."""
+    print(f"\n    ── {label} 前后对比 ──")
+    for i, (inp, out) in enumerate(zip(inputs, results)):
+        restored = out[0] if out else inp
+        changed = inp != restored
+        marker = "✓ changed" if changed else "= same"
+        print(f"    [{i}] ({marker})")
+        print(f"         before: {inp!r}")
+        print(f"         after:  {restored!r}")
+        if changed:
+            # highlight added punctuation
+            added = set(restored) - set(inp) - {" "}
+            if added:
+                print(f"         added chars: {added}")
+    print(f"    output shape: {[len(r) for r in results]}  (每项 [1] = 1:1 替换)")
+
+
+def _print_chunk_comparison(
+    inputs: list[str], results: list[list[str]], label: str
+) -> None:
+    """Print a detailed before/after comparison for chunking."""
+    print(f"\n    ── {label} 前后对比 ──")
+    for i, (inp, parts) in enumerate(zip(inputs, results)):
+        print(f"    [{i}] input ({len(inp)} chars):")
+        print(f"         {inp!r}")
+        print(f"        output ({len(parts)} parts):")
+        for j, p in enumerate(parts):
+            print(f"         [{j}] ({len(p):>3d} chars) {p!r}")
+    print(f"    output shape: {[len(r) for r in results]}  (1:N 拆分)")
+
+
+def demo_ner_punc() -> None:
+    """Section 8a: NerPuncRestorer standalone."""
+    sub("8a  NerPuncRestorer — 本地 NER 模型标点恢复")
+    try:
+        from preprocess import NerPuncRestorer
+    except ImportError:
+        print("    ⚠ deepmultilingualpunctuation 不可用, 跳过")
+        return
+
+    restorer = NerPuncRestorer.get_instance()
+    print(f"    type:  {type(restorer).__name__} (singleton)")
+    print(f"    model: oliverguhr/fullstop-punctuation-multilang-large")
+    print(f"    input: {len(SAMPLE_TEXTS)} texts (无标点)")
+
+    results = restorer(SAMPLE_TEXTS)
+    _print_punc_comparison(SAMPLE_TEXTS, results, "NER Punc")
+
+
+async def demo_llm_punc() -> None:
+    """Section 8b: LlmPuncRestorer standalone."""
+    sub("8b  LlmPuncRestorer — LLM 标点恢复")
+    from preprocess import LlmPuncRestorer
+    from llm_ops import EngineConfig, OpenAICompatEngine
+
+    engine = OpenAICompatEngine(
+        EngineConfig(
+            model=LLM_MODEL,
+            base_url=LLM_BASE_URL,
+            api_key="EMPTY",
+            temperature=0.3,
+            max_tokens=2048,
+        )
+    )
+    restorer = LlmPuncRestorer(engine, threshold=0)
+    print(f"    type:      {type(restorer).__name__}")
+    print(f"    engine:    {LLM_MODEL} @ {LLM_BASE_URL}")
+    print(f"    threshold: 0 (process all, no skip)")
+    print(f"    input:     {len(SAMPLE_TEXTS)} texts (无标点)")
+
+    results = restorer(SAMPLE_TEXTS)
+    _print_punc_comparison(SAMPLE_TEXTS, results, "LLM Punc")
+
+
+def demo_remote_punc() -> None:
+    """Section 8c: RemotePuncRestorer standalone."""
+    sub("8c  RemotePuncRestorer — HTTP 服务标点恢复")
+    print("    RemotePuncRestorer 通过 HTTP 调用远程标点恢复服务。")
+    print("    后端可以是 NER 模型、LLM、或任意实现 — 对调用方完全透明。")
+    print()
+    print("    接口约定:")
+    print("      POST /restore")
+    print('      Request:  {"texts": ["hello world", "another text"]}')
+    print('      Response: {"results": [["Hello world."], ["Another text."]]}')
+    print()
+    print("    用法:")
+    print("      from preprocess import RemotePuncRestorer")
+    print(
+        '      restorer = RemotePuncRestorer("http://host:port/restore", threshold=180)'
+    )
+    print('      results = restorer(["hello world"])')
+    print('      # → [["Hello world."]]  (1:1 替换)')
+    print()
+    print("    ⚠ 无可用端点, 跳过实际调用。")
+
+
+def demo_spacy_splitter() -> None:
+    """Section 8d: SpacySplitter standalone."""
+    sub("8d  SpacySplitter — spaCy NLP 拆句 (chunk_mode='spacy')")
+    try:
+        from preprocess import SpacySplitter
+    except ImportError:
+        print("    ⚠ spacy 不可用, 跳过")
+        return
+
+    splitter = SpacySplitter.get_instance("en_core_web_md")
+    print(f"    type:  {type(splitter).__name__} (singleton)")
+    print(f"    model: en_core_web_md")
+    print(f"    input: 1 long text ({len(LONG_TEXT)} chars)")
+
+    results = splitter([LONG_TEXT])
+    _print_chunk_comparison([LONG_TEXT], results, "spaCy Splitter")
+
+
+async def demo_llm_chunker() -> None:
+    """Section 8e: LlmChunker standalone."""
+    sub("8e  LlmChunker — LLM 二分法拆句 (chunk_mode='llm')")
+    from preprocess import LlmChunker
+    from llm_ops import EngineConfig, OpenAICompatEngine
+
+    engine = OpenAICompatEngine(
+        EngineConfig(
+            model=LLM_MODEL,
+            base_url=LLM_BASE_URL,
+            api_key="EMPTY",
+            temperature=0.3,
+            max_tokens=2048,
+        )
+    )
+    chunker = LlmChunker(engine, chunk_len=90, max_depth=4)
+    print(f"    type:      {type(chunker).__name__}")
+    print(f"    engine:    {LLM_MODEL} @ {LLM_BASE_URL}")
+    print(f"    chunk_len: 90 chars, max_depth: 4")
+    print(f"    input:     1 long text ({len(LONG_TEXT)} chars)")
+
+    results = chunker([LONG_TEXT])
+    _print_chunk_comparison([LONG_TEXT], results, "LLM Chunker")
+
+
+async def demo_full_pipeline(
+    srt_files: list[Path],
+    counts: dict[str, int],
+) -> None:
+    """Section 8f: Full pipeline — step-by-step Subtitle pipeline visualization."""
+    from subtitle import Subtitle
+    from subtitle.io import read_srt
+    from preprocess import LlmPuncRestorer, LlmChunker
+    from llm_ops import EngineConfig, OpenAICompatEngine
+
+    sub("8f  完整预处理流水线 — 逐步可视化 (1 视频)")
+    print(
+        "    流程: raw_segments → punc_global → sentences → punc_sentence → chunk → records"
+    )
+    print(f"    engine: {LLM_MODEL} @ {LLM_BASE_URL}")
+
+    first_srt = srt_files[0]
+    segments = read_srt(first_srt)
+    print(f"\n    ── Step 0: 原始 SRT segments ({len(segments)} 个) ──")
+    for i, seg in enumerate(segments[:8]):
+        print(f"    [{i:>3d}] ({len(seg.text):>3d} chars) {seg.text!r}")
+    if len(segments) > 8:
+        print(f"    ... +{len(segments) - 8} more segments")
+
+    # Build engine + preprocessors
+    engine = OpenAICompatEngine(
+        EngineConfig(
+            model=LLM_MODEL,
+            base_url=LLM_BASE_URL,
+            api_key="EMPTY",
+            temperature=0.3,
+            max_tokens=2048,
+        )
+    )
+    punc_fn = LlmPuncRestorer(engine, threshold=0)
+    chunk_fn = LlmChunker(engine, chunk_len=90, max_depth=4)
+
+    # Step 1: Construct Subtitle
+    sub_obj = Subtitle(segments, language="en")
+
+    # Collect original concatenated text for comparison
+    orig_texts = [seg.text for seg in segments]
+    orig_concat = " ".join(orig_texts)
+
+    # Step 1: Global punc — operates on concatenated text (before sentence split)
+    print(f"\n    ── Step 1: apply_global('restore_punc') — 全局标点恢复 ──")
+    print(f"    注意: apply_global 在 sentences() 之前运行,")
+    print(f"          输入是拼接后的完整文本 ({len(orig_concat)} chars), 非逐段处理")
+    punc_cache: dict[str, list[str]] = {}
+    sub_after_punc = sub_obj.apply_global("restore_punc", punc_fn, cache=punc_cache)
+    # After apply_global, pipeline holds the punc-restored concatenated text
+    punc_full_texts = []
+    for p in sub_after_punc._pipelines:
+        punc_full_texts.extend(p.result())
+    punc_concat = " ".join(punc_full_texts)
+    changed = orig_concat != punc_concat
+    print(f"    punc_cache entries: {len(punc_cache)}")
+    print(f"    text changed: {'yes' if changed else 'no'}")
+    if changed:
+        # Show a snippet of before/after
+        snippet_len = 200
+        print(f"    before[:200]: {orig_concat[:snippet_len]!r}")
+        print(f"    after[:200]:  {punc_concat[:snippet_len]!r}")
+        added = set(punc_concat) - set(orig_concat) - {" "}
+        if added:
+            print(f"    added chars: {added}")
+
+    # Step 2: sentences() — splits the punc-restored text into sentences
+    sub_after_sent = sub_after_punc.sentences()
+    sent_records = sub_after_sent.records()
+    print(f"\n    ── Step 2: .sentences() — 断句 ──")
+    print(f"    1 concatenated text → {len(sent_records)} sentences")
+    for i, rec in enumerate(sent_records[:6]):
+        print(f"    [{i:>3d}] ({len(rec.src_text):>3d} chars) {rec.src_text!r}")
+    if len(sent_records) > 6:
+        print(f"    ... +{len(sent_records) - 6} more sentences")
+
+    # Step 3: per-sentence punc
+    print(f"\n    ── Step 3: apply_per_sentence('restore_punc_sent') — 句级标点恢复 ──")
+    sub_after_sent_punc = sub_after_sent.apply_per_sentence(
+        "restore_punc_sent", punc_fn
+    )
+    sent_punc_records = sub_after_sent_punc.records()
+    print(
+        f"    {len(sent_records)} sentences → {len(sent_punc_records)} sentences"
+    )
+    split_happened = len(sent_punc_records) != len(sent_records)
+    print(f"    sentence count changed: {'yes' if split_happened else 'no'}")
+    # Show before/after comparison for first few sentences
+    for i, (before, after) in enumerate(
+        zip(sent_records[:6], sent_punc_records[:6])
+    ):
+        marker = "✓" if before.src_text != after.src_text else "="
+        print(f"    [{i:>3d}] {marker} {after.src_text!r}")
+    if len(sent_punc_records) > 6:
+        print(f"    ... +{len(sent_punc_records) - 6} more sentences")
+
+    # Step 4: chunk
+    print(f"\n    ── Step 4: apply_per_sentence('chunk') — LLM 拆句 ──")
+    sub_after_chunk = sub_after_sent_punc.apply_per_sentence("chunk", chunk_fn)
+    chunk_records = sub_after_chunk.records()
+    print(
+        f"    {len(sent_punc_records)} sentences → {len(chunk_records)} records"
+    )
+    for i, rec in enumerate(chunk_records[:8]):
+        cc_keys = list(rec.chunk_cache.keys()) if rec.chunk_cache else []
+        cc_info = f"  chunk_cache={cc_keys}" if cc_keys else ""
+        print(
+            f"    [{i:>3d}] ({len(rec.src_text):>3d} chars) {rec.src_text!r}{cc_info}"
+        )
+    if len(chunk_records) > 8:
+        print(f"    ... +{len(chunk_records) - 8} more records")
+
+    # Summary
+    print(f"\n    ── 流水线总结 ──")
+    print(f"    原始 segments:    {len(segments):>4d}")
+    print(f"    punc_global:      全局标点恢复 (拼接后处理)")
+    print(f"    sentences() 后:   {len(sent_records):>4d} sentences")
+    print(f"    punc_sentence 后: {len(sent_punc_records):>4d} sentences")
+    print(f"    chunk 后:         {len(chunk_records):>4d} records")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 async def main() -> None:
     header("demo_course_batch — 真实 Udemy 课程批量翻译")
@@ -738,7 +1038,10 @@ async def main() -> None:
 
     # 3. 第一次运行 — 全部新翻
     result, dt1 = await run_first_pass(
-        app, srt_files, progress_engine, total_records,
+        app,
+        srt_files,
+        progress_engine,
+        total_records,
     )
 
     # 4-5. Workspace 目录树 + JSON 内容
@@ -759,10 +1062,34 @@ async def main() -> None:
     # 7d. 对比
     base_recs = len(result.videos[0][1].records) if result.succeeded else 0
     compare_preprocess(
-        base_recs, dt1,
-        len(rec_punc), dt_punc,
-        len(rec_full), dt_full,
+        base_recs,
+        dt1,
+        len(rec_punc),
+        dt_punc,
+        len(rec_full),
+        dt_full,
     )
+
+    # --- 8. 独立预处理器 demo ---
+    header("独立预处理器 demo — 直接调用, 观察输入/输出")
+
+    # 8a. NerPuncRestorer
+    demo_ner_punc()
+
+    # 8b. LlmPuncRestorer
+    await demo_llm_punc()
+
+    # 8c. RemotePuncRestorer (说明用法, 无实际调用)
+    demo_remote_punc()
+
+    # 8d. SpacySplitter
+    demo_spacy_splitter()
+
+    # 8e. LlmChunker
+    await demo_llm_chunker()
+
+    # 8f. Full pipeline (punc_position=both + chunk)
+    await demo_full_pipeline(srt_files, counts)
 
     print("\n" + SEP)
     print("DONE — 数据保留在:")

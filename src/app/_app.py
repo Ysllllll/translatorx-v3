@@ -107,7 +107,10 @@ class App:
         if cfg.punc_mode == "llm":
             from preprocess import LlmPuncRestorer
             engine = self.engine(cfg.punc_engine)
-            return LlmPuncRestorer(engine, threshold=cfg.punc_threshold)
+            return LlmPuncRestorer(
+                engine, threshold=cfg.punc_threshold,
+                max_concurrent=cfg.max_concurrent,
+            )
         if cfg.punc_mode == "remote":
             from preprocess import RemotePuncRestorer
             if cfg.punc_endpoint is None:
@@ -115,23 +118,37 @@ class App:
             return RemotePuncRestorer(cfg.punc_endpoint, threshold=cfg.punc_threshold)
         raise ValueError(f"unknown punc_mode: {cfg.punc_mode!r}")
 
-    def spacy_splitter(self) -> "object | None":
-        """Build a SpaCy sentence splitter if configured."""
-        cfg = self._config.preprocess
-        if cfg.spacy_model is None:
-            return None
-        from preprocess import SpacySplitter
-        return SpacySplitter.get_instance(cfg.spacy_model)
-
     def chunker(self) -> ApplyFn | None:
-        """Build a chunker from ``config.preprocess``."""
+        """Build a chunker from ``config.preprocess``.
+
+        - ``"spacy"`` → :class:`SpacySplitter` (NLP-based sentence splitting).
+        - ``"llm"`` → :class:`LlmChunker` (recursive binary LLM splitting).
+        - ``"spacy_llm"`` → spaCy coarse split, then LLM fine split for
+          chunks exceeding ``chunk_len``.
+        """
         cfg = self._config.preprocess
         if cfg.chunk_mode == "none":
             return None
+        if cfg.chunk_mode == "spacy":
+            from preprocess import SpacySplitter
+            return SpacySplitter.get_instance(cfg.spacy_model)
         if cfg.chunk_mode == "llm":
             from preprocess import LlmChunker
             engine = self.engine(cfg.chunk_engine)
-            return LlmChunker(engine, chunk_len=cfg.chunk_len)
+            return LlmChunker(
+                engine, chunk_len=cfg.chunk_len,
+                max_concurrent=cfg.max_concurrent,
+            )
+        if cfg.chunk_mode == "spacy_llm":
+            from preprocess import LlmChunker, SpacySplitter
+            from preprocess._spacy_llm_chunk import SpacyLlmChunker
+            splitter = SpacySplitter.get_instance(cfg.spacy_model)
+            engine = self.engine(cfg.chunk_engine)
+            llm = LlmChunker(
+                engine, chunk_len=cfg.chunk_len,
+                max_concurrent=cfg.max_concurrent,
+            )
+            return SpacyLlmChunker(splitter, llm, chunk_len=cfg.chunk_len)
         raise ValueError(f"unknown chunk_mode: {cfg.chunk_mode!r}")
 
     # -- builders --------------------------------------------------------

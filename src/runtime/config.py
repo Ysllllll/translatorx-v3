@@ -97,22 +97,40 @@ class RuntimeConfig(BaseModel):
 
 
 class PreprocessConfig(BaseModel):
-    """Preprocessing pipeline configuration (D-073/D-074)."""
+    """Preprocessing pipeline configuration (D-073/D-074).
+
+    ``punc_position`` controls where punctuation restoration runs:
+
+    - ``"global"`` — before ``sentences()``; helps sentence splitting accuracy.
+    - ``"sentence"`` — after ``sentences()``; fixes per-sentence punctuation,
+      may split one sentence into two.
+    - ``"both"`` — runs at both positions.
+
+    ``chunk_mode`` controls sentence chunking strategy:
+
+    - ``"spacy"`` — use spaCy NLP model for sentence splitting.
+    - ``"llm"`` — recursive binary splitting via LLM.
+    - ``"spacy_llm"`` — spaCy coarse split first, then LLM fine split
+      for chunks still exceeding ``chunk_len``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     punc_mode: Literal["none", "ner", "llm", "remote"] = "none"
+    punc_position: Literal["global", "sentence", "both"] = "global"
     punc_engine: str = "default"
     punc_endpoint: str | None = None
     punc_threshold: int = 180
 
-    spacy_model: str | None = None
+    spacy_model: str = "en_core_web_md"
 
-    chunk_mode: Literal["none", "llm"] = "none"
+    chunk_mode: Literal["none", "spacy", "llm", "spacy_llm"] = "none"
     chunk_engine: str = "default"
     chunk_len: int = 90
     merge_under: int | None = None
     max_len: int | None = None
+
+    max_concurrent: int = 8
 
 
 class AppConfig(BaseModel):

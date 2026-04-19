@@ -6,8 +6,12 @@ Full design (D-073 / D-074):
   ``zzz_subtitle_jsonl/<video>.segments.jsonl`` sidecar and ``raw_segment_ref``
   is patched into the main video JSON via :meth:`Store.patch_video`.
 - Optional preprocessing hooks follow the locked pipeline:
-  ``apply_global("restore_punc") → clauses → apply_per_sentence("chunk_llm") → split``.
+  ``apply_global("restore_punc") → sentences → apply_per_sentence("restore_punc_sent")
+  → clauses → apply_per_sentence("chunk") → split``.
   Each hook is only executed when the caller supplies a callable.
+- ``punc_position`` controls where punctuation restoration runs:
+  ``"global"`` (before sentences), ``"sentence"`` (after sentences),
+  ``"both"`` (both positions).
 - Video-level caches (``punc_cache``) and per-sentence caches
   (``chunk_cache["chunk_llm"]``) ride along each :class:`SentenceRecord` so
   downstream processors can persist them without re-executing the LLM.
@@ -20,7 +24,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import AsyncIterator, Callable
+from typing import AsyncIterator, Callable, Literal
 
 from model import SentenceRecord
 from subtitle import Subtitle
@@ -46,13 +50,16 @@ class SrtSource:
         If both are supplied, the source persists the raw_segment sidecar
         and any populated ``punc_cache`` via :class:`Store`.
     restore_punc:
-        Optional ``apply_global`` callable (text batch → list[list[str]]).
-        When provided, a video-level ``punc_cache`` is reloaded from the
-        store (if any) and passed through so repeats hit the cache.
+        Optional callable (text batch → list[list[str]]).
+        Used at the position(s) indicated by *punc_position*.
+    punc_position:
+        ``"global"`` — run before ``sentences()`` (helps sentence splitting).
+        ``"sentence"`` — run after ``sentences()`` (fixes per-sentence punc).
+        ``"both"`` — run at both positions.
     chunk_llm:
         Optional ``apply_per_sentence`` callable. The per-record output is
         stamped onto :attr:`SentenceRecord.chunk_cache` under key
-        ``"chunk_llm"``.
+        ``"chunk"``.
     merge_under:
         Forwarded to :meth:`Subtitle.clauses`; skipped when ``None``.
     max_len:
@@ -71,6 +78,7 @@ class SrtSource:
         store: Store | None = None,
         video_key: VideoKey | None = None,
         restore_punc: ApplyFn | None = None,
+        punc_position: Literal["global", "sentence", "both"] = "global",
         chunk_llm: ApplyFn | None = None,
         merge_under: int | None = None,
         max_len: int | None = None,
@@ -84,6 +92,7 @@ class SrtSource:
         self._store = store
         self._video_key = video_key
         self._restore_punc = restore_punc
+        self._punc_position = punc_position
         self._chunk_llm = chunk_llm
         self._merge_under = merge_under
         self._max_len = max_len
@@ -97,9 +106,7 @@ class SrtSource:
         if self._store is not None and self._video_key is not None:
             vid = self._video_key.video
             ref = await self._store.write_raw_segment(vid, segments, "srt")
-            await self._store.patch_video(
-                vid, segment_type="srt", raw_segment_ref=ref
-            )
+            await self._store.patch_video(vid, segment_type="srt", raw_segment_ref=ref)
 
         sub = Subtitle(
             segments,
@@ -114,29 +121,39 @@ class SrtSource:
             if self._store is not None and self._video_key is not None:
                 prior = await self._store.load_video(self._video_key.video)
                 punc_cache.update(prior.get("punc_cache") or {})
+
+        # ① Global punc — before sentences()
+        if self._restore_punc is not None and self._punc_position in ("global", "both"):
             sub = sub.apply_global("restore_punc", self._restore_punc, cache=punc_cache)
 
+        # ② Sentence splitting
         sub = sub.sentences()
+
+        # ③ Per-sentence punc — after sentences()
+        if self._restore_punc is not None and self._punc_position in (
+            "sentence",
+            "both",
+        ):
+            sub = sub.apply_per_sentence("restore_punc_sent", self._restore_punc)
+
+        # ④ Clause splitting
         if self._merge_under is not None:
             sub = sub.clauses(merge_under=self._merge_under)
+
+        # ⑤ Chunking (spaCy or LLM)
         if self._chunk_llm is not None:
-            sub = sub.apply_per_sentence("chunk_llm", self._chunk_llm)
+            sub = sub.apply_per_sentence("chunk", self._chunk_llm)
+
+        # ⑥ Length-based split fallback
         if self._max_len is not None:
             sub = sub.split(self._max_len)
 
         # Persist punc_cache if it was populated.
-        if (
-            punc_cache
-            and self._store is not None
-            and self._video_key is not None
-        ):
-            await self._store.patch_video(
-                self._video_key.video, punc_cache=punc_cache
-            )
+        if punc_cache and self._store is not None and self._video_key is not None:
+            await self._store.patch_video(self._video_key.video, punc_cache=punc_cache)
 
         for rec in assign_ids(sub.records(), start=self._id_start):
             yield rec
 
 
 __all__ = ["SrtSource"]
-

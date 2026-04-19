@@ -176,68 +176,81 @@ class CourseBuilder:
             else:
                 src_lang = _detect_language_from_file(first.path, first.kind)
 
-        # For now, use the first target language
-        tgt_lang = t.tgt[0]
-
-        engine = self.app.engine(t.engine_name)
-        ctx = self.app.context(src_lang, tgt_lang)
-        checker = self.app.checker(src_lang, tgt_lang)
-        store = self.app.store(self.course)
-
-        # Preprocess config
+        # Preprocess config (shared across all target languages)
         pcfg = self.app.config.preprocess
         restore_punc = self.app.punc_restorer()
         chunk_llm = self.app.chunker()
 
-        def factory() -> Sequence[Any]:
-            procs: list[Any] = []
-            if self._summary is not None:
-                sum_engine = self.app.engine(self._summary.engine_name)
+        result: CourseResult | None = None
+
+        for tgt_lang in t.tgt:
+            engine = self.app.engine(t.engine_name)
+            ctx = self.app.context(src_lang, tgt_lang)
+            checker = self.app.checker(src_lang, tgt_lang)
+            store = self.app.store(self.course)
+
+            def factory(
+                _engine=engine,
+                _checker=checker,
+                _src=src_lang,
+                _tgt=tgt_lang,
+            ) -> Sequence[Any]:
+                procs: list[Any] = []
+                if self._summary is not None:
+                    sum_engine = self.app.engine(self._summary.engine_name)
+                    procs.append(
+                        SummaryProcessor(
+                            sum_engine,
+                            source_lang=_src,
+                            target_lang=_tgt,
+                            window_words=self._summary.window_words,
+                        )
+                    )
                 procs.append(
-                    SummaryProcessor(
-                        sum_engine,
-                        source_lang=src_lang,
-                        target_lang=tgt_lang,
-                        window_words=self._summary.window_words,
+                    TranslateProcessor(
+                        _engine,
+                        _checker,
+                        flush_every=self.app.config.runtime.flush_every,
                     )
                 )
-            procs.append(
-                TranslateProcessor(
-                    engine,
-                    checker,
-                    flush_every=self.app.config.runtime.flush_every,
+                return procs
+
+            specs: list[VideoSpec] = []
+            for v in self._videos:
+                vk = VideoKey(course=self.course, video=v.video)
+                vid_lang = v.language or src_lang
+                preprocess_kw = dict(
+                    restore_punc=restore_punc,
+                    punc_position=pcfg.punc_position,
+                    chunk_llm=chunk_llm,
+                    merge_under=pcfg.merge_under,
+                    max_len=pcfg.max_len,
                 )
+                if v.kind == "srt":
+                    src_obj: Source = SrtSource(
+                        v.path, language=vid_lang, store=store, video_key=vk,
+                        **preprocess_kw,
+                    )
+                elif v.kind == "whisperx":
+                    src_obj = WhisperXSource(
+                        v.path, language=vid_lang, store=store, video_key=vk,
+                        **preprocess_kw,
+                    )
+                else:
+                    raise ValueError(f"unknown source kind: {v.kind!r}")
+                specs.append(VideoSpec(video=v.video, source=src_obj))
+
+            orch = CourseOrchestrator(
+                store=store,
+                ctx=ctx,
+                processors_factory=factory,
+                error_reporter=self._error_reporter,
+                max_concurrent_videos=self.app.config.runtime.max_concurrent_videos,
             )
-            return procs
+            result = await orch.run(specs)
 
-        specs: list[VideoSpec] = []
-        for v in self._videos:
-            vk = VideoKey(course=self.course, video=v.video)
-            vid_lang = v.language or src_lang
-            if v.kind == "srt":
-                src_obj: Source = SrtSource(
-                    v.path, language=vid_lang, store=store, video_key=vk,
-                    restore_punc=restore_punc, chunk_llm=chunk_llm,
-                    merge_under=pcfg.merge_under, max_len=pcfg.max_len,
-                )
-            elif v.kind == "whisperx":
-                src_obj = WhisperXSource(
-                    v.path, language=vid_lang, store=store, video_key=vk,
-                    restore_punc=restore_punc, chunk_llm=chunk_llm,
-                    merge_under=pcfg.merge_under, max_len=pcfg.max_len,
-                )
-            else:
-                raise ValueError(f"unknown source kind: {v.kind!r}")
-            specs.append(VideoSpec(video=v.video, source=src_obj))
-
-        orch = CourseOrchestrator(
-            store=store,
-            ctx=ctx,
-            processors_factory=factory,
-            error_reporter=self._error_reporter,
-            max_concurrent_videos=self.app.config.runtime.max_concurrent_videos,
-        )
-        return await orch.run(specs)
+        assert result is not None  # at least one tgt guaranteed
+        return result
 
 
 __all__ = ["CourseBuilder"]

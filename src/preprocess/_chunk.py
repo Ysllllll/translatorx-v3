@@ -50,11 +50,13 @@ class LlmChunker:
         chunk_len: int = 90,
         max_depth: int = 4,
         ops: "_BaseOps | None" = None,
+        max_concurrent: int = 8,
     ) -> None:
         self._engine = engine
         self._chunk_len = chunk_len
         self._max_depth = max_depth
         self._ops = ops
+        self._max_concurrent = max_concurrent
 
     # -- ApplyFn interface ------------------------------------------------
 
@@ -75,14 +77,15 @@ class LlmChunker:
         return asyncio.run(self._process_batch(texts))
 
     async def _process_batch(self, texts: list[str]) -> list[list[str]]:
-        results: list[list[str]] = []
-        for text in texts:
+        sem = asyncio.Semaphore(self._max_concurrent)
+
+        async def _chunk_one(text: str) -> list[str]:
             if len(text) <= self._chunk_len:
-                results.append([text])
-                continue
-            chunks = await self._chunk_recursive(text, depth=0)
-            results.append(chunks)
-        return results
+                return [text]
+            async with sem:
+                return await self._chunk_recursive(text, depth=0)
+
+        return list(await asyncio.gather(*(_chunk_one(t) for t in texts)))
 
     async def _chunk_recursive(self, text: str, depth: int) -> list[str]:
         """Recursively split *text* into chunks ≤ chunk_len."""

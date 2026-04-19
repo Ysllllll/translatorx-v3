@@ -92,18 +92,23 @@ class VideoBuilder:
         video_key = VideoKey(course=self.course, video=self.video)
         cfg = self.app.config.preprocess
         restore_punc = self.app.punc_restorer()
-        chunk_llm = self.app.chunker()
+        chunk_fn = self.app.chunker()
+        preprocess_kw = dict(
+            restore_punc=restore_punc,
+            punc_position=cfg.punc_position,
+            chunk_llm=chunk_fn,
+            merge_under=cfg.merge_under,
+            max_len=cfg.max_len,
+        )
         if resolved == "srt":
             src: Source = SrtSource(
                 p, language=detected_lang, store=store, video_key=video_key,
-                restore_punc=restore_punc, chunk_llm=chunk_llm,
-                merge_under=cfg.merge_under, max_len=cfg.max_len,
+                **preprocess_kw,
             )
         elif resolved == "whisperx":
             src = WhisperXSource(
                 p, language=detected_lang, store=store, video_key=video_key,
-                restore_punc=restore_punc, chunk_llm=chunk_llm,
-                merge_under=cfg.merge_under, max_len=cfg.max_len,
+                **preprocess_kw,
             )
         else:
             raise ValueError(f"unknown source kind: {resolved!r}")
@@ -158,41 +163,43 @@ class VideoBuilder:
                 "source language unknown; pass language= to .source() or src= to .translate()"
             )
 
-        # For now, translate to the first target language.
-        # Multi-target support: iterate over t.tgt and run each.
-        tgt_lang = t.tgt[0]
+        result: VideoResult | None = None
 
-        engine = self.app.engine(t.engine_name)
-        ctx = self.app.context(src_lang, tgt_lang)
-        checker = self.app.checker(src_lang, tgt_lang)
-        store = self.app.store(self.course)
+        for tgt_lang in t.tgt:
+            engine = self.app.engine(t.engine_name)
+            ctx = self.app.context(src_lang, tgt_lang)
+            checker = self.app.checker(src_lang, tgt_lang)
+            store = self.app.store(self.course)
 
-        processor = TranslateProcessor(
-            engine,
-            checker,
-            flush_every=self.app.config.runtime.flush_every,
-        )
-        procs: list[Any] = []
-        if self._summary is not None:
-            sum_engine = self.app.engine(self._summary.engine_name)
-            procs.append(
-                SummaryProcessor(
-                    sum_engine,
-                    source_lang=src_lang,
-                    target_lang=tgt_lang,
-                    window_words=self._summary.window_words,
-                )
+            processor = TranslateProcessor(
+                engine,
+                checker,
+                flush_every=self.app.config.runtime.flush_every,
             )
-        procs.append(processor)
-        orch = VideoOrchestrator(
-            source=self._source,
-            processors=procs,
-            ctx=ctx,
-            store=store,
-            video_key=VideoKey(course=self.course, video=self.video),
-            error_reporter=self._error_reporter,
-        )
-        return await orch.run()
+            procs: list[Any] = []
+            if self._summary is not None:
+                sum_engine = self.app.engine(self._summary.engine_name)
+                procs.append(
+                    SummaryProcessor(
+                        sum_engine,
+                        source_lang=src_lang,
+                        target_lang=tgt_lang,
+                        window_words=self._summary.window_words,
+                    )
+                )
+            procs.append(processor)
+            orch = VideoOrchestrator(
+                source=self._source,
+                processors=procs,
+                ctx=ctx,
+                store=store,
+                video_key=VideoKey(course=self.course, video=self.video),
+                error_reporter=self._error_reporter,
+            )
+            result = await orch.run()
+
+        assert result is not None  # at least one tgt guaranteed
+        return result
 
 
 __all__ = ["VideoBuilder"]

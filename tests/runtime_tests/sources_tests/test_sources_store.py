@@ -67,13 +67,17 @@ class TestSrtSourceStoreIntegration:
         vk = VideoKey(course="c", video="v1")
 
         calls: list[list[str]] = []
+
         def punc(batch: list[str]) -> list[list[str]]:
             calls.append(list(batch))
             return [[t + "." for t in batch]] if False else [[t + "."] for t in batch]
 
         src = SrtSource(
-            srt_path, language="en",
-            store=store, video_key=vk, restore_punc=punc,
+            srt_path,
+            language="en",
+            store=store,
+            video_key=vk,
+            restore_punc=punc,
         )
         await _drain(src.read())
         data = await store.load_video("v1")
@@ -81,7 +85,7 @@ class TestSrtSourceStoreIntegration:
         assert calls  # was called
 
     @pytest.mark.asyncio
-    async def test_chunk_llm_populates_chunk_cache_on_records(
+    async def test_chunk_populates_chunk_cache_on_records(
         self, store: JsonFileStore, srt_path: Path
     ) -> None:
         vk = VideoKey(course="c", video="v1")
@@ -90,14 +94,17 @@ class TestSrtSourceStoreIntegration:
             return [t.split() for t in batch]
 
         src = SrtSource(
-            srt_path, language="en",
-            store=store, video_key=vk, chunk_llm=chunker,
+            srt_path,
+            language="en",
+            store=store,
+            video_key=vk,
+            chunk_llm=chunker,
         )
         records = await _drain(src.read())
         assert records
         for rec in records:
-            assert "chunk_llm" in rec.chunk_cache
-            assert rec.chunk_cache["chunk_llm"]
+            assert "chunk" in rec.chunk_cache
+            assert rec.chunk_cache["chunk"]
 
 
 class TestSrtSourceBackwardCompat:

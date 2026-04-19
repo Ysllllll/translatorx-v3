@@ -2,14 +2,17 @@
 
 Mirrors :class:`SrtSource` (D-073 / D-074): optional Store-backed raw_segment
 sidecar (``<video>.words.jsonl``), optional preprocessing hooks
-(``restore_punc`` / ``chunk_llm``), and per-sentence ``chunk_cache`` emission.
+(``restore_punc`` / ``chunk``), and per-sentence ``chunk_cache`` emission.
+
+``punc_position`` controls where punctuation restoration runs (see
+:class:`SrtSource` for details).
 """
 
 from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import AsyncIterator, Callable
+from typing import AsyncIterator, Callable, Literal
 
 from model import SentenceRecord
 from subtitle import Subtitle
@@ -37,6 +40,7 @@ class WhisperXSource:
         store: Store | None = None,
         video_key: VideoKey | None = None,
         restore_punc: ApplyFn | None = None,
+        punc_position: Literal["global", "sentence", "both"] = "global",
         chunk_llm: ApplyFn | None = None,
         merge_under: int | None = None,
         max_len: int | None = None,
@@ -49,6 +53,7 @@ class WhisperXSource:
         self._store = store
         self._video_key = video_key
         self._restore_punc = restore_punc
+        self._punc_position = punc_position
         self._chunk_llm = chunk_llm
         self._merge_under = merge_under
         self._max_len = max_len
@@ -73,29 +78,38 @@ class WhisperXSource:
             if self._store is not None and self._video_key is not None:
                 prior = await self._store.load_video(self._video_key.video)
                 punc_cache.update(prior.get("punc_cache") or {})
+
+        # ① Global punc — before sentences()
+        if self._restore_punc is not None and self._punc_position in ("global", "both"):
             sub = sub.apply_global("restore_punc", self._restore_punc, cache=punc_cache)
 
+        # ② Sentence splitting
         sub = sub.sentences()
+
+        # ③ Per-sentence punc — after sentences()
+        if self._restore_punc is not None and self._punc_position in (
+            "sentence",
+            "both",
+        ):
+            sub = sub.apply_per_sentence("restore_punc_sent", self._restore_punc)
+
+        # ④ Clause splitting
         if self._merge_under is not None:
             sub = sub.clauses(merge_under=self._merge_under)
+
+        # ⑤ Chunking
         if self._chunk_llm is not None:
-            sub = sub.apply_per_sentence("chunk_llm", self._chunk_llm)
+            sub = sub.apply_per_sentence("chunk", self._chunk_llm)
+
+        # ⑥ Length-based split fallback
         if self._max_len is not None:
             sub = sub.split(self._max_len)
 
-        if (
-            punc_cache
-            and self._store is not None
-            and self._video_key is not None
-        ):
-            await self._store.patch_video(
-                self._video_key.video, punc_cache=punc_cache
-            )
+        if punc_cache and self._store is not None and self._video_key is not None:
+            await self._store.patch_video(self._video_key.video, punc_cache=punc_cache)
 
         for rec in assign_ids(sub.records(), start=self._id_start):
             yield rec
 
 
 __all__ = ["WhisperXSource"]
-
-

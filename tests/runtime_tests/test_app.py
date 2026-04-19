@@ -585,3 +585,75 @@ class TestPreprocessIntegration:
         )
         # Should have records regardless of how chunking split them
         assert len(result.records) >= 1
+
+    def test_punc_position_default_global(self, app: App):
+        """Default punc_position is 'global'."""
+        assert app.config.preprocess.punc_position == "global"
+
+    def test_punc_position_configurable(self, tmp_path: Path):
+        """punc_position can be set to 'sentence' or 'both'."""
+        for pos in ("global", "sentence", "both"):
+            a = App.from_dict({
+                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+                "store": {"root": (tmp_path / "ws").as_posix()},
+                "preprocess": {"punc_mode": "llm", "punc_position": pos},
+            })
+            assert a.config.preprocess.punc_position == pos
+
+    def test_chunker_spacy(self, tmp_path: Path):
+        """chunk_mode='spacy' returns a SpacySplitter instance."""
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"chunk_mode": "spacy"},
+        })
+        chunker = app.chunker()
+        assert chunker is not None
+        from preprocess import SpacySplitter
+        assert isinstance(chunker, SpacySplitter)
+
+    @pytest.mark.asyncio
+    async def test_video_run_with_punc_position_sentence(self, tmp_path: Path, monkeypatch):
+        """punc_position='sentence' runs punc after sentences() splitting."""
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"punc_mode": "llm", "punc_threshold": 0, "punc_position": "sentence"},
+        })
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        srt = tmp_path / "test.srt"
+        _write_srt(srt, ["hello world"])
+
+        result = await (
+            app.video(course="c1", video="test")
+            .source(srt, language="en")
+            .translate(tgt="zh")
+            .run()
+        )
+        assert len(result.records) >= 1
+
+    @pytest.mark.asyncio
+    async def test_video_run_with_punc_position_both(self, tmp_path: Path, monkeypatch):
+        """punc_position='both' runs punc at both positions."""
+        app = App.from_dict({
+            "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+            "store": {"root": (tmp_path / "ws").as_posix()},
+            "preprocess": {"punc_mode": "llm", "punc_threshold": 0, "punc_position": "both"},
+        })
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        srt = tmp_path / "test.srt"
+        _write_srt(srt, ["hello world"])
+
+        result = await (
+            app.video(course="c1", video="test")
+            .source(srt, language="en")
+            .translate(tgt="zh")
+            .run()
+        )
+        assert len(result.records) >= 1

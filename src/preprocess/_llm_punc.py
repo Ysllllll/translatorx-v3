@@ -38,9 +38,12 @@ class LlmPuncRestorer:
         # → [["Hello world, this is a test."]]
     """
 
-    def __init__(self, engine: "LLMEngine", *, threshold: int = 0) -> None:
+    def __init__(
+        self, engine: "LLMEngine", *, threshold: int = 0, max_concurrent: int = 8,
+    ) -> None:
         self._engine = engine
         self._threshold = threshold
+        self._max_concurrent = max_concurrent
 
     def __call__(self, texts: list[str]) -> list[list[str]]:
         """Synchronous ApplyFn interface — runs async internally."""
@@ -61,19 +64,20 @@ class LlmPuncRestorer:
         return asyncio.run(self._process_batch(texts))
 
     async def _process_batch(self, texts: list[str]) -> list[list[str]]:
-        results: list[list[str]] = []
-        for text in texts:
+        sem = asyncio.Semaphore(self._max_concurrent)
+
+        async def _restore(text: str) -> list[str]:
             if not text.strip() or len(text) < self._threshold:
-                results.append([text])
-                continue
-            messages = [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": text},
-            ]
-            completion = await self._engine.complete(messages)
-            restored = completion.text.strip()
-            results.append([restored])
-        return results
+                return [text]
+            async with sem:
+                messages = [
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": text},
+                ]
+                completion = await self._engine.complete(messages)
+                return [completion.text.strip()]
+
+        return list(await asyncio.gather(*(_restore(t) for t in texts)))
 
 
 __all__ = ["LlmPuncRestorer"]
