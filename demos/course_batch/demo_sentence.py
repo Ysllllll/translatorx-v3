@@ -252,21 +252,11 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
     d_records = sub_d.records()
     print(f"  {ts()} chunk 完成, 耗时 {_elapsed(t0)}, {len(a_records)} → {len(d_records)} records")
 
-    # chunk 拆分对比
-    di = 0
-    for ai_idx, a_rec in enumerate(a_records):
-        src = a_rec.src_text
-        parts: list[str] = []
-        while di < len(d_records):
-            parts.append(d_records[di].src_text)
-            di += 1
-            joined = " ".join(parts)
-            if joined == src or (len(parts) == 1 and parts[0] == src):
-                break
-            if len(joined) >= len(src):
-                break
+    # chunk 拆分对比 — 使用 chunk_cache 而非文本匹配
+    for di, d_rec in enumerate(d_records):
+        parts = d_rec.chunk_cache.get("chunk_d", [])
         if len(parts) > 1:
-            print(f"  [{ai_idx:>3d}] ({len(src):>3d}c) {src!r}")
+            print(f"  [{di:>3d}] ({len(d_rec.src_text):>3d}c) {d_rec.src_text!r}")
             for j, p in enumerate(parts):
                 print(f"        → [{j}] ({len(p):>3d}c) {p!r}")
 
