@@ -81,7 +81,7 @@ def merge_chunks_by_length(
        incorrect results when applied to complete sentences.  The simple
        ``"" / " "`` separator is correct for text-level merging.  For
        token-level merging, use :func:`merge_token_groups` (which the
-       :class:`ChunkPipeline` uses internally via ``ops.join()``).
+       :class:`TextPipeline` uses internally via ``ops.join()``).
 
     Args:
         chunks: Text fragments to merge.

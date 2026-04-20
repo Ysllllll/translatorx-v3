@@ -84,10 +84,10 @@ class GermanTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("Hallo"), "Hallo")
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc("Hallo Welt", "Hallo, Welt!"), "Hallo, Welt!")
-        self.assertEqual(o.restore_punc("Hallo", "(Hallo)"), "(Hallo)")
-        self.assertEqual(o.restore_punc("Hallo Welt", "Hallo Welt"), "Hallo Welt")
-        self.assertEqual(o.restore_punc("", ""), "")
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc("Hallo Welt", "Hallo, Welt!"), "Hallo, Welt!")
+        self.assertEqual(o.transfer_punc("Hallo", "(Hallo)"), "(Hallo)")
+        self.assertEqual(o.transfer_punc("Hallo Welt", "Hallo Welt"), "Hallo Welt")
+        self.assertEqual(o.transfer_punc("", ""), "")
         with self.assertRaises(ValueError):
-            o.restore_punc("a b c", "x y")
+            o.transfer_punc("a b c", "x y")

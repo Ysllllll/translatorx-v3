@@ -179,7 +179,7 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
     print(f"  {ts()} 开始 LLM 标点恢复...")
     t0 = time.perf_counter()
     punc_cache_a: dict[str, list[str]] = {}
-    sub_a_punc = sub_obj.apply_global("restore_punc", punc_fn, cache=punc_cache_a)
+    sub_a_punc = sub_obj.transform(punc_fn, cache=punc_cache_a)
     print(f"  {ts()} punc 完成, 耗时 {_elapsed(t0)}, cache={len(punc_cache_a)} 条")
 
     punc_texts_a: list[str] = []
@@ -205,7 +205,7 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
 
     print(f"  {ts()} 开始逐句 LLM 标点恢复...")
     t0 = time.perf_counter()
-    sub_b_punc = sub_b_sent.apply_per_sentence("punc_b", punc_fn, workers=20)
+    sub_b_punc = sub_b_sent.transform(punc_fn, name="punc_b", workers=20)
     print(f"  {ts()} punc 完成, 耗时 {_elapsed(t0)}")
 
     b_punc_texts = [r.src_text for r in sub_b_punc.records()]
@@ -225,7 +225,7 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
     c_before = [r.src_text for r in a_records]
     print(f"  {ts()} 开始逐句 LLM 标点恢复 (基于 Pipeline A)...")
     t0 = time.perf_counter()
-    sub_c_punc = sub_a_sent.apply_per_sentence("punc_c", punc_fn, workers=20)
+    sub_c_punc = sub_a_sent.transform(punc_fn, name="punc_c", workers=20)
     print(f"  {ts()} punc 完成, 耗时 {_elapsed(t0)}")
 
     c_punc_texts = [r.src_text for r in sub_c_punc.records()]
@@ -248,7 +248,7 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
 
     print(f"  {ts()} 开始 LLM chunk...")
     t0 = time.perf_counter()
-    sub_d = sub_a_sent.apply_per_sentence("chunk_d", chunk_fn, workers=20)
+    sub_d = sub_a_sent.transform(chunk_fn, name="chunk_d", workers=20)
     d_records = sub_d.records()
     print(f"  {ts()} chunk 完成, 耗时 {_elapsed(t0)}, {len(a_records)} → {len(d_records)} records")
 

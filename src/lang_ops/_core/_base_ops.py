@@ -87,7 +87,16 @@ class _BaseOps(ABC):
     def rstrip_punc(self, text: str) -> str:
         return text.rstrip(STRIP_PUNCT)
 
-    def restore_punc(self, text_a: str, text_b: str) -> str:
+    def transfer_punc(self, text_a: str, text_b: str) -> str:
+        """Transfer punctuation from *text_b* onto words of *text_a*.
+
+        Token-level punctuation transfer: takes the word content from
+        *text_a* and wraps it with the leading/trailing punctuation
+        found in *text_b*.
+
+        Not to be confused with LLM-based punctuation *restoration*
+        (see :class:`~preprocess.LlmPuncRestorer`).
+        """
         tokens_a = self.split(text_a)
         tokens_b = self.split(text_b)
         if len(tokens_a) != len(tokens_b):
@@ -106,25 +115,25 @@ class _BaseOps(ABC):
 
     def split_sentences(self, text: str) -> list[str]:
         """Split text into sentences (token-based)."""
-        from lang_ops.chunk._pipeline import ChunkPipeline
-        return ChunkPipeline(text, ops=self).sentences().result()
+        from lang_ops.chunk._pipeline import TextPipeline
+        return TextPipeline(text, ops=self).sentences().result()
 
     def split_clauses(self, text: str) -> list[str]:
         """Split text into clauses (sentence boundaries included, token-based)."""
-        from lang_ops.chunk._pipeline import ChunkPipeline
-        return ChunkPipeline(text, ops=self).clauses().result()
+        from lang_ops.chunk._pipeline import TextPipeline
+        return TextPipeline(text, ops=self).clauses().result()
 
     def split_by_length(self, text: str, max_len: int) -> list[str]:
         """Split text into chunks whose length ≤ *max_len* (token-based)."""
-        from lang_ops.chunk._pipeline import ChunkPipeline
-        return ChunkPipeline(text, ops=self).split(max_len).result()
+        from lang_ops.chunk._pipeline import TextPipeline
+        return TextPipeline(text, ops=self).split(max_len).result()
 
     def merge_by_length(self, chunks: list[str], max_len: int) -> list[str]:
         """Greedily merge adjacent chunks whose combined length ≤ *max_len*."""
         from lang_ops.chunk._merge import merge_chunks_by_length
         return merge_chunks_by_length(chunks, self, max_len)
 
-    def chunk(self, text: str) -> "ChunkPipeline":
-        """Create a ChunkPipeline for chainable chunking."""
-        from lang_ops.chunk._pipeline import ChunkPipeline
-        return ChunkPipeline(text, ops=self)
+    def chunk(self, text: str) -> "TextPipeline":
+        """Create a TextPipeline for chainable text structuring."""
+        from lang_ops.chunk._pipeline import TextPipeline
+        return TextPipeline(text, ops=self)

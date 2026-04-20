@@ -1,8 +1,9 @@
-"""Tests for ChunkPipeline.segments() integration — pipeline → timed Segments."""
+"""Tests for TextPipeline + align_segments integration — pipeline → timed Segments."""
 
 import pytest
 
 from subtitle import Word
+from subtitle.align import align_segments
 from lang_ops import LangOps
 
 
@@ -16,7 +17,8 @@ class TestPipelineSegments:
         ops = LangOps.for_language("en")
         words = [Word("Hello", 0, .5), Word("world.", .6, 1),
                  Word("How", 1.1, 1.3), Word("are", 1.4, 1.6), Word("you?", 1.7, 2)]
-        segs = ops.chunk("Hello world. How are you?").sentences().segments(words)
+        chunks = ops.chunk("Hello world. How are you?").sentences().result()
+        segs = align_segments(chunks, words)
         assert len(segs) == 2
         assert segs[0].text == "Hello world."
         assert segs[0].start == pytest.approx(0.0)
@@ -29,7 +31,8 @@ class TestPipelineSegments:
         ops = LangOps.for_language("en")
         words = [Word("Well,", 0, .5), Word("hello", .6, 1), Word("world.", 1.1, 1.5),
                  Word("How", 1.6, 1.8), Word("are", 1.9, 2.1), Word("you?", 2.2, 2.5)]
-        segs = ops.chunk("Well, hello world. How are you?").clauses().segments(words)
+        chunks = ops.chunk("Well, hello world. How are you?").clauses().result()
+        segs = align_segments(chunks, words)
         assert len(segs) == 3
         assert segs[0].text == "Well,"
         assert segs[1].text == "hello world."
@@ -60,7 +63,8 @@ PIPELINE_CASES = {
 )
 def test_pipeline_segments_multilingual(lang, text, words, expected_count, expected_texts):
     ops = LangOps.for_language(lang)
-    segs = ops.chunk(text).sentences().segments(words)
+    chunks = ops.chunk(text).sentences().result()
+    segs = align_segments(chunks, words)
     assert len(segs) == expected_count
     if expected_texts is not None:
         assert [s.text for s in segs] == expected_texts

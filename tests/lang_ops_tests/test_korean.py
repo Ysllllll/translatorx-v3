@@ -104,13 +104,13 @@ class KoreanTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(''), '')
         self.assertEqual(o.rstrip_punc('안녕하세요'), '안녕하세요')
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc('안녕하세요', '안녕하세요!'), '안녕하세요!')
-        self.assertEqual(o.restore_punc('테스트', '《테스트》'), '《테스트》')
-        self.assertEqual(o.restore_punc('안녕하세요', '안녕하세요'), '안녕하세요')
-        self.assertEqual(o.restore_punc('', ''), '')
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc('안녕하세요', '안녕하세요!'), '안녕하세요!')
+        self.assertEqual(o.transfer_punc('테스트', '《테스트》'), '《테스트》')
+        self.assertEqual(o.transfer_punc('안녕하세요', '안녕하세요'), '안녕하세요')
+        self.assertEqual(o.transfer_punc('', ''), '')
         with self.assertRaises(ValueError):
-            o.restore_punc('안녕 하세요', '안녕')
+            o.transfer_punc('안녕 하세요', '안녕')
 
         # edge()
         self._assert_cjk_edge('한')

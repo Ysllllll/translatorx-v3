@@ -8,13 +8,13 @@ from ._core._availability import (
     mecab_is_available,
     kiwi_is_available,
 )
-from .chunk import ChunkPipeline
+from .chunk import TextPipeline
 
 __all__ = [
     "LangOps",
     "normalize_language",
     "detect_language",
-    "ChunkPipeline",
+    "TextPipeline",
     "jieba_is_available",
     "mecab_is_available",
     "kiwi_is_available",

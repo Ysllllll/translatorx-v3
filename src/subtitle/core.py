@@ -1,7 +1,7 @@
 """Subtitle — chainable subtitle segment restructuring.
 
-Thin wrapper that delegates text operations to
-:class:`~lang_ops.chunk.ChunkPipeline` and word alignment to
+Thin wrapper that delegates text structuring to
+:class:`~lang_ops.chunk.TextPipeline` and word alignment to
 :func:`~subtitle.align.align_segments`.
 
 Typical usage::
@@ -15,16 +15,16 @@ Typical usage::
 With external text transforms (e.g. punctuation restoration)::
 
     records = (sub
+        .transform(restore_fn)    # pre-sentence: global
         .sentences()
-        .apply(restore_fn)       # fn: list[str] → list[list[str]]
-        .sentences()             # re-split after text change
-        .split(40)
+        .transform(chunker, name="chunk")  # post-sentence: per-sentence
         .records())
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 from model import Segment, SentenceRecord, Word
@@ -32,7 +32,8 @@ from .align import fill_words, align_segments, distribute_words
 
 if TYPE_CHECKING:
     from lang_ops._core._base_ops import _BaseOps
-    from lang_ops.chunk._pipeline import ApplyFn, ApplyCache
+    from preprocess._protocol import ApplyFn
+
 
 
 def _extract(
@@ -74,16 +75,49 @@ def _speaker_chunks(all_words: list[Word], ops: _BaseOps) -> list[str]:
     return chunks
 
 
+def _call_apply_fn(
+    fn: ApplyFn,
+    texts: list[str],
+    batch_size: int,
+    workers: int,
+) -> list[list[str]]:
+    """Dispatch *texts* to *fn* in batches, optionally in parallel."""
+    if batch_size == 0:
+        batches = [texts]
+    else:
+        batches = [
+            texts[i : i + batch_size]
+            for i in range(0, len(texts), batch_size)
+        ]
+
+    if workers <= 1 or len(batches) <= 1:
+        batch_results = [fn(b) for b in batches]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            batch_results = list(pool.map(fn, batches))
+
+    # Flatten batch results into a single list aligned with *texts*.
+    result: list[list[str]] = []
+    for br, batch in zip(batch_results, batches):
+        if len(br) != len(batch):
+            raise ValueError(
+                f"apply fn returned {len(br)} results for a batch of "
+                f"{len(batch)} texts"
+            )
+        result.extend(br)
+    return result
+
+
 class Subtitle:
     """Immutable chainable processor for restructuring subtitle segments.
 
     After ``sentences()``, the instance holds one pipeline per sentence
     with its corresponding words.  Subsequent operations (``clauses``,
-    ``split``, ``apply``) are applied per-sentence, so they never
+    ``split``, ``transform``) are applied per-sentence, so they never
     cross sentence boundaries.
 
-    All text operations are delegated to
-    :class:`~lang_ops.chunk.ChunkPipeline` which tokenizes once and
+    All text structuring is delegated to
+    :class:`~lang_ops.chunk.TextPipeline` which tokenizes once and
     operates on the token array.
     """
 
@@ -100,7 +134,7 @@ class Subtitle:
         split_by_speaker: bool = False,
     ) -> None:
         from lang_ops import LangOps
-        from lang_ops.chunk._pipeline import ChunkPipeline
+        from lang_ops.chunk._pipeline import TextPipeline
 
         if ops is not None:
             self._ops = ops
@@ -113,11 +147,11 @@ class Subtitle:
 
         if split_by_speaker:
             chunks = _speaker_chunks(all_words, self._ops)
-            pipeline = ChunkPipeline.from_chunks(chunks, ops=self._ops)
+            pipeline = TextPipeline.from_chunks(chunks, ops=self._ops)
         else:
-            pipeline = ChunkPipeline(full_text, ops=self._ops)
+            pipeline = TextPipeline(full_text, ops=self._ops)
 
-        self._pipelines: list[ChunkPipeline] = [pipeline]
+        self._pipelines: list[TextPipeline] = [pipeline]
         self._words: list[list[Word]] = [all_words]
         self._chunk_caches: list[dict[str, list[str]]] = [{}]
         self._sentence_split: bool = False
@@ -153,21 +187,19 @@ class Subtitle:
         language: str | None = None,
         chunk_cache_key: str | None = None,
     ) -> Subtitle:
-        """Rehydrate from already-processed :class:`SentenceRecord` list (D-073).
+        """Rehydrate from already-processed :class:`SentenceRecord` list.
 
         Useful for resumable reruns: each record's ``segments`` carry the
-        original words, and its ``chunk_cache`` carries prior ``apply_*``
-        outputs (e.g. ``chunk_cache["chunk_llm"]``). The returned Subtitle
-        has one pipeline per record — it behaves as if ``sentences()`` has
-        already been called.
+        original words, and its ``chunk_cache`` carries prior transform
+        outputs. The returned Subtitle has one pipeline per record — it
+        behaves as if ``sentences()`` has already been called.
 
         If *chunk_cache_key* is given and present in a record's
         ``chunk_cache``, the pipeline is seeded with those exact chunks
-        (so downstream ``split`` / ``apply_per_sentence`` skips the
-        expensive step).
+        (so downstream ``split`` / ``transform`` skips the expensive step).
         """
         from lang_ops import LangOps
-        from lang_ops.chunk._pipeline import ChunkPipeline
+        from lang_ops.chunk._pipeline import TextPipeline
 
         if ops is not None:
             resolved_ops = ops
@@ -178,7 +210,7 @@ class Subtitle:
 
         new = object.__new__(Subtitle)
         new._ops = resolved_ops
-        pipelines: list[ChunkPipeline] = []
+        pipelines: list[TextPipeline] = []
         words_list: list[list[Word]] = []
         caches: list[dict[str, list[str]]] = []
         for rec in records:
@@ -193,12 +225,12 @@ class Subtitle:
                 and rec.chunk_cache[chunk_cache_key]
             ):
                 pipelines.append(
-                    ChunkPipeline.from_chunks(
+                    TextPipeline.from_chunks(
                         list(rec.chunk_cache[chunk_cache_key]), ops=resolved_ops
                     )
                 )
             else:
-                pipelines.append(ChunkPipeline(rec.src_text, ops=resolved_ops))
+                pipelines.append(TextPipeline(rec.src_text, ops=resolved_ops))
         new._pipelines = pipelines
         new._words = words_list
         new._chunk_caches = caches
@@ -228,7 +260,7 @@ class Subtitle:
         )
         return new
 
-    # ---- text operations (delegated to ChunkPipeline) ----------------
+    # ---- text structuring (delegated to TextPipeline) ----------------
 
     def sentences(self) -> Subtitle:
         """Split each chunk into sentences.
@@ -236,16 +268,16 @@ class Subtitle:
         After this call, each pipeline holds exactly one sentence and
         words are distributed to their respective sentences (early
         alignment).  Subsequent operations (``clauses``, ``split``,
-        ``merge``, ``apply``) are applied per-sentence — they never
+        ``merge``, ``transform``) are applied per-sentence — they never
         cross sentence boundaries.
 
         This is typically the first operation in a chain::
 
             sub.sentences().clauses(merge_under=60).split(40).build()
         """
-        from lang_ops.chunk._pipeline import ChunkPipeline
+        from lang_ops.chunk._pipeline import TextPipeline
 
-        new_pipelines: list[ChunkPipeline] = []
+        new_pipelines: list[TextPipeline] = []
         new_words: list[list[Word]] = []
 
         for pipeline, words in zip(self._pipelines, self._words):
@@ -261,7 +293,7 @@ class Subtitle:
                 # Each sentence gets its own pipeline from pre-tokenized groups
                 for group, wg in zip(sent_pipeline._groups, word_groups):  # noqa: SLF001
                     new_pipelines.append(
-                        ChunkPipeline._from_groups([group], self._ops)  # noqa: SLF001
+                        TextPipeline._from_groups([group], self._ops)  # noqa: SLF001
                     )
                     new_words.append(wg)
 
@@ -296,30 +328,59 @@ class Subtitle:
             [p.merge(max_len) for p in self._pipelines]
         )
 
-    def apply(
+    # ---- transform (unified content transform dispatch) --------------
+
+    def transform(
         self,
         fn: ApplyFn,
-        cache: ApplyCache | None = None,
+        *,
+        cache: dict[str, list[str]] | None = None,
+        name: str | None = None,
         batch_size: int = 1,
         workers: int = 1,
         skip_if: Callable[[str], bool] | None = None,
     ) -> Subtitle:
-        """Apply an external function to each chunk.
+        """Apply an external function to transform text content.
 
         *fn* receives a batch of texts and returns one ``list[str]`` per
-        input text:
+        input text.  The return value determines the operation:
 
-        - ``["new text"]`` → 1:1 replacement (e.g. punctuation restoration)
-        - ``["part1", "part2"]`` → 1:N splitting (e.g. NLP/LLM splitting)
-        - ``[]`` → deletion
+        - ``["new text"]`` — 1:1 replacement (e.g. punctuation restoration)
+        - ``["part1", "part2"]`` — 1:N splitting (e.g. NLP/LLM splitting)
+        - ``[]`` — deletion
 
-        Texts from all pipelines are collected and dispatched to *fn*
-        together (respecting *batch_size*), then results are distributed
-        back to their respective pipelines.
+        **Auto-scope detection:**
 
-        See :meth:`ChunkPipeline.apply` for full parameter docs.
+        - **Pre-sentence** (``sentences()`` not yet called): Collects all
+          pipeline texts, dispatches to *fn* as a single batch, re-tokenizes
+          results, returns new Subtitle.  The *name* parameter is ignored.
+        - **Post-sentence** (``sentences()`` already called): Collects texts
+          from all sentence pipelines, dispatches to *fn* in one batch (for
+          efficiency), re-tokenizes results, distributes back to per-pipeline
+          groups.  If *name* is provided, stamps results into
+          ``chunk_cache[name]`` for each sentence.
+
+        Args:
+            fn: ``list[str] → list[list[str]]``.
+            cache: Optional dict mapping ``text → list[str]``.
+                Hits are reused; misses are computed by *fn* and stored.
+                The cache is mutated in-place.
+            name: Step label (e.g. ``"chunk"``).  When provided in
+                post-sentence mode, stamps results into ``chunk_cache``.
+                Ignored in pre-sentence mode.
+            batch_size: Number of texts per *fn* call.
+                ``0`` means pass all uncached texts in one call.
+                Default ``1`` (one text per call).
+            workers: Number of threads for concurrent *fn* calls.
+                Default ``1`` (sequential).
+            skip_if: Optional predicate ``str → bool``.
+                Chunks for which ``skip_if(text)`` returns ``True`` are
+                left unchanged.
+
+        Returns:
+            A new Subtitle with transformed text content.
         """
-        from lang_ops.chunk._pipeline import ChunkPipeline, _call_apply_fn
+        from lang_ops.chunk._pipeline import TextPipeline
 
         # Collect all texts across pipelines
         pipeline_texts: list[list[str]] = [p.result() for p in self._pipelines]
@@ -353,7 +414,7 @@ class Subtitle:
                     cache[all_texts[mi]] = result_list
 
         # --- distribute results back to per-pipeline groups ---
-        new_pipelines: list[ChunkPipeline] = []
+        new_pipelines: list[TextPipeline] = []
         offset = 0
         for i, texts in enumerate(pipeline_texts):
             n = len(texts)
@@ -369,68 +430,19 @@ class Subtitle:
                     if tokens:
                         new_groups.append(tokens)
 
-            new_pipelines.append(ChunkPipeline._from_groups(new_groups, ops))  # noqa: SLF001
+            new_pipelines.append(TextPipeline._from_groups(new_groups, ops))  # noqa: SLF001
 
-        return self._with_pipelines(new_pipelines)
+        new_sub = self._with_pipelines(new_pipelines)
 
-    def apply_global(
-        self,
-        name: str,
-        fn: ApplyFn,
-        cache: ApplyCache | None = None,
-        batch_size: int = 1,
-        workers: int = 1,
-        skip_if: Callable[[str], bool] | None = None,
-    ) -> Subtitle:
-        """Apply *fn* before sentence splitting (D-073).
+        # --- stamp chunk_cache for post-sentence mode ---
+        if self._sentence_split and name is not None:
+            new_caches: list[dict[str, list[str]]] = []
+            for i, pipeline in enumerate(new_sub._pipelines):
+                c = dict(new_sub._chunk_caches[i]) if i < len(new_sub._chunk_caches) else {}
+                c[name] = list(pipeline.result())
+                new_caches.append(c)
+            new_sub._chunk_caches = new_caches
 
-        *name* is a human-readable step label (e.g. ``"restore_punc"``)
-        used purely for diagnostics / fingerprinting. The actual cache is
-        still supplied by the caller (video-level for punc).
-
-        Must be called before :meth:`sentences` — raises ``RuntimeError``
-        if pipelines have already been split per-sentence.
-        """
-        if self._sentence_split:
-            raise RuntimeError(
-                f"apply_global('{name}') must run before sentences()"
-            )
-        return self.apply(
-            fn, cache=cache, batch_size=batch_size,
-            workers=workers, skip_if=skip_if,
-        )
-
-    def apply_per_sentence(
-        self,
-        name: str,
-        fn: ApplyFn,
-        batch_size: int = 1,
-        workers: int = 1,
-        skip_if: Callable[[str], bool] | None = None,
-    ) -> Subtitle:
-        """Apply *fn* per sentence and stamp result under ``chunk_cache[name]`` (D-073).
-
-        Must be called after :meth:`sentences`. The outcome of *fn* for
-        each sentence is recorded so :meth:`records` can emit it as
-        ``SentenceRecord.chunk_cache[name]`` — enabling resumable reruns
-        that skip *fn* entirely when the cache matches.
-        """
-        if not self._sentence_split:
-            raise RuntimeError(
-                f"apply_per_sentence('{name}') requires sentences() to have "
-                f"been called first"
-            )
-        new_sub = self.apply(
-            fn, cache=None, batch_size=batch_size,
-            workers=workers, skip_if=skip_if,
-        )
-        # Stamp per-sentence chunk_cache entries.
-        new_caches: list[dict[str, list[str]]] = []
-        for i, pipeline in enumerate(new_sub._pipelines):
-            c = dict(new_sub._chunk_caches[i]) if i < len(new_sub._chunk_caches) else {}
-            c[name] = list(pipeline.result())
-            new_caches.append(c)
-        new_sub._chunk_caches = new_caches
         return new_sub
 
     # ---- output ------------------------------------------------------

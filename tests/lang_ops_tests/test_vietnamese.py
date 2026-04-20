@@ -85,10 +85,10 @@ class VietnameseTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("Xin chào"), "Xin chào")
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc("Xin chào", "Xin chào!"), "Xin chào!")
-        self.assertEqual(o.restore_punc("Xin chào", "(Xin chào)"), "(Xin chào)")
-        self.assertEqual(o.restore_punc("Xin chào", "Xin chào"), "Xin chào")
-        self.assertEqual(o.restore_punc("", ""), "")
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc("Xin chào", "Xin chào!"), "Xin chào!")
+        self.assertEqual(o.transfer_punc("Xin chào", "(Xin chào)"), "(Xin chào)")
+        self.assertEqual(o.transfer_punc("Xin chào", "Xin chào"), "Xin chào")
+        self.assertEqual(o.transfer_punc("", ""), "")
         with self.assertRaises(ValueError):
-            o.restore_punc("a b c", "x y")
+            o.transfer_punc("a b c", "x y")

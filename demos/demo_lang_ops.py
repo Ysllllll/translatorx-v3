@@ -1,6 +1,6 @@
 """lang_ops — 多语言文本操作演示。
 
-展示 LangOps 工厂、分词/合词、分句/分子句、ChunkPipeline 链式调用。
+展示 LangOps 工厂、分词/合词、分句/分子句、TextPipeline 链式调用。
 
 运行:
     python demos/demo_lang_ops.py
@@ -8,7 +8,7 @@
 
 import _bootstrap  # noqa: F401
 
-from lang_ops import LangOps, ChunkPipeline
+from lang_ops import LangOps, TextPipeline
 
 # ── 1. 工厂模式 ──────────────────────────────────────────────────────
 
@@ -62,9 +62,9 @@ merged = ops_en.merge_by_length(split_result, max_len=80)
 print(f"Merged (max=80): {merged}")
 print()
 
-# ── 5. ChunkPipeline 链式调用 ─────────────────────────────────────────
+# ── 5. TextPipeline 链式调用 ─────────────────────────────────────────
 
-print("=== ChunkPipeline ===")
+print("=== TextPipeline ===")
 
 text_zh = "你好世界。今天天气怎么样？我觉得还不错，谢谢你的关心。"
 result = (
@@ -100,7 +100,7 @@ print(f"Clauses (merge_under=20): {result2}")
 # 也可以从预分块构造
 chunks = ["Hello world.", "How are you?", "Fine."]
 result3 = (
-    ChunkPipeline.from_chunks(chunks, ops_en)
+    TextPipeline.from_chunks(chunks, ops_en)
     .merge(max_len=30)
     .result()
 )

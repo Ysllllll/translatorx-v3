@@ -84,10 +84,10 @@ class RussianTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("Привет"), "Привет")
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc("Привет мир", "Привет, мир!"), "Привет, мир!")
-        self.assertEqual(o.restore_punc("Привет", "(Привет)"), "(Привет)")
-        self.assertEqual(o.restore_punc("Привет мир", "Привет мир"), "Привет мир")
-        self.assertEqual(o.restore_punc("", ""), "")
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc("Привет мир", "Привет, мир!"), "Привет, мир!")
+        self.assertEqual(o.transfer_punc("Привет", "(Привет)"), "(Привет)")
+        self.assertEqual(o.transfer_punc("Привет мир", "Привет мир"), "Привет мир")
+        self.assertEqual(o.transfer_punc("", ""), "")
         with self.assertRaises(ValueError):
-            o.restore_punc("a b c", "x y")
+            o.transfer_punc("a b c", "x y")

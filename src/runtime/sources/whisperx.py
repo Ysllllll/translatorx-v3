@@ -81,7 +81,7 @@ class WhisperXSource:
 
         # ① Global punc — before sentences()
         if self._restore_punc is not None and self._punc_position in ("global", "both"):
-            sub = sub.apply_global("restore_punc", self._restore_punc, cache=punc_cache)
+            sub = sub.transform(self._restore_punc, cache=punc_cache)
 
         # ② Sentence splitting
         sub = sub.sentences()
@@ -91,7 +91,7 @@ class WhisperXSource:
             "sentence",
             "both",
         ):
-            sub = sub.apply_per_sentence("restore_punc_sent", self._restore_punc)
+            sub = sub.transform(self._restore_punc, name="restore_punc_sent")
 
         # ④ Clause splitting
         if self._merge_under is not None:
@@ -99,7 +99,7 @@ class WhisperXSource:
 
         # ⑤ Chunking
         if self._chunk_llm is not None:
-            sub = sub.apply_per_sentence("chunk", self._chunk_llm)
+            sub = sub.transform(self._chunk_llm, name="chunk")
 
         # ⑥ Length-based split fallback
         if self._max_len is not None:

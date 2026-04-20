@@ -110,15 +110,15 @@ class EnglishTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("!Hello"), "!Hello")
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc("Hello world", "Hello, world!"), "Hello, world!")
-        self.assertEqual(o.restore_punc("Hello", "Hello!"), "Hello!")
-        self.assertEqual(o.restore_punc("Hello", "(Hello)"), "(Hello)")
-        self.assertEqual(o.restore_punc("Hello world", '"Hello" world!'), '"Hello" world!')
-        self.assertEqual(o.restore_punc("Hello world", "Hello world"), "Hello world")
-        self.assertEqual(o.restore_punc("", ""), "")
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc("Hello world", "Hello, world!"), "Hello, world!")
+        self.assertEqual(o.transfer_punc("Hello", "Hello!"), "Hello!")
+        self.assertEqual(o.transfer_punc("Hello", "(Hello)"), "(Hello)")
+        self.assertEqual(o.transfer_punc("Hello world", '"Hello" world!'), '"Hello" world!')
+        self.assertEqual(o.transfer_punc("Hello world", "Hello world"), "Hello world")
+        self.assertEqual(o.transfer_punc("", ""), "")
         with self.assertRaises(ValueError):
-            o.restore_punc("a b c", "x y")
+            o.transfer_punc("a b c", "x y")
 
         # edge()
         self._assert_entype_edge()

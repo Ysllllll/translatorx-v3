@@ -1,7 +1,7 @@
 """Preprocessing package — punctuation restoration, sentence splitting, chunking.
 
 Provides implementations conforming to the ``ApplyFn`` signature used by
-``Subtitle.apply_global()`` / ``apply_per_sentence()``.
+``Subtitle.transform()``.
 
 All heavy dependencies (``deepmultilingualpunctuation``, ``spacy``) are
 optional — availability guards in ``_availability.py`` follow the same

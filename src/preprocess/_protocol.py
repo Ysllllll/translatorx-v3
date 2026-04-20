@@ -1,7 +1,7 @@
 """Protocol for preprocessing callables.
 
 All preprocessors expose the ``ApplyFn`` signature so they can be
-passed directly to ``Subtitle.apply_global()`` / ``apply_per_sentence()``.
+passed directly to ``Subtitle.transform()``.
 """
 
 from __future__ import annotations

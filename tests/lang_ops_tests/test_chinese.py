@@ -111,13 +111,13 @@ class ChineseTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(''), '')
         self.assertEqual(o.rstrip_punc('你好世界'), '你好世界')
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc('你好世界', '你好，世界！'), '你好，世界！')
-        self.assertEqual(o.restore_punc('测试', '（测试）'), '（测试）')
-        self.assertEqual(o.restore_punc('你好世界', '你好世界'), '你好世界')
-        self.assertEqual(o.restore_punc('', ''), '')
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc('你好世界', '你好，世界！'), '你好，世界！')
+        self.assertEqual(o.transfer_punc('测试', '（测试）'), '（测试）')
+        self.assertEqual(o.transfer_punc('你好世界', '你好世界'), '你好世界')
+        self.assertEqual(o.transfer_punc('', ''), '')
         with self.assertRaises(ValueError):
-            o.restore_punc('你好世界', '你好')
+            o.transfer_punc('你好世界', '你好')
 
         # edge()
         self._assert_cjk_edge('你')

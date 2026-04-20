@@ -2,7 +2,7 @@
 
 import pytest
 
-from lang_ops import LangOps, ChunkPipeline
+from lang_ops import LangOps, TextPipeline
 from ._base import SplitterTestBase
 
 
@@ -137,12 +137,12 @@ class TestEnglishSplitter(SplitterTestBase):
         ]
 
         # Long text chunk chain equivalence
-        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
-        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-        assert ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
 
         # Pipeline immutability
-        p1 = ChunkPipeline("Hello. World.", language="en")
+        p1 = TextPipeline("Hello. World.", language="en")
         p2 = p1.sentences()
         p3 = p2.clauses()
         assert p1 is not p2
@@ -152,12 +152,12 @@ class TestEnglishSplitter(SplitterTestBase):
         assert p3.result() == ["Hello.", "World."]
 
         # Pipeline edge cases
-        assert ChunkPipeline("", language="en").sentences().result() == []
-        assert ChunkPipeline("No terminators", language="en").sentences().result() == ["No terminators"]
+        assert TextPipeline("", language="en").sentences().result() == []
+        assert TextPipeline("No terminators", language="en").sentences().result() == ["No terminators"]
 
     def test_paragraph_api_removed(self) -> None:
         assert not hasattr(_ops, "split_paragraphs")
 
-        pipeline = ChunkPipeline("First.\n\nSecond.", language="en")
+        pipeline = TextPipeline("First.\n\nSecond.", language="en")
         with pytest.raises(AttributeError):
             pipeline.paragraphs()

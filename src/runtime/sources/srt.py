@@ -6,8 +6,8 @@ Full design (D-073 / D-074):
   ``zzz_subtitle_jsonl/<video>.segments.jsonl`` sidecar and ``raw_segment_ref``
   is patched into the main video JSON via :meth:`Store.patch_video`.
 - Optional preprocessing hooks follow the locked pipeline:
-  ``apply_global("restore_punc") → sentences → apply_per_sentence("restore_punc_sent")
-  → clauses → apply_per_sentence("chunk") → split``.
+  ``transform(restore_punc) → sentences → transform(restore_punc, name="restore_punc_sent")
+  → clauses → transform(chunk, name="chunk") → split``.
   Each hook is only executed when the caller supplies a callable.
 - ``punc_position`` controls where punctuation restoration runs:
   ``"global"`` (before sentences), ``"sentence"`` (after sentences),
@@ -57,7 +57,7 @@ class SrtSource:
         ``"sentence"`` — run after ``sentences()`` (fixes per-sentence punc).
         ``"both"`` — run at both positions.
     chunk_llm:
-        Optional ``apply_per_sentence`` callable. The per-record output is
+        Optional transform callable. The per-record output is
         stamped onto :attr:`SentenceRecord.chunk_cache` under key
         ``"chunk"``.
     merge_under:
@@ -124,7 +124,7 @@ class SrtSource:
 
         # ① Global punc — before sentences()
         if self._restore_punc is not None and self._punc_position in ("global", "both"):
-            sub = sub.apply_global("restore_punc", self._restore_punc, cache=punc_cache)
+            sub = sub.transform(self._restore_punc, cache=punc_cache)
 
         # ② Sentence splitting
         sub = sub.sentences()
@@ -134,7 +134,7 @@ class SrtSource:
             "sentence",
             "both",
         ):
-            sub = sub.apply_per_sentence("restore_punc_sent", self._restore_punc)
+            sub = sub.transform(self._restore_punc, name="restore_punc_sent")
 
         # ④ Clause splitting
         if self._merge_under is not None:
@@ -142,7 +142,7 @@ class SrtSource:
 
         # ⑤ Chunking (spaCy or LLM)
         if self._chunk_llm is not None:
-            sub = sub.apply_per_sentence("chunk", self._chunk_llm)
+            sub = sub.transform(self._chunk_llm, name="chunk")
 
         # ⑥ Length-based split fallback
         if self._max_len is not None:

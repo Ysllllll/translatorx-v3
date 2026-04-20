@@ -9,7 +9,7 @@ pytest does *not* try to collect it directly.
 
 from __future__ import annotations
 
-from lang_ops import LangOps, ChunkPipeline
+from lang_ops import LangOps, TextPipeline
 
 
 class SplitterTestBase:
@@ -58,7 +58,7 @@ class SplitterTestBase:
 
     def _pipeline_sentences_clauses(self) -> list[str]:
         return (
-            ChunkPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE)
+            TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE)
             .sentences()
             .clauses()
             .result()

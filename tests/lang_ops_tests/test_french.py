@@ -108,10 +108,10 @@ class FrenchTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("Bonjour"), "Bonjour")
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc("Bonjour monde", "Bonjour, monde!"), "Bonjour, monde!")
-        self.assertEqual(o.restore_punc("Bonjour", "(Bonjour)"), "(Bonjour)")
-        self.assertEqual(o.restore_punc("Bonjour monde", "Bonjour monde"), "Bonjour monde")
-        self.assertEqual(o.restore_punc("", ""), "")
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc("Bonjour monde", "Bonjour, monde!"), "Bonjour, monde!")
+        self.assertEqual(o.transfer_punc("Bonjour", "(Bonjour)"), "(Bonjour)")
+        self.assertEqual(o.transfer_punc("Bonjour monde", "Bonjour monde"), "Bonjour monde")
+        self.assertEqual(o.transfer_punc("", ""), "")
         with self.assertRaises(ValueError):
-            o.restore_punc("a b c", "x y")
+            o.transfer_punc("a b c", "x y")

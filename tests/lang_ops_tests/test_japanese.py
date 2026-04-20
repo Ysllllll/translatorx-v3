@@ -101,10 +101,10 @@ class JapaneseTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(''), '')
         self.assertEqual(o.rstrip_punc('こんにちは'), 'こんにちは')
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc('こんにちは世界', 'こんにちは、世界！'), 'こんにちは、世界！')
-        self.assertEqual(o.restore_punc('こんにちは世界', 'こんにちは世界'), 'こんにちは世界')
-        self.assertEqual(o.restore_punc('', ''), '')
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc('こんにちは世界', 'こんにちは、世界！'), 'こんにちは、世界！')
+        self.assertEqual(o.transfer_punc('こんにちは世界', 'こんにちは世界'), 'こんにちは世界')
+        self.assertEqual(o.transfer_punc('', ''), '')
 
         # edge()
         self._assert_cjk_edge('あ')

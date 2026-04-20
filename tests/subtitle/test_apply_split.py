@@ -1,4 +1,4 @@
-"""Tests for Subtitle.apply_global / apply_per_sentence / from_records (D-073)."""
+"""Tests for Subtitle.transform / from_records."""
 
 from __future__ import annotations
 
@@ -23,11 +23,12 @@ def _mk_seg(start: float, end: float, text: str) -> Segment:
 
 
 # ---------------------------------------------------------------------------
-# apply_global
+# transform — pre-sentence (auto-scope: global)
 # ---------------------------------------------------------------------------
 
 
-def test_apply_global_runs_before_sentences() -> None:
+def test_transform_pre_sentence() -> None:
+    """transform() before sentences() — global scope."""
     segs = [_mk_seg(0.0, 1.0, "hello world how are you")]
 
     cache: dict[str, list[str]] = {}
@@ -36,7 +37,7 @@ def test_apply_global_runs_before_sentences() -> None:
 
     sub = (
         Subtitle(segs, language="en")
-        .apply_global("restore_punc", punc, cache=cache)
+        .transform(punc, cache=cache)
         .sentences()
     )
     records = sub.records()
@@ -45,19 +46,26 @@ def test_apply_global_runs_before_sentences() -> None:
     assert cache  # non-empty
 
 
-def test_apply_global_after_sentences_raises() -> None:
-    segs = [_mk_seg(0.0, 2.0, "hello world. foo bar.")]
-    sub = Subtitle(segs, language="en").sentences()
-    with pytest.raises(RuntimeError, match="before sentences"):
-        sub.apply_global("restore_punc", lambda b: [[t] for t in b])
+def test_transform_pre_sentence_name_ignored() -> None:
+    """In pre-sentence mode, name parameter is ignored (no chunk_cache)."""
+    segs = [_mk_seg(0.0, 1.0, "hello world")]
+    sub = (
+        Subtitle(segs, language="en")
+        .transform(lambda b: [[t] for t in b], name="should_be_ignored")
+    )
+    # Not sentence-split, so records() auto-calls sentences()
+    records = sub.records()
+    for r in records:
+        assert "should_be_ignored" not in r.chunk_cache
 
 
 # ---------------------------------------------------------------------------
-# apply_per_sentence
+# transform — post-sentence (auto-scope: per-sentence)
 # ---------------------------------------------------------------------------
 
 
-def test_apply_per_sentence_populates_chunk_cache() -> None:
+def test_transform_post_sentence_populates_chunk_cache() -> None:
+    """transform() after sentences() with name — stamps chunk_cache."""
     segs = [_mk_seg(0.0, 2.0, "hello world. foo bar.")]
 
     def split_fn(batch: list[str]) -> list[list[str]]:
@@ -66,7 +74,7 @@ def test_apply_per_sentence_populates_chunk_cache() -> None:
     sub = (
         Subtitle(segs, language="en")
         .sentences()
-        .apply_per_sentence("chunk_llm", split_fn)
+        .transform(split_fn, name="chunk_llm")
     )
     records = sub.records()
     assert len(records) >= 1
@@ -75,11 +83,17 @@ def test_apply_per_sentence_populates_chunk_cache() -> None:
         assert r.chunk_cache["chunk_llm"]  # non-empty
 
 
-def test_apply_per_sentence_before_sentences_raises() -> None:
-    segs = [_mk_seg(0.0, 1.0, "hello world")]
-    sub = Subtitle(segs, language="en")
-    with pytest.raises(RuntimeError, match="requires sentences"):
-        sub.apply_per_sentence("chunk_llm", lambda b: [[t] for t in b])
+def test_transform_post_sentence_without_name() -> None:
+    """transform() after sentences() without name — no chunk_cache stamp."""
+    segs = [_mk_seg(0.0, 2.0, "hello world. foo bar.")]
+    sub = (
+        Subtitle(segs, language="en")
+        .sentences()
+        .transform(lambda b: [[t] for t in b])
+    )
+    records = sub.records()
+    for r in records:
+        assert r.chunk_cache == {}
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +119,7 @@ def test_from_records_honors_chunk_cache_key() -> None:
     sub = (
         Subtitle(segs, language="en")
         .sentences()
-        .apply_per_sentence("chunk_llm", fake_chunker)
+        .transform(fake_chunker, name="chunk_llm")
     )
     records = sub.records()
     # Rehydrate using cached chunk_llm — fake_chunker should NOT be called again.

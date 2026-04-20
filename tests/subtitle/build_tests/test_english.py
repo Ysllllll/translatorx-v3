@@ -409,10 +409,10 @@ class TestEnglishMerge:
 # Split (external fn splitting)
 # ---------------------------------------------------------------------------
 
-class TestEnglishApply:
+class TestEnglishTransform:
 
-    def test_apply_split(self) -> None:
-        """apply() with a rule-based splitting fn."""
+    def test_transform_split(self) -> None:
+        """transform() with a rule-based splitting fn."""
         def rule_split(texts: list[str]) -> list[list[str]]:
             result = []
             for t in texts:
@@ -433,35 +433,35 @@ class TestEnglishApply:
                   .sentences()
                   .clauses()
                   .merge(60)
-                  .apply(rule_split)
+                  .transform(rule_split)
                   .build())
         # Text is preserved
         result_words = " ".join(s.text for s in result).split()
         original_words = " ".join(s.text for s in segs).split()
         assert result_words == original_words
 
-    def test_apply_noop(self) -> None:
-        """apply() with a fn that returns [text] — no change."""
+    def test_transform_noop(self) -> None:
+        """transform() with a fn that returns [text] — no change."""
         def noop(texts):
             return [[t] for t in texts]
 
         segs = _short_segments()
         before = Subtitle(segs, _ops).sentences().build()
-        after = Subtitle(segs, _ops).sentences().apply(noop).build()
+        after = Subtitle(segs, _ops).sentences().transform(noop).build()
         assert [s.text for s in before] == [s.text for s in after]
 
-    def test_apply_replace(self) -> None:
-        """apply() for 1:1 text replacement (e.g. punct restoration)."""
+    def test_transform_replace(self) -> None:
+        """transform() for 1:1 text replacement (e.g. punct restoration)."""
         def upper_fn(texts):
             return [[t.upper()] for t in texts]
 
         segs = _short_segments()
-        result = Subtitle(segs, _ops).sentences().apply(upper_fn).build()
+        result = Subtitle(segs, _ops).sentences().transform(upper_fn).build()
         original = Subtitle(segs, _ops).sentences().build()
         for r, o in zip(result, original):
             assert r.text == o.text.upper()
 
-    def test_apply_with_cache(self) -> None:
+    def test_transform_with_cache(self) -> None:
         """Cache is populated on first call, hit on second."""
         call_count = 0
 
@@ -473,17 +473,17 @@ class TestEnglishApply:
         cache: dict[str, list[str]] = {}
         segs = _short_segments()
 
-        Subtitle(segs, _ops).sentences().apply(counting_fn, cache=cache).build()
+        Subtitle(segs, _ops).sentences().transform(counting_fn, cache=cache).build()
         first_count = call_count
 
         call_count = 0
-        Subtitle(segs, _ops).sentences().apply(counting_fn, cache=cache).build()
+        Subtitle(segs, _ops).sentences().transform(counting_fn, cache=cache).build()
         # Second call should hit cache — fn not called
         assert call_count == 0
         assert first_count > 0
 
-    def test_apply_respects_sentence_boundaries(self) -> None:
-        """apply() after sentences → merge only within sentences."""
+    def test_transform_respects_sentence_boundaries(self) -> None:
+        """transform() after sentences → merge only within sentences."""
         def split_long(texts):
             result = []
             for t in texts:
@@ -500,16 +500,16 @@ class TestEnglishApply:
         segs = _asr_interview_segments()
         result = (Subtitle(segs, _ops)
                   .sentences()
-                  .apply(split_long)
+                  .transform(split_long)
                   .merge(200)
                   .build())
-        # merge(200) after apply: merge only within each sentence
+        # merge(200) after transform: merge only within each sentence
         sentence_count = len(
             Subtitle(segs, _ops).sentences().build()
         )
         assert len(result) == sentence_count
 
-    def test_apply_batch_and_workers(self) -> None:
+    def test_transform_batch_and_workers(self) -> None:
         """batch_size and workers control fn dispatch."""
         received_batches = []
 
@@ -518,14 +518,14 @@ class TestEnglishApply:
             return [[t] for t in texts]
 
         segs = _asr_interview_segments()
-        Subtitle(segs, _ops).sentences().apply(
+        Subtitle(segs, _ops).sentences().transform(
             tracking_fn, batch_size=2, workers=1,
         ).build()
         # Each batch should have at most 2 texts
         assert all(b <= 2 for b in received_batches)
         assert len(received_batches) >= 1
 
-    def test_apply_batch_size_zero(self) -> None:
+    def test_transform_batch_size_zero(self) -> None:
         """batch_size=0 passes all texts in one call."""
         received_batches = []
 
@@ -535,21 +535,21 @@ class TestEnglishApply:
 
         segs = _asr_interview_segments()
         sentences = Subtitle(segs, _ops).sentences().build()
-        Subtitle(segs, _ops).sentences().apply(
+        Subtitle(segs, _ops).sentences().transform(
             tracking_fn, batch_size=0,
         ).build()
         assert len(received_batches) == 1
         assert received_batches[0] == len(sentences)
 
-    def test_apply_fn_bad_count_raises(self) -> None:
+    def test_transform_fn_bad_count_raises(self) -> None:
         """fn returning wrong count raises ValueError."""
         def bad_fn(texts):
             return [[t] for t in texts[:-1]]  # one fewer
 
         with pytest.raises(ValueError, match="apply fn returned"):
-            Subtitle(_short_segments(), _ops).sentences().apply(bad_fn).build()
+            Subtitle(_short_segments(), _ops).sentences().transform(bad_fn).build()
 
-    def test_apply_skip_if(self) -> None:
+    def test_transform_skip_if(self) -> None:
         """skip_if prevents fn from being called on matching chunks."""
         call_count = 0
 
@@ -563,7 +563,7 @@ class TestEnglishApply:
         all_texts = sub.build()
 
         # skip_if skips chunks with length ≤ 30
-        result = sub.apply(
+        result = sub.transform(
             counting_fn,
             skip_if=lambda t: _ops.length(t) <= 30,
         ).build()

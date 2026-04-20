@@ -84,10 +84,10 @@ class PortugueseTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("Olá"), "Olá")
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc("Olá mundo", "Olá, mundo!"), "Olá, mundo!")
-        self.assertEqual(o.restore_punc("Olá", "(Olá)"), "(Olá)")
-        self.assertEqual(o.restore_punc("Olá mundo", "Olá mundo"), "Olá mundo")
-        self.assertEqual(o.restore_punc("", ""), "")
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc("Olá mundo", "Olá, mundo!"), "Olá, mundo!")
+        self.assertEqual(o.transfer_punc("Olá", "(Olá)"), "(Olá)")
+        self.assertEqual(o.transfer_punc("Olá mundo", "Olá mundo"), "Olá mundo")
+        self.assertEqual(o.transfer_punc("", ""), "")
         with self.assertRaises(ValueError):
-            o.restore_punc("a b c", "x y")
+            o.transfer_punc("a b c", "x y")

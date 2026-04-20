@@ -29,7 +29,7 @@ from subtitle import Subtitle, SubtitleStream
 from subtitle.io import parse_srt, read_srt, parse_whisperx, read_whisperx
 
 # LangOps
-from lang_ops import LangOps, ChunkPipeline
+from lang_ops import LangOps, TextPipeline
 
 # LLM
 from llm_ops import (
@@ -207,7 +207,7 @@ __all__ = [
     "read_whisperx",
     # LangOps
     "LangOps",
-    "ChunkPipeline",
+    "TextPipeline",
     # LLM
     "LLMEngine",
     "OpenAICompatEngine",

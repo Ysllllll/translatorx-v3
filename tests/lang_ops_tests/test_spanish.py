@@ -85,10 +85,10 @@ class SpanishTextTest(LangOpsTestCase):
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("Hola"), "Hola")
 
-        # restore_punc()
-        self.assertEqual(o.restore_punc("Hola mundo", "¡Hola mundo!"), "¡Hola mundo!")
-        self.assertEqual(o.restore_punc("Qué", "¿Qué?"), "¿Qué?")
-        self.assertEqual(o.restore_punc("Hola mundo", "Hola mundo"), "Hola mundo")
-        self.assertEqual(o.restore_punc("", ""), "")
+        # transfer_punc()
+        self.assertEqual(o.transfer_punc("Hola mundo", "¡Hola mundo!"), "¡Hola mundo!")
+        self.assertEqual(o.transfer_punc("Qué", "¿Qué?"), "¿Qué?")
+        self.assertEqual(o.transfer_punc("Hola mundo", "Hola mundo"), "Hola mundo")
+        self.assertEqual(o.transfer_punc("", ""), "")
         with self.assertRaises(ValueError):
-            o.restore_punc("a b c", "x y")
+            o.transfer_punc("a b c", "x y")

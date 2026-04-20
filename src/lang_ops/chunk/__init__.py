@@ -1,5 +1,5 @@
 """Text chunking — split, merge, and reshape text."""
 
-from lang_ops.chunk._pipeline import ChunkPipeline, ApplyFn, ApplyCache
+from lang_ops.chunk._pipeline import TextPipeline
 
-__all__ = ["ChunkPipeline", "ApplyFn", "ApplyCache"]
+__all__ = ["TextPipeline"]

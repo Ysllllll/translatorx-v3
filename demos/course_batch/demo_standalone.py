@@ -193,10 +193,10 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
     orig_concat = " ".join(orig_texts)
 
     # Step 1: Global punc
-    print(f"\n    ── Step 1: apply_global('restore_punc') — 全局标点恢复 ──")
+    print(f"\n    ── Step 1: transform(punc) — 全局标点恢复 ──")
     print(f"    {ts()} 输入是拼接后的完整文本 ({len(orig_concat)} chars)")
     punc_cache: dict[str, list[str]] = {}
-    sub_after_punc = sub_obj.apply_global("restore_punc", punc_fn, cache=punc_cache)
+    sub_after_punc = sub_obj.transform(punc_fn, cache=punc_cache)
     punc_full_texts = []
     for p in sub_after_punc._pipelines:
         punc_full_texts.extend(p.result())
@@ -221,11 +221,11 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
 
     # Step 3: per-sentence punc
     print(
-        f"\n    ── Step 3: apply_per_sentence('restore_punc_sent') "
+        f"\n    ── Step 3: transform(punc, name='restore_punc_sent') "
         f"— 句级标点恢复 ──"
     )
-    sub_after_sent_punc = sub_after_sent.apply_per_sentence(
-        "restore_punc_sent", punc_fn
+    sub_after_sent_punc = sub_after_sent.transform(
+        punc_fn, name="restore_punc_sent"
     )
     sent_punc_records = sub_after_sent_punc.records()
     print(
@@ -234,8 +234,8 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
     )
 
     # Step 4: chunk
-    print(f"\n    ── Step 4: apply_per_sentence('chunk') — LLM 拆句 ──")
-    sub_after_chunk = sub_after_sent_punc.apply_per_sentence("chunk", chunk_fn)
+    print(f"\n    ── Step 4: transform(chunk, name='chunk') — LLM 拆句 ──")
+    sub_after_chunk = sub_after_sent_punc.transform(chunk_fn, name="chunk")
     chunk_records = sub_after_chunk.records()
     print(
         f"    {ts()} {len(sent_punc_records)} sentences "
