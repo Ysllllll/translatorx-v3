@@ -67,6 +67,7 @@ SUB = "─" * 72
 # 通用打印工具
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _truncate(text: str, limit: int = 120) -> str:
     text = text.replace("\n", " ⏎ ")
     return text if len(text) <= limit else text[: limit - 1] + "…"
@@ -124,6 +125,7 @@ def print_report(report: CheckReport) -> None:
 # 本地 engine — 不需要真实 LLM
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class LoggingEngine:
     """装饰真实 engine，拦截 complete() 与 stream() 记录最近一次 messages。"""
@@ -134,13 +136,18 @@ class LoggingEngine:
     async def complete(self, messages, *, temperature=None, max_tokens=None, json_mode=False):
         self.last_messages = list(messages)
         return await self.inner.complete(
-            messages, temperature=temperature, max_tokens=max_tokens, json_mode=json_mode,
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=json_mode,
         )
 
     async def stream(self, messages, *, temperature=None, max_tokens=None):
         self.last_messages = list(messages)
         async for chunk in self.inner.stream(
-            messages, temperature=temperature, max_tokens=max_tokens,
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
         ):
             yield chunk
 
@@ -168,48 +175,53 @@ class ScriptedEngine:
 # Section 1 — Checker 规则矩阵（纯本地）
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def section_1_checker_matrix() -> None:
     header("Section 1 — Checker 规则矩阵（不需要 LLM）")
-    print(
-        "  逐条展示内置规则的命中样例。最后两例展示 ERROR 短路 与 WARNING-only\n"
-        "  仍 passed=True 的边界情况。"
-    )
+    print("  逐条展示内置规则的命中样例。最后两例展示 ERROR 短路 与 WARNING-only\n  仍 passed=True 的边界情况。")
 
     checker = default_checker("en", "zh")
     # 将 length_ratio 配置为 WARNING，用于最后一例：issues 不为空但 passed=True
     warning_ratio = Checker(rules=[LengthRatioRule(severity=Severity.WARNING)])
 
     cases: list[tuple[str, str, str, Checker | None]] = [
-        ("1.1  clean pass",
-         "Hello, world.", "你好，世界。", None),
-        ("1.2  length_ratio — 译文过长（ratio > 4.0）",
-         "Hi.", "你好" * 60 + "。", None),
-        ("1.3  format — 幻觉前缀（translation starts with \"好的，这是翻译：\"）",
-         "Compute the gradient.",
-         "好的，这是翻译：计算梯度。", None),
-        ("1.4  format — bracket mismatch（译文以括号开头但源文不是）",
-         "See figure a.", "（图a）。", None),
-        ("1.5  format — markdown 粗体残留",
-         "The loss is minimized.", "**损失** 被最小化。", None),
-        ("1.6  format — 意外换行",
-         "Step one. Step two.", "第一步。\n第二步。", None),
-        ("1.7  question_mark — 源含 \"?\"，译文漏问号（WARNING, 不阻断）",
-         "Is this correct?", "这是对的。", None),
-        ("1.8  keyword — forbidden 术语命中",
-         "We train a model on the data.",
-         "我们在数据上狗狗模型。",
-         Checker(rules=[KeywordRule(forbidden_terms=["狗狗"])])),
-        ("1.9  keyword_pair — 译文幻觉出源文没有的术语",
-         "The snake slithered through the grass.",
-         "这条 Python 蛇在草丛里滑行。",
-         Checker(rules=[KeywordRule(keyword_pairs=[(["python"], ["Python", "python"])])])),
-        ("1.10 trailing_annotation — 句末幻觉括号注释",
-         "The activation function is ReLU.",
-         "激活函数是 ReLU（注：这里指整流线性单元激活函数）。", None),
-        ("1.11 多规则 — length + hallucination 都会触发，ERROR 短路",
-         "Hi.", "好的，这是翻译：" + "你好" * 50 + "。", None),
-        ("1.12 WARNING only — 有 issue 但 report.passed=True",
-         "Hello.", "你好" * 30 + "。", warning_ratio),
+        ("1.1  clean pass", "Hello, world.", "你好，世界。", None),
+        ("1.2  length_ratio — 译文过长（ratio > 4.0）", "Hi.", "你好" * 60 + "。", None),
+        (
+            '1.3  format — 幻觉前缀（translation starts with "好的，这是翻译："）',
+            "Compute the gradient.",
+            "好的，这是翻译：计算梯度。",
+            None,
+        ),
+        ("1.4  format — bracket mismatch（译文以括号开头但源文不是）", "See figure a.", "（图a）。", None),
+        ("1.5  format — markdown 粗体残留", "The loss is minimized.", "**损失** 被最小化。", None),
+        ("1.6  format — 意外换行", "Step one. Step two.", "第一步。\n第二步。", None),
+        ('1.7  question_mark — 源含 "?"，译文漏问号（WARNING, 不阻断）', "Is this correct?", "这是对的。", None),
+        (
+            "1.8  keyword — forbidden 术语命中",
+            "We train a model on the data.",
+            "我们在数据上狗狗模型。",
+            Checker(rules=[KeywordRule(forbidden_terms=["狗狗"])]),
+        ),
+        (
+            "1.9  keyword_pair — 译文幻觉出源文没有的术语",
+            "The snake slithered through the grass.",
+            "这条 Python 蛇在草丛里滑行。",
+            Checker(rules=[KeywordRule(keyword_pairs=[(["python"], ["Python", "python"])])]),
+        ),
+        (
+            "1.10 trailing_annotation — 句末幻觉括号注释",
+            "The activation function is ReLU.",
+            "激活函数是 ReLU（注：这里指整流线性单元激活函数）。",
+            None,
+        ),
+        (
+            "1.11 多规则 — length + hallucination 都会触发，ERROR 短路",
+            "Hi.",
+            "好的，这是翻译：" + "你好" * 50 + "。",
+            None,
+        ),
+        ("1.12 WARNING only — 有 issue 但 report.passed=True", "Hello.", "你好" * 30 + "。", warning_ratio),
     ]
 
     for title, src, tgt, custom in cases:
@@ -224,6 +236,7 @@ def section_1_checker_matrix() -> None:
 # ═══════════════════════════════════════════════════════════════════════
 # Section 2 — Direct-translate dict 旁路（纯本地）
 # ═══════════════════════════════════════════════════════════════════════
+
 
 async def section_2_bypasses() -> None:
     header("Section 2 — 流水线旁路机制（真实 TranslateProcessor + Store）")
@@ -277,8 +290,10 @@ async def section_2_bypasses() -> None:
 
     def _ctx() -> TranslationContext:
         return TranslationContext(
-            source_lang="en", target_lang="zh",
-            terms_provider=StaticTerms({}), window_size=4,
+            source_lang="en",
+            target_lang="zh",
+            terms_provider=StaticTerms({}),
+            window_size=4,
         )
 
     def _rec(rid: int, text: str, **extra):
@@ -314,15 +329,19 @@ async def section_2_bypasses() -> None:
         # ─── 2a direct_translate 混合 LLM 兜底 ────────────────────────────
         sub("2a  direct_translate 字典命中 + LLM 兜底（混合场景）")
         print(
-            "    6 条句子：4 条命中字典 → 0 LLM call；\n"
-            "    2 条未命中 → 正常走 LLM。验证字典只是短路逻辑，不是全封顶。"
+            "    6 条句子：4 条命中字典 → 0 LLM call；\n    2 条未命中 → 正常走 LLM。验证字典只是短路逻辑，不是全封顶。"
         )
         vkey_a = VideoKey(course="ml_101", video="lec01_intro")
         eng_a = _FakeTranslator("fake-a")
-        cfg_a = TranslateNodeConfig(direct_translate={
-            "ok": "好的", "yeah": "是的", "um": "嗯",
-            "thanks": "谢谢", "welcome back": "欢迎回来",
-        })
+        cfg_a = TranslateNodeConfig(
+            direct_translate={
+                "ok": "好的",
+                "yeah": "是的",
+                "um": "嗯",
+                "thanks": "谢谢",
+                "welcome back": "欢迎回来",
+            }
+        )
         proc_a = TranslateProcessor(eng_a, _PassChecker(), config=cfg_a)
         inputs_a = [
             _rec(0, "ok"),
@@ -335,7 +354,9 @@ async def section_2_bypasses() -> None:
         out_a = await _run(proc_a, inputs_a, store, vkey_a)
         for r in out_a:
             kind = _classify(r)
-            print(f"    [{kind}] id={r.extra['id']}  {_truncate(r.src_text, 48)!r:52s} → {_truncate(r.translations.get('zh', '∅'), 30)!r}")
+            print(
+                f"    [{kind}] id={r.extra['id']}  {_truncate(r.src_text, 48)!r:52s} → {_truncate(r.translations.get('zh', '∅'), 30)!r}"
+            )
         direct_hits = sum(1 for r in out_a if _classify(r) == "DIRECT")
         llm_hits = sum(1 for r in out_a if _classify(r) == "LLM ")
         print(f"    ⇒ direct={direct_hits}  llm={llm_hits}  engine.calls={eng_a.calls}")
@@ -463,6 +484,7 @@ async def section_2_bypasses() -> None:
 # Section 3 — 单句真实翻译（最小化场景）
 # ═══════════════════════════════════════════════════════════════════════
 
+
 async def section_3_single_sentence() -> None:
     header("Section 3 — 单句真实翻译（空 window、无 terms）")
     print(
@@ -536,8 +558,10 @@ async def section_4_full_pipeline() -> None:
         print(f"      {k!r:45s} → {v!r}")
 
     ctx = TranslationContext(
-        source_lang="en", target_lang="zh",
-        terms_provider=terms, window_size=4,
+        source_lang="en",
+        target_lang="zh",
+        terms_provider=terms,
+        window_size=4,
     )
     window = ContextWindow(size=ctx.window_size)
     checker = default_checker("en", "zh")
@@ -566,8 +590,7 @@ async def section_4_full_pipeline() -> None:
         print_messages(engine.last_messages or [], limit=100)
 
         print(f"\n  ✅ TRANSLATION: {result.translation}")
-        print(f"     attempts={result.attempts} accepted={result.accepted} "
-              f"passed={result.report.passed}")
+        print(f"     attempts={result.attempts} accepted={result.accepted} passed={result.report.passed}")
 
         print(f"\n  📜 window AFTER  (当前={len(window)})")
         print_window(window)
@@ -581,13 +604,20 @@ async def section_4_full_pipeline() -> None:
 # Section 5 — Prompt 降级（scripted，4 级）
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class _AlwaysFailChecker:
     """Always reject translations — forces translate_with_verify to exhaust retries."""
 
     def check(self, _src: str, _tgt: str) -> CheckReport:
-        return CheckReport(issues=[Issue(
-            "demo_force_fail", Severity.ERROR, "demo forcing retry",
-        )])
+        return CheckReport(
+            issues=[
+                Issue(
+                    "demo_force_fail",
+                    Severity.ERROR,
+                    "demo forcing retry",
+                )
+            ]
+        )
 
 
 async def section_5_prompt_degradation() -> None:
@@ -608,7 +638,8 @@ async def section_5_prompt_degradation() -> None:
     engine = ScriptedEngine(scripted_replies=replies)
 
     ctx = TranslationContext(
-        source_lang="en", target_lang="zh",
+        source_lang="en",
+        target_lang="zh",
         terms_provider=StaticTerms({"gradient descent": "梯度下降"}),
         frozen_pairs=(("gradient descent", "梯度下降"),),
         window_size=4,
@@ -628,7 +659,11 @@ async def section_5_prompt_degradation() -> None:
     print(f"  window primed with 2 pairs, frozen_pairs=1")
 
     result = await translate_with_verify(
-        source, engine, ctx, _AlwaysFailChecker(), window,
+        source,
+        engine,
+        ctx,
+        _AlwaysFailChecker(),
+        window,
         system_prompt=real_prompt,
     )
 
@@ -646,6 +681,7 @@ async def section_5_prompt_degradation() -> None:
 # ═══════════════════════════════════════════════════════════════════════
 # Section 6a — OneShotTerms 流式术语抽取
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _describe_task(t) -> str:
     if t is None:
@@ -700,8 +736,10 @@ async def section_6a_oneshot_terms() -> None:
 
     terms = OneShotTerms(engine_inner, "en", "zh", char_threshold=100)
     ctx = TranslationContext(
-        source_lang="en", target_lang="zh",
-        max_retries=2, terms_provider=terms,
+        source_lang="en",
+        target_lang="zh",
+        max_retries=2,
+        terms_provider=terms,
     )
     checker = default_checker("en", "zh")
     window = ContextWindow(size=6)
@@ -753,7 +791,11 @@ async def section_6a_oneshot_terms() -> None:
             snap = await terms.get_terms()
             if snap:
                 pair_preview = list(snap.items())[:3]
-                print(f"    terms so far ({len(snap)}): " + ", ".join(f"{k}→{v}" for k, v in pair_preview) + ("…" if len(snap) > 3 else ""))
+                print(
+                    f"    terms so far ({len(snap)}): "
+                    + ", ".join(f"{k}→{v}" for k, v in pair_preview)
+                    + ("…" if len(snap) > 3 else "")
+                )
 
     await terms.wait_until_ready()
     sub("final state")
@@ -767,6 +809,7 @@ async def section_6a_oneshot_terms() -> None:
 # ═══════════════════════════════════════════════════════════════════════
 # Section 6b — engine.stream 实时 token
 # ═══════════════════════════════════════════════════════════════════════
+
 
 async def section_6b_engine_stream() -> None:
     header("Section 6b — engine.stream 实时 token 流")
@@ -798,6 +841,7 @@ async def section_6b_engine_stream() -> None:
 # Engine factory
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _make_engine(*, max_tokens: int = 2048):
     return trx.create_engine(
         model=LLM_MODEL,
@@ -816,6 +860,7 @@ def _make_engine(*, max_tokens: int = 2048):
 # ═══════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════
+
 
 async def _llm_alive() -> bool:
     try:

@@ -104,9 +104,7 @@ def demo_remote_punc() -> None:
     print()
     print("    用法:")
     print("      from preprocess import RemotePuncRestorer")
-    print(
-        '      restorer = RemotePuncRestorer("http://host:port/restore", threshold=180)'
-    )
+    print('      restorer = RemotePuncRestorer("http://host:port/restore", threshold=180)')
     print('      results = restorer(["hello world"])')
     print('      # → [["Hello world."]]  (1:1 替换)')
     print()
@@ -162,10 +160,7 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
     from llm_ops import EngineConfig, OpenAICompatEngine
 
     sub("8f  完整预处理流水线 — 逐步可视化 (1 视频)")
-    print(
-        f"    {ts()} 流程: raw_segments → punc_global → sentences "
-        f"→ punc_sentence → chunk → records"
-    )
+    print(f"    {ts()} 流程: raw_segments → punc_global → sentences → punc_sentence → chunk → records")
 
     first_srt = srt_files[0]
     segments = read_srt(first_srt)
@@ -220,33 +215,20 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
         print(f"    ... +{len(sent_records) - 6} more sentences")
 
     # Step 3: per-sentence punc
-    print(
-        f"\n    ── Step 3: transform(punc, name='restore_punc_sent') "
-        f"— 句级标点恢复 ──"
-    )
-    sub_after_sent_punc = sub_after_sent.transform(
-        punc_fn, name="restore_punc_sent"
-    )
+    print(f"\n    ── Step 3: transform(punc, name='restore_punc_sent') — 句级标点恢复 ──")
+    sub_after_sent_punc = sub_after_sent.transform(punc_fn, name="restore_punc_sent")
     sent_punc_records = sub_after_sent_punc.records()
-    print(
-        f"    {ts()} {len(sent_records)} sentences "
-        f"→ {len(sent_punc_records)} sentences"
-    )
+    print(f"    {ts()} {len(sent_records)} sentences → {len(sent_punc_records)} sentences")
 
     # Step 4: chunk
     print(f"\n    ── Step 4: transform(chunk, name='chunk') — LLM 拆句 ──")
     sub_after_chunk = sub_after_sent_punc.transform(chunk_fn, name="chunk")
     chunk_records = sub_after_chunk.records()
-    print(
-        f"    {ts()} {len(sent_punc_records)} sentences "
-        f"→ {len(chunk_records)} records"
-    )
+    print(f"    {ts()} {len(sent_punc_records)} sentences → {len(chunk_records)} records")
     for i, rec in enumerate(chunk_records[:8]):
         cc_keys = list(rec.chunk_cache.keys()) if rec.chunk_cache else []
         cc_info = f"  chunk_cache={cc_keys}" if cc_keys else ""
-        print(
-            f"    [{i:>3d}] ({len(rec.src_text):>3d} chars) {rec.src_text!r}{cc_info}"
-        )
+        print(f"    [{i:>3d}] ({len(rec.src_text):>3d} chars) {rec.src_text!r}{cc_info}")
     if len(chunk_records) > 8:
         print(f"    ... +{len(chunk_records) - 8} more records")
 

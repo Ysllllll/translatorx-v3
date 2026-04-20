@@ -10,8 +10,12 @@ import _bootstrap  # noqa: F401
 
 from model import Word, Segment, SentenceRecord
 from subtitle import (
-    Subtitle, SubtitleStream,
-    fill_words, find_words, distribute_words, align_segments,
+    Subtitle,
+    SubtitleStream,
+    fill_words,
+    find_words,
+    distribute_words,
+    align_segments,
     normalize_words,
 )
 from subtitle.io import parse_srt, sanitize_srt

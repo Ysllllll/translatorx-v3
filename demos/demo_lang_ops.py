@@ -67,41 +67,19 @@ print()
 print("=== TextPipeline ===")
 
 text_zh = "你好世界。今天天气怎么样？我觉得还不错，谢谢你的关心。"
-result = (
-    ops_zh.chunk(text_zh)
-    .sentences()
-    .result()
-)
+result = ops_zh.chunk(text_zh).sentences().result()
 print(f"Sentences: {result}")
 
-result = (
-    ops_zh.chunk(text_zh)
-    .sentences()
-    .clauses()
-    .result()
-)
+result = ops_zh.chunk(text_zh).sentences().clauses().result()
 print(f"Sentences + Clauses: {result}")
 
-result = (
-    ops_zh.chunk(text_zh)
-    .clauses()
-    .result()
-)
+result = ops_zh.chunk(text_zh).clauses().result()
 print(f"Clauses: {result}")
 
-result2 = (
-    ops_zh.chunk(text_zh)
-    .sentences()
-    .clauses(merge_under=20)
-    .result()
-)
+result2 = ops_zh.chunk(text_zh).sentences().clauses(merge_under=20).result()
 print(f"Clauses (merge_under=20): {result2}")
 
 # 也可以从预分块构造
 chunks = ["Hello world.", "How are you?", "Fine."]
-result3 = (
-    TextPipeline.from_chunks(chunks, ops_en)
-    .merge(max_len=30)
-    .result()
-)
+result3 = TextPipeline.from_chunks(chunks, ops_en).merge(max_len=30).result()
 print(f"Merged chunks: {result3}")

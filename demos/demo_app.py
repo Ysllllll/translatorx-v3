@@ -69,34 +69,36 @@ We discuss advanced topics.
 
 def build_app(ws_root: Path) -> App:
     """Build an App from an inline dict — no YAML file needed."""
-    return App.from_dict({
-        "engines": {
-            "default": {
-                "kind": "openai_compat",
-                "model": LLM_MODEL,
-                "base_url": LLM_BASE_URL,
-                "api_key": "EMPTY",
-                "temperature": 0.3,
-                "extra_body": {
-                    "top_k": 20,
-                    "min_p": 0,
-                    "chat_template_kwargs": {"enable_thinking": False},
+    return App.from_dict(
+        {
+            "engines": {
+                "default": {
+                    "kind": "openai_compat",
+                    "model": LLM_MODEL,
+                    "base_url": LLM_BASE_URL,
+                    "api_key": "EMPTY",
+                    "temperature": 0.3,
+                    "extra_body": {
+                        "top_k": 20,
+                        "min_p": 0,
+                        "chat_template_kwargs": {"enable_thinking": False},
+                    },
                 },
             },
-        },
-        "contexts": {
-            "en_zh": {"src": "en", "tgt": "zh", "window_size": 4, "terms": {"API": "接口"}},
-        },
-        "store": {"kind": "json", "root": ws_root.as_posix()},
-        "runtime": {"max_concurrent_videos": 2, "flush_every": 1},
-    })
+            "contexts": {
+                "en_zh": {"src": "en", "tgt": "zh", "window_size": 4, "terms": {"API": "接口"}},
+            },
+            "store": {"kind": "json", "root": ws_root.as_posix()},
+            "runtime": {"max_concurrent_videos": 2, "flush_every": 1},
+        }
+    )
 
 
 async def scenario_video_builder(app: App, srt_path: Path) -> None:
     print("\n=== Scenario A: VideoBuilder (single SRT) ===")
     result = await (
         app.video(course="demo-course", video="lec01")
-        .source(srt_path, language="en")   # kind 由 .srt 自动推断
+        .source(srt_path, language="en")  # kind 由 .srt 自动推断
         .translate(src="en", tgt="zh")
         .run()
     )
@@ -128,9 +130,9 @@ async def scenario_stream_builder(app: App) -> None:
     print("\n=== Scenario C: StreamBuilder (live feed, priority + seek) ===")
     # Simulate a live lecture stream: 6 incoming segments + a "scrub" event.
     early = [
-        Segment(start=0.0,  end=2.0,  text="Welcome back to the channel."),
-        Segment(start=2.0,  end=4.0,  text="Today's topic is streaming APIs."),
-        Segment(start=4.0,  end=6.0,  text="Let's begin with the basics."),
+        Segment(start=0.0, end=2.0, text="Welcome back to the channel."),
+        Segment(start=2.0, end=4.0, text="Today's topic is streaming APIs."),
+        Segment(start=4.0, end=6.0, text="Let's begin with the basics."),
     ]
     later = [
         Segment(start=10.0, end=12.0, text="This is the advanced section."),
@@ -139,9 +141,7 @@ async def scenario_stream_builder(app: App) -> None:
     ]
 
     async with (
-        app.stream(course="demo-course", video="live-clip", language="en")
-        .translate(src="en", tgt="zh")
-        .start()
+        app.stream(course="demo-course", video="live-clip", language="en").translate(src="en", tgt="zh").start()
     ) as stream:
 
         async def producer():
@@ -208,8 +208,7 @@ async def scenario_error_reporter(app: App, srt_path: Path) -> None:
         .with_error_reporter(reporter)
         .run()
     )
-    print(f"  translated {len(result.records)} records, "
-          f"reporter captured {len(reporter.events)} events")
+    print(f"  translated {len(result.records)} records, reporter captured {len(reporter.events)} events")
     for cat, code in reporter.events:
         print(f"    - [{cat}] {code}")
 

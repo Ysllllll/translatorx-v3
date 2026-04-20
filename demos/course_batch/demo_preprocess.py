@@ -73,10 +73,7 @@ def verify_preprocess_factories() -> None:
     )
     restorer = app1.punc_restorer()
     assert restorer is not None
-    print(
-        f"    {ts()} ✓ punc_mode=llm → LlmPuncRestorer "
-        f"(threshold={restorer._threshold})"
-    )
+    print(f"    {ts()} ✓ punc_mode=llm → LlmPuncRestorer (threshold={restorer._threshold})")
 
     # LLM chunk
     app2 = App.from_dict(
@@ -88,9 +85,7 @@ def verify_preprocess_factories() -> None:
     )
     chunker = app2.chunker()
     assert chunker is not None
-    print(
-        f"    {ts()} ✓ chunk_mode=llm → LlmChunker " f"(chunk_len={chunker._chunk_len})"
-    )
+    print(f"    {ts()} ✓ chunk_mode=llm → LlmChunker (chunk_len={chunker._chunk_len})")
 
     # Remote punc (no endpoint → error)
     try:
@@ -163,20 +158,14 @@ async def run_preprocess_punc(
 
     t0 = time.perf_counter()
     result = await (
-        app.course(course="prep_punc")
-        .add_video(first_srt.stem, first_srt, language="en")
-        .translate(tgt="zh")
-        .run()
+        app.course(course="prep_punc").add_video(first_srt.stem, first_srt, language="en").translate(tgt="zh").run()
     )
     dt = time.perf_counter() - t0
 
     n = len(result.succeeded)
     recs = result.videos[0][1].records if n else []
     print(f"\n    {ts()} ⏱ 用时 {dt:.1f}s  succeeded={n}  records={len(recs)}")
-    print(
-        f"    LLM calls: unique={prog.unique} retries={prog.retries} "
-        f"puncs={prog.puncs} chunks={prog.chunks}"
-    )
+    print(f"    LLM calls: unique={prog.unique} retries={prog.retries} puncs={prog.puncs} chunks={prog.chunks}")
     if recs:
         sample = recs[0]
         print(f"    sample[0].src = {sample.src_text[:60]!r}")
@@ -224,20 +213,14 @@ async def run_preprocess_full(
 
     t0 = time.perf_counter()
     result = await (
-        app.course(course="prep_full")
-        .add_video(first_srt.stem, first_srt, language="en")
-        .translate(tgt="zh")
-        .run()
+        app.course(course="prep_full").add_video(first_srt.stem, first_srt, language="en").translate(tgt="zh").run()
     )
     dt = time.perf_counter() - t0
 
     n = len(result.succeeded)
     recs = result.videos[0][1].records if n else []
     print(f"\n    {ts()} ⏱ 用时 {dt:.1f}s  succeeded={n}  records={len(recs)}")
-    print(
-        f"    LLM calls: unique={prog.unique} retries={prog.retries} "
-        f"puncs={prog.puncs} chunks={prog.chunks}"
-    )
+    print(f"    LLM calls: unique={prog.unique} retries={prog.retries} puncs={prog.puncs} chunks={prog.chunks}")
     if recs:
         sample = recs[0]
         print(f"    sample[0].src = {sample.src_text[:60]!r}")

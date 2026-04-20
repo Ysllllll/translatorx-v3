@@ -48,13 +48,29 @@ def _build_demo_segments() -> list[Segment]:
         (5.8, 8.2, "start with the basic setup of our project."),
         (8.2, 11.5, "First you need to install the stripe package and all the required dependencies. Make sure"),
         (11.5, 14.0, "you have Node.js version eighteen or above installed on your development machine."),
-        (14.0, 17.5, "The configuration file is critically important for the security of your application. You should never ever"),
+        (
+            14.0,
+            17.5,
+            "The configuration file is critically important for the security of your application. You should never ever",
+        ),
         (17.5, 20.0, "hardcode your API keys directly in the source code."),
-        (20.0, 23.0, "Instead you should use environment variables to store sensitive credentials. This is a fundamental security"),
+        (
+            20.0,
+            23.0,
+            "Instead you should use environment variables to store sensitive credentials. This is a fundamental security",
+        ),
         (23.0, 25.5, "best practice that every professional developer should follow."),
-        (25.5, 28.8, "Now let's look at how the payment flow actually works in a real production environment. When a customer"),
+        (
+            25.5,
+            28.8,
+            "Now let's look at how the payment flow actually works in a real production environment. When a customer",
+        ),
         (28.8, 31.5, "clicks the buy button, we create a Stripe checkout session with all the product details."),
-        (31.5, 34.8, "The checkout session contains the product information, pricing, and shipping details. Stripe then"),
+        (
+            31.5,
+            34.8,
+            "The checkout session contains the product information, pricing, and shipping details. Stripe then",
+        ),
         (34.8, 37.2, "redirects the user to their secure hosted payment page."),
         (37.2, 40.5, "After the payment is successfully completed, Stripe sends a webhook event to our server. We"),
         (40.5, 43.0, "need to verify the webhook signature to ensure the request is authentic."),
@@ -66,11 +82,23 @@ def _build_demo_segments() -> list[Segment]:
         # ── Seg 20-29: 无标点 (模拟 WhisperX 原始输出) ──
         (58.0, 61.5, "now lets move on to the deployment process and talk about how we can automate the entire"),
         (61.5, 64.0, "workflow using modern CI CD tools like vercel"),
-        (64.0, 67.5, "vercel makes it incredibly easy to deploy your full stack javascript application to the cloud you just"),
+        (
+            64.0,
+            67.5,
+            "vercel makes it incredibly easy to deploy your full stack javascript application to the cloud you just",
+        ),
         (67.5, 70.0, "connect your github repository and push your code"),
-        (70.0, 73.5, "the platform automatically detects your framework and builds and deploys your application within minutes"),
+        (
+            70.0,
+            73.5,
+            "the platform automatically detects your framework and builds and deploys your application within minutes",
+        ),
         (73.5, 76.0, "you can also configure custom domains SSL certificates and environment variables"),
-        (76.0, 79.0, "the preview deployments are really useful for testing changes before they go to production each pull"),
+        (
+            76.0,
+            79.0,
+            "the preview deployments are really useful for testing changes before they go to production each pull",
+        ),
         (79.0, 81.5, "request gets its own unique preview URL that you can share with your team"),
         (81.5, 84.0, "this makes the entire code review process much more effective and collaborative"),
         (84.0, 86.5, "and that wraps up todays lecture on modern deployment strategies"),
@@ -110,7 +138,9 @@ def _print_records(records: list, label: str) -> None:
         cc = list(rec.chunk_cache.keys()) if rec.chunk_cache else []
         cc_info = f"  cc={cc}" if cc else ""
         tag = " >90!" if len(rec.src_text) > 90 else ""
-        print(f"  [{i:>3d}] [{rec.start:5.1f}-{rec.end:5.1f}] ({len(rec.src_text):>3d}c) {rec.src_text!r}{cc_info}{tag}")
+        print(
+            f"  [{i:>3d}] [{rec.start:5.1f}-{rec.end:5.1f}] ({len(rec.src_text):>3d}c) {rec.src_text!r}{cc_info}{tag}"
+        )
 
 
 def _print_comparison(before: list[str], after: list[str], label: str) -> None:

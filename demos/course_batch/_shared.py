@@ -165,8 +165,7 @@ class ProgressEngine:
                 out = result.text
                 out_short = out
                 print(
-                    f"    {ts()} [t={elapsed:5.1f}s] ◆ punc  #{self.puncs:>3d}  "
-                    f"{src_short!r:42s} → {out_short!r}",
+                    f"    {ts()} [t={elapsed:5.1f}s] ◆ punc  #{self.puncs:>3d}  {src_short!r:42s} → {out_short!r}",
                     flush=True,
                 )
             elif kind == "chunk":
@@ -175,8 +174,7 @@ class ProgressEngine:
                 src_short = user_text
                 lines = [l for l in result.text.strip().splitlines() if l.strip()]
                 print(
-                    f"    {ts()} [t={elapsed:5.1f}s] ◇ chunk #{self.chunks:>3d}  "
-                    f"{src_short!r:42s} → {lines}",
+                    f"    {ts()} [t={elapsed:5.1f}s] ◇ chunk #{self.chunks:>3d}  {src_short!r:42s} → {lines}",
                     flush=True,
                 )
             else:
@@ -200,8 +198,7 @@ class ProgressEngine:
                     tgt = result.text
                     tgt_short = tgt if len(tgt) <= 36 else tgt[:33] + "…"
                     print(
-                        f"    {ts()} [t={elapsed:5.1f}s] rec {n:>4d}{tot}  "
-                        f"src={src_short!r:42s} → {tgt_short!r}",
+                        f"    {ts()} [t={elapsed:5.1f}s] rec {n:>4d}{tot}  src={src_short!r:42s} → {tgt_short!r}",
                         flush=True,
                     )
         return result
@@ -254,8 +251,7 @@ def dump_translation_json(path: Path, max_records: int = 3) -> None:
     ref = data.get("raw_segment_ref")
     if ref:
         print(
-            f"      raw_segment_ref: file={ref.get('file')} "
-            f"n={ref.get('n')} sha256={str(ref.get('sha256', ''))[:16]}…"
+            f"      raw_segment_ref: file={ref.get('file')} n={ref.get('n')} sha256={str(ref.get('sha256', ''))[:16]}…"
         )
     punc_cache = data.get("punc_cache") or {}
     if punc_cache:
@@ -265,10 +261,7 @@ def dump_translation_json(path: Path, max_records: int = 3) -> None:
     summary = data.get("summary")
     if summary:
         cur = summary.get("current") or {}
-        print(
-            f"      summary: v{cur.get('version')} "
-            f"topic={cur.get('topic')!r} title={cur.get('title')!r}"
-        )
+        print(f"      summary: v{cur.get('version')} topic={cur.get('topic')!r} title={cur.get('title')!r}")
     print(f"      meta._fingerprints:")
     for k, v in (meta.get("_fingerprints") or {}).items():
         print(f"        {k} = {str(v)[:32]}…")
@@ -285,9 +278,7 @@ def dump_translation_json(path: Path, max_records: int = 3) -> None:
         print(f"        … +{len(recs) - max_records} more records")
 
 
-def print_punc_comparison(
-    inputs: list[str], results: list[list[str]], label: str
-) -> None:
+def print_punc_comparison(inputs: list[str], results: list[list[str]], label: str) -> None:
     """Print a detailed before/after comparison for punc restoration."""
     print(f"\n    ── {label} 前后对比 ──")
     for i, (inp, out) in enumerate(zip(inputs, results)):
@@ -304,9 +295,7 @@ def print_punc_comparison(
     print(f"    output shape: {[len(r) for r in results]}  (每项 [1] = 1:1 替换)")
 
 
-def print_chunk_comparison(
-    inputs: list[str], results: list[list[str]], label: str
-) -> None:
+def print_chunk_comparison(inputs: list[str], results: list[list[str]], label: str) -> None:
     """Print a detailed before/after comparison for chunking."""
     print(f"\n    ── {label} 前后对比 ──")
     for i, (inp, parts) in enumerate(zip(inputs, results)):

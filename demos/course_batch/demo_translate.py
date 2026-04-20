@@ -58,10 +58,7 @@ def prepare_data() -> tuple[list[Path], dict[str, int], int] | None:
     total_records = sum(counts.values())
 
     print(f"    数据目录: {DATA_DIR.relative_to(REPO_ROOT)}")
-    print(
-        f"    发现 SRT: {len(srt_files)} 个 (MAX_VIDEOS={MAX_VIDEOS}), "
-        f"共 {total_records} 条句子"
-    )
+    print(f"    发现 SRT: {len(srt_files)} 个 (MAX_VIDEOS={MAX_VIDEOS}), 共 {total_records} 条句子")
     for p in srt_files:
         vid = extract_video_id(p)
         print(f"      • {vid:>4s}  {p.name}  ({counts[p.stem]} sentences)")
@@ -84,10 +81,7 @@ def build_app(total_records: int) -> tuple[App, ProgressEngine]:
     if WS_ROOT.exists():
         shutil.rmtree(WS_ROOT)
     WS_ROOT.mkdir(parents=True, exist_ok=True)
-    print(
-        f"    workspace root = {WS_ROOT.relative_to(REPO_ROOT)}/  "
-        f"(course={COURSE_NAME})"
-    )
+    print(f"    workspace root = {WS_ROOT.relative_to(REPO_ROOT)}/  (course={COURSE_NAME})")
 
     app = App.from_dict(
         {
@@ -107,10 +101,7 @@ def build_app(total_records: int) -> tuple[App, ProgressEngine]:
     app._engines["default"] = progress_engine
 
     print("    runtime: max_concurrent_videos=2  flush_every=100  checker=lenient")
-    print(
-        "    context: en→zh, max_retries=1, "
-        "terms = {'Stripe', 'Vercel', 'API', 'AI'}"
-    )
+    print("    context: en→zh, max_retries=1, terms = {'Stripe', 'Vercel', 'API', 'AI'}")
     print(f"    {ts()} progress: per-call 实时打印 (ProgressEngine 包装)")
     return app, progress_engine
 
@@ -122,10 +113,7 @@ async def run_first_pass(
     total_records: int,
 ):
     """Section 3: 第一次运行 — 全部新翻."""
-    sub(
-        f"3  第一次运行 — scan_dir + 自动语言探测 + 批量翻译 "
-        f"({total_records} 条句子)"
-    )
+    sub(f"3  第一次运行 — scan_dir + 自动语言探测 + 批量翻译 ({total_records} 条句子)")
     print(f"    {ts()} 每条 LLM 调用都会打印一行；2 条视频并发执行")
 
     t0 = time.perf_counter()
