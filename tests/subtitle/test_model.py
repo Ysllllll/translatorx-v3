@@ -10,9 +10,7 @@ class TestWordDisplay:
 
     def test_word_pretty_includes_optional_fields(self) -> None:
         word = Word("Hello", 0.0, 1.25, speaker="A", extra={"lang": "en"})
-        assert word.pretty() == (
-            "Word(\n  word='Hello',\n  start=0.00,\n  end=1.25,\n  speaker='A',\n  extra={'lang': 'en'},\n)"
-        )
+        assert word.pretty() == ("Word(\n  word='Hello',\n  start=0.00,\n  end=1.25,\n  speaker='A',\n  extra={'lang': 'en'},\n)")
 
 
 class TestSegmentDisplay:
@@ -65,7 +63,6 @@ class TestSentenceRecordDisplay:
                 Segment(0.0, 1.5, "Hello world."),
                 Segment(1.5, 3.0, " How are you?"),
             ],
-            chunk_cache={"zh": ["你好世界。"]},
             translations={"zh": "你好世界。"},
             alignment={"method": "mock"},
             extra={"note": "demo"},
@@ -76,7 +73,6 @@ class TestSentenceRecordDisplay:
             "  start=0.00,\n"
             "  end=3.00,\n"
             "  segments=['Hello world.', ' How are you?'],\n"
-            "  chunk_cache={'zh': ['你好世界。']},\n"
             "  translations={'zh': '你好世界。'},\n"
             "  alignment={'method': 'mock'},\n"
             "  extra={'note': 'demo'},\n"

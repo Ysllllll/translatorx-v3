@@ -256,8 +256,6 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                         patch["segments"] = rec_payload["segments"]
                     if "words" in rec_payload:
                         patch["words"] = rec_payload["words"]
-                    if "chunk_cache" in rec_payload:
-                        patch["chunk_cache"] = rec_payload["chunk_cache"]
                     buffer[rec_id] = patch
                     now = time.monotonic()
                     if len(buffer) >= self._flush_every or (now - last_flush_at) >= self._flush_interval_s:

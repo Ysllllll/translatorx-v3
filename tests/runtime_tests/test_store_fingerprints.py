@@ -130,12 +130,12 @@ def _seeded_video_data() -> dict:
         "segment_type": "srt",
         "raw_segment_ref": {"sha256": "abc", "n": 1},
         "punc_cache": {"Hello world": ["Hello world."]},
+        "chunk_cache": {"Hello world.": ["Hello", "world."]},
         "summary": {"title": "demo", "terms": []},
         "records": [
             {
                 "id": 0,
                 "src_text": "Hello world.",
-                "chunk_cache": {"chunk_llm": ["Hello", "world."]},
                 "translations": {"zh": "你好世界。"},
                 "alignment": {"method": "wx"},
                 "tts": {"path": "x.wav"},
@@ -187,9 +187,10 @@ class TestInvalidateFromStep:
         data = await store.load_video("v1")
         rec = data["records"][0]
         assert rec["src_text"] == "Hello world."
-        assert "chunk_cache" not in rec
         assert "translations" not in rec
         assert "tts" not in rec
+        # Video-level chunk_cache is cleared
+        assert "chunk_cache" not in data
         assert data["punc_cache"] == {"Hello world": ["Hello world."]}
         fps = data["meta"]["_fingerprints"]
         assert set(fps) == {"raw", "preprocess.punc"}
@@ -200,7 +201,8 @@ class TestInvalidateFromStep:
         await store.invalidate_from_step("v1", "translate")
         data = await store.load_video("v1")
         rec = data["records"][0]
-        assert rec["chunk_cache"] == {"chunk_llm": ["Hello", "world."]}
+        # Video-level chunk_cache survives translate invalidation
+        assert data["chunk_cache"] == {"Hello world.": ["Hello", "world."]}
         assert "translations" not in rec
         assert "tts" not in rec
         fps = data["meta"]["_fingerprints"]

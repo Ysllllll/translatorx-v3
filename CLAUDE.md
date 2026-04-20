@@ -298,7 +298,7 @@ sub.sentences()                        → Subtitle  # splits into per-sentence 
 sub.clauses(merge_under=60)            → Subtitle  # per-sentence clause splitting
 sub.split(max_len=40)                  → Subtitle  # per-sentence length splitting
 sub.merge(max_len=60)                  → Subtitle  # per-sentence greedy merge
-sub.transform(fn, *, cache=None, name=None, batch_size=1, workers=1, skip_if=None)  → Subtitle  # unified transform
+sub.transform(fn, *, cache=None, scope="chunk", batch_size=1, workers=1, skip_if=None)  → Subtitle  # unified transform
 sub.build()                            → list[Segment]
 sub.records()                          → list[SentenceRecord]
 
@@ -310,9 +310,9 @@ remaining = stream.flush()             → list[Segment]
 
 After `sentences()`, each operation is implicitly per-sentence — it never crosses sentence boundaries.
 
-`transform()` auto-detects scope:
-- **Pre-sentence** (before `sentences()`): applies `fn` globally across all text; `name` is ignored, `cache` is the video-level punc cache.
-- **Post-sentence** (after `sentences()`): applies `fn` per-sentence; if `name` is given, results are stamped into each record's `chunk_cache[name]`.
+`transform()` scope parameter:
+- **`scope="chunk"`** (default): applies `fn` to each chunk individually.
+- **`scope="pipeline"`**: joins all chunks within a pipeline before sending to `fn`, then rebuilds the pipeline from the result. Use for punc restoration where the fn needs full context.
 
 ### Subtitle word timing
 
@@ -329,7 +329,7 @@ align_segments(chunks, words) → list[Segment]    # text chunks + timed words �
 
 - `Word(word, start, end, speaker=None, extra={})` — `content` property returns word stripped of punctuation
 - `Segment(start, end, text, speaker=None, words=[], extra={})`
-- `SentenceRecord(src_text, start, end, segments=[], ...)` — also has `chunk_cache`, `translations`, `alignment`
+- `SentenceRecord(src_text, start, end, segments=[], ...)` — also has `translations`, `alignment`
 
 ### SRT reader
 

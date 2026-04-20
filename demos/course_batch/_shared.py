@@ -185,8 +185,7 @@ class ProgressEngine:
                     tgt = result.text
                     tgt_short = tgt if len(tgt) <= 36 else tgt[:33] + "…"
                     print(
-                        f"    {ts()} [t={elapsed:5.1f}s] ↻ retry #{self.retries}  "
-                        f"src={src_short!r:42s} → {tgt_short!r}",
+                        f"    {ts()} [t={elapsed:5.1f}s] ↻ retry #{self.retries}  src={src_short!r:42s} → {tgt_short!r}",
                         flush=True,
                     )
                 else:
@@ -250,9 +249,7 @@ def dump_translation_json(path: Path, max_records: int = 3) -> None:
     print(f"      segment_type:   {data.get('segment_type')}")
     ref = data.get("raw_segment_ref")
     if ref:
-        print(
-            f"      raw_segment_ref: file={ref.get('file')} n={ref.get('n')} sha256={str(ref.get('sha256', ''))[:16]}…"
-        )
+        print(f"      raw_segment_ref: file={ref.get('file')} n={ref.get('n')} sha256={str(ref.get('sha256', ''))[:16]}…")
     punc_cache = data.get("punc_cache") or {}
     if punc_cache:
         print(f"      punc_cache: {len(punc_cache)} 条 (展示 1)")
@@ -271,9 +268,6 @@ def dump_translation_json(path: Path, max_records: int = 3) -> None:
         zh = (r.get("translations") or {}).get("zh", "")
         zh_short = zh if len(zh) <= 80 else zh[:77] + "…"
         print(f"        • id={rid}  zh={zh_short!r}")
-        cc = r.get("chunk_cache") or {}
-        if cc:
-            print(f"          chunk_cache keys: {list(cc.keys())}")
     if len(recs) > max_records:
         print(f"        … +{len(recs) - max_records} more records")
 

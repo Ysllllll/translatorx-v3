@@ -2,7 +2,7 @@
 
 Mirrors :class:`SrtSource` (D-073 / D-074): optional Store-backed raw_segment
 sidecar (``<video>.words.jsonl``), optional preprocessing hooks
-(``restore_punc`` / ``chunk``), and per-sentence ``chunk_cache`` emission.
+(``restore_punc`` / ``chunk``), and video-level cache persistence.
 
 ``punc_position`` controls where punctuation restoration runs (see
 :class:`SrtSource` for details).
@@ -70,41 +70,51 @@ class WhisperXSource:
 
         sub = Subtitle.from_words(words, language=self._language)
 
+        # Load video-level caches for warm hits.
         punc_cache: dict[str, list[str]] | None = None
-        if self._restore_punc is not None:
-            punc_cache = {}
+        chunk_cache: dict[str, list[str]] | None = None
+
+        if self._store is not None and self._video_key is not None:
+            prior = await self._store.load_video(self._video_key.video)
+            if self._restore_punc is not None:
+                punc_cache = dict(prior.get("punc_cache") or {})
+            if self._chunk_llm is not None:
+                chunk_cache = dict(prior.get("chunk_cache") or {})
+
+        try:
+            # ① Global punc — before sentences()
+            if self._restore_punc is not None and self._punc_position in ("global", "both"):
+                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="pipeline")
+
+            # ② Sentence splitting
+            sub = sub.sentences()
+
+            # ③ Per-sentence punc — after sentences()
+            if self._restore_punc is not None and self._punc_position in (
+                "sentence",
+                "both",
+            ):
+                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="pipeline")
+
+            # ④ Clause splitting
+            if self._merge_under is not None:
+                sub = sub.clauses(merge_under=self._merge_under)
+
+            # ⑤ Chunking
+            if self._chunk_llm is not None:
+                sub = sub.transform(self._chunk_llm, cache=chunk_cache)
+
+            # ⑥ Length-based split fallback
+            if self._max_len is not None:
+                sub = sub.split(self._max_len)
+        finally:
+            # Persist caches even on failure so partial LLM results are not lost.
             if self._store is not None and self._video_key is not None:
-                prior = await self._store.load_video(self._video_key.video)
-                punc_cache.update(prior.get("punc_cache") or {})
-
-        # ① Global punc — before sentences()
-        if self._restore_punc is not None and self._punc_position in ("global", "both"):
-            sub = sub.transform(self._restore_punc, cache=punc_cache)
-
-        # ② Sentence splitting
-        sub = sub.sentences()
-
-        # ③ Per-sentence punc — after sentences()
-        if self._restore_punc is not None and self._punc_position in (
-            "sentence",
-            "both",
-        ):
-            sub = sub.transform(self._restore_punc, name="restore_punc_sent")
-
-        # ④ Clause splitting
-        if self._merge_under is not None:
-            sub = sub.clauses(merge_under=self._merge_under)
-
-        # ⑤ Chunking
-        if self._chunk_llm is not None:
-            sub = sub.transform(self._chunk_llm, name="chunk")
-
-        # ⑥ Length-based split fallback
-        if self._max_len is not None:
-            sub = sub.split(self._max_len)
-
-        if punc_cache and self._store is not None and self._video_key is not None:
-            await self._store.patch_video(self._video_key.video, punc_cache=punc_cache)
+                vid = self._video_key.video
+                if punc_cache:
+                    await self._store.patch_video(vid, punc_cache=punc_cache)
+                if chunk_cache:
+                    await self._store.patch_video(vid, chunk_cache=chunk_cache)
 
         for rec in assign_ids(sub.records(), start=self._id_start):
             yield rec

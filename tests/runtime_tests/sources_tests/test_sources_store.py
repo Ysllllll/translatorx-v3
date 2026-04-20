@@ -79,7 +79,7 @@ class TestSrtSourceStoreIntegration:
         assert calls  # was called
 
     @pytest.mark.asyncio
-    async def test_chunk_populates_chunk_cache_on_records(self, store: JsonFileStore, srt_path: Path) -> None:
+    async def test_chunk_populates_video_level_chunk_cache(self, store: JsonFileStore, srt_path: Path) -> None:
         vk = VideoKey(course="c", video="v1")
 
         def chunker(batch: list[str]) -> list[list[str]]:
@@ -94,9 +94,9 @@ class TestSrtSourceStoreIntegration:
         )
         records = await _drain(src.read())
         assert records
-        for rec in records:
-            assert "chunk" in rec.chunk_cache
-            assert rec.chunk_cache["chunk"]
+        # chunk_cache is persisted at video level, not per record
+        data = await store.load_video("v1")
+        assert data.get("chunk_cache")  # non-empty video-level cache
 
 
 class TestSrtSourceBackwardCompat:

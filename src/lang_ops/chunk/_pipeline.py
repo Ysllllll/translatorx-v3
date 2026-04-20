@@ -89,7 +89,7 @@ class TextPipeline:
     def sentences(self) -> TextPipeline:
         """Split each group into sentences."""
 
-        def _split_fn(group):
+        def _split_fn(group: list[str]) -> list[list[str]]:
             boundaries = find_boundaries(
                 group,
                 self._ops.sentence_terminators,

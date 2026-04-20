@@ -122,10 +122,7 @@ class Segment:
 
     def __repr__(self) -> str:
         suffix = f", speaker={self.speaker!r}" if self.speaker is not None else ""
-        return (
-            f"Segment({_fmt_time(self.start)}->{_fmt_time(self.end)}, "
-            f"text={self.text!r}, words={len(self.words)}{suffix})"
-        )
+        return f"Segment({_fmt_time(self.start)}->{_fmt_time(self.end)}, text={self.text!r}, words={len(self.words)}{suffix})"
 
     def pretty(self) -> str:
         return (
@@ -178,16 +175,12 @@ class SentenceRecord:
     start: float
     end: float
     segments: list[Segment] = field(default_factory=list)
-    chunk_cache: dict[str, list[str]] = field(default_factory=dict)
     translations: dict[str, str] = field(default_factory=dict)
     alignment: dict[str, Any] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def __repr__(self) -> str:
-        return (
-            f"SentenceRecord({self.src_text!r}, {_fmt_time(self.start)}->{_fmt_time(self.end)}, "
-            f"segments={len(self.segments)})"
-        )
+        return f"SentenceRecord({self.src_text!r}, {_fmt_time(self.start)}->{_fmt_time(self.end)}, segments={len(self.segments)})"
 
     def pretty(self) -> str:
         return (
@@ -196,7 +189,6 @@ class SentenceRecord:
             f"  start={_fmt_time(self.start)},\n"
             f"  end={_fmt_time(self.end)},\n"
             f"  segments={repr([segment.text for segment in self.segments])},\n"
-            f"  chunk_cache={self.chunk_cache!r},\n"
             f"  translations={self.translations!r},\n"
             f"  alignment={self.alignment!r},\n"
             f"  extra={self.extra!r},\n"
@@ -216,7 +208,7 @@ class SentenceRecord:
         - ``segments`` emits ``{text, w: [i, j]}`` index ranges that slice
           into the sentence-level ``words`` array. Segments without words
           fall back to ``{text, start, end}``.
-        - ``chunk_cache``/``translations``/``alignment``/``extra`` are
+        - ``translations``/``alignment``/``extra`` are
           omitted when empty.
         """
         payload: dict[str, Any] = {
@@ -256,8 +248,6 @@ class SentenceRecord:
                         seg_payload["extra"] = dict(seg.extra)
                     seg_dicts.append(seg_payload)
             payload["segments"] = seg_dicts
-        if self.chunk_cache:
-            payload["chunk_cache"] = {k: list(v) for k, v in self.chunk_cache.items()}
         if self.translations:
             payload["translations"] = dict(self.translations)
         if self.alignment:
@@ -296,13 +286,11 @@ class SentenceRecord:
             else:
                 # Legacy {text, start, end, ...} form or bare fallback.
                 segments.append(Segment.from_dict(s))
-        chunk_cache_raw = payload.get("chunk_cache") or {}
         return cls(
             src_text=payload["src_text"],
             start=_num(payload["start"]),
             end=_num(payload["end"]),
             segments=segments,
-            chunk_cache={k: list(v) for k, v in chunk_cache_raw.items()},
             translations=dict(payload.get("translations") or {}),
             alignment=dict(payload.get("alignment") or {}),
             extra=dict(payload.get("extra") or {}),

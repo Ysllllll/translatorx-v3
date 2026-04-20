@@ -122,7 +122,6 @@ class TestSentenceRecordSerde:
             start=0.0,
             end=1.5,
             segments=[Segment(start=0.0, end=1.5, text="Hello world.")],
-            chunk_cache={"chunk_llm": ["Hello", "world."]},
             translations={"zh": "你好世界。"},
             alignment={"method": "wx"},
             extra={"src_id": 1},
@@ -130,16 +129,17 @@ class TestSentenceRecordSerde:
         wire = json.loads(json.dumps(rec.to_dict()))
         assert SentenceRecord.from_dict(wire) == rec
 
-    def test_chunk_cache_lists_are_independent_after_round_trip(self) -> None:
-        rec = SentenceRecord(
-            src_text="x",
-            start=0.0,
-            end=1.0,
-            chunk_cache={"step": ["a", "b"]},
-        )
-        restored = SentenceRecord.from_dict(rec.to_dict())
-        restored.chunk_cache["step"].append("c")
-        assert rec.chunk_cache["step"] == ["a", "b"]
+    def test_from_dict_ignores_legacy_chunk_cache(self) -> None:
+        """Old JSON payloads with chunk_cache are deserialized without error."""
+        payload = {
+            "src_text": "x",
+            "start": 0.0,
+            "end": 1.0,
+            "chunk_cache": {"step": ["a", "b"]},
+        }
+        rec = SentenceRecord.from_dict(payload)
+        assert rec.src_text == "x"
+        assert not hasattr(rec, "chunk_cache")
 
     def test_segments_emit_start_end_when_words_missing(self) -> None:
         rec = SentenceRecord(

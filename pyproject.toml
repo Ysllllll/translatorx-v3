@@ -2,10 +2,10 @@
 pythonpath = ["src"]
 
 [tool.ruff]
-line-length = 120
+line-length = 140
 
 [tool.ruff.lint]
-ignore = ["F541"]
+ignore = ["F541", "E741"]
 
 [tool.ruff.format]
 quote-style = "double"

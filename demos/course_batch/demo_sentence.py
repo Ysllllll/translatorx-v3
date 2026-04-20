@@ -48,29 +48,13 @@ def _build_demo_segments() -> list[Segment]:
         (5.8, 8.2, "start with the basic setup of our project."),
         (8.2, 11.5, "First you need to install the stripe package and all the required dependencies. Make sure"),
         (11.5, 14.0, "you have Node.js version eighteen or above installed on your development machine."),
-        (
-            14.0,
-            17.5,
-            "The configuration file is critically important for the security of your application. You should never ever",
-        ),
+        (14.0, 17.5, "The configuration file is critically important for the security of your application. You should never ever"),
         (17.5, 20.0, "hardcode your API keys directly in the source code."),
-        (
-            20.0,
-            23.0,
-            "Instead you should use environment variables to store sensitive credentials. This is a fundamental security",
-        ),
+        (20.0, 23.0, "Instead you should use environment variables to store sensitive credentials. This is a fundamental security"),
         (23.0, 25.5, "best practice that every professional developer should follow."),
-        (
-            25.5,
-            28.8,
-            "Now let's look at how the payment flow actually works in a real production environment. When a customer",
-        ),
+        (25.5, 28.8, "Now let's look at how the payment flow actually works in a real production environment. When a customer"),
         (28.8, 31.5, "clicks the buy button, we create a Stripe checkout session with all the product details."),
-        (
-            31.5,
-            34.8,
-            "The checkout session contains the product information, pricing, and shipping details. Stripe then",
-        ),
+        (31.5, 34.8, "The checkout session contains the product information, pricing, and shipping details. Stripe then"),
         (34.8, 37.2, "redirects the user to their secure hosted payment page."),
         (37.2, 40.5, "After the payment is successfully completed, Stripe sends a webhook event to our server. We"),
         (40.5, 43.0, "need to verify the webhook signature to ensure the request is authentic."),
@@ -82,23 +66,11 @@ def _build_demo_segments() -> list[Segment]:
         # ── Seg 20-29: 无标点 (模拟 WhisperX 原始输出) ──
         (58.0, 61.5, "now lets move on to the deployment process and talk about how we can automate the entire"),
         (61.5, 64.0, "workflow using modern CI CD tools like vercel"),
-        (
-            64.0,
-            67.5,
-            "vercel makes it incredibly easy to deploy your full stack javascript application to the cloud you just",
-        ),
+        (64.0, 67.5, "vercel makes it incredibly easy to deploy your full stack javascript application to the cloud you just"),
         (67.5, 70.0, "connect your github repository and push your code"),
-        (
-            70.0,
-            73.5,
-            "the platform automatically detects your framework and builds and deploys your application within minutes",
-        ),
+        (70.0, 73.5, "the platform automatically detects your framework and builds and deploys your application within minutes"),
         (73.5, 76.0, "you can also configure custom domains SSL certificates and environment variables"),
-        (
-            76.0,
-            79.0,
-            "the preview deployments are really useful for testing changes before they go to production each pull",
-        ),
+        (76.0, 79.0, "the preview deployments are really useful for testing changes before they go to production each pull"),
         (79.0, 81.5, "request gets its own unique preview URL that you can share with your team"),
         (81.5, 84.0, "this makes the entire code review process much more effective and collaborative"),
         (84.0, 86.5, "and that wraps up todays lecture on modern deployment strategies"),
@@ -135,12 +107,8 @@ def _print_records(records: list, label: str) -> None:
     lengths = [len(r.src_text) for r in records]
     print(f"  {ts()} {label}: {len(records)} records  {_stats(lengths)}")
     for i, rec in enumerate(records):
-        cc = list(rec.chunk_cache.keys()) if rec.chunk_cache else []
-        cc_info = f"  cc={cc}" if cc else ""
         tag = " >90!" if len(rec.src_text) > 90 else ""
-        print(
-            f"  [{i:>3d}] [{rec.start:5.1f}-{rec.end:5.1f}] ({len(rec.src_text):>3d}c) {rec.src_text!r}{cc_info}{tag}"
-        )
+        print(f"  [{i:>3d}] [{rec.start:5.1f}-{rec.end:5.1f}] ({len(rec.src_text):>3d}c) {rec.src_text!r}{tag}")
 
 
 def _print_comparison(before: list[str], after: list[str], label: str) -> None:
@@ -235,7 +203,7 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
 
     print(f"  {ts()} 开始逐句 LLM 标点恢复...")
     t0 = time.perf_counter()
-    sub_b_punc = sub_b_sent.transform(punc_fn, name="punc_b", workers=20)
+    sub_b_punc = sub_b_sent.transform(punc_fn, scope="pipeline", workers=20)
     print(f"  {ts()} punc 完成, 耗时 {_elapsed(t0)}")
 
     b_punc_texts = [r.src_text for r in sub_b_punc.records()]
@@ -255,7 +223,7 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
     c_before = [r.src_text for r in a_records]
     print(f"  {ts()} 开始逐句 LLM 标点恢复 (基于 Pipeline A)...")
     t0 = time.perf_counter()
-    sub_c_punc = sub_a_sent.transform(punc_fn, name="punc_c", workers=20)
+    sub_c_punc = sub_a_sent.transform(punc_fn, scope="pipeline", workers=20)
     print(f"  {ts()} punc 完成, 耗时 {_elapsed(t0)}")
 
     c_punc_texts = [r.src_text for r in sub_c_punc.records()]
@@ -278,13 +246,14 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
 
     print(f"  {ts()} 开始 LLM chunk...")
     t0 = time.perf_counter()
-    sub_d = sub_a_sent.transform(chunk_fn, name="chunk_d", workers=20)
+    chunk_cache_d: dict[str, list[str]] = {}
+    sub_d = sub_a_sent.transform(chunk_fn, cache=chunk_cache_d, workers=20)
     d_records = sub_d.records()
     print(f"  {ts()} chunk 完成, 耗时 {_elapsed(t0)}, {len(a_records)} → {len(d_records)} records")
 
-    # chunk 拆分对比 — 使用 chunk_cache 而非文本匹配
+    # chunk 拆分对比 — 使用外部 chunk_cache
     for di, d_rec in enumerate(d_records):
-        parts = d_rec.chunk_cache.get("chunk_d", [])
+        parts = chunk_cache_d.get(d_rec.src_text, [])
         if len(parts) > 1:
             print(f"  [{di:>3d}] ({len(d_rec.src_text):>3d}c) {d_rec.src_text!r}")
             for j, p in enumerate(parts):

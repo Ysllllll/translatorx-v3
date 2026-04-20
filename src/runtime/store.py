@@ -166,6 +166,7 @@ class Store(Protocol):
         segment_type: SegmentType | None = None,
         raw_segment_ref: dict[str, Any] | None = None,
         punc_cache: dict[str, list[str]] | None = None,
+        chunk_cache: dict[str, list[str]] | None = None,
         summary: dict[str, Any] | None = None,
     ) -> None: ...
 
@@ -250,10 +251,7 @@ def _dumps_pretty(data: Any, indent: int = 2, level: int = 0) -> str:
     if isinstance(data, dict):
         if not data:
             return "{}"
-        items = [
-            f"{pad_inner}{json.dumps(k, ensure_ascii=False)}: {_dumps_pretty(v, indent, level + 1)}"
-            for k, v in data.items()
-        ]
+        items = [f"{pad_inner}{json.dumps(k, ensure_ascii=False)}: {_dumps_pretty(v, indent, level + 1)}" for k, v in data.items()]
         return "{\n" + ",\n".join(items) + "\n" + pad_close + "}"
     if isinstance(data, list):
         if not data:
@@ -297,9 +295,7 @@ def _check_schema(data: dict[str, Any], where: str) -> None:
         data["schema_version"] = SCHEMA_VERSION
         return
     if version > SCHEMA_VERSION:
-        raise IncompatibleStoreError(
-            f"{where}: schema_version={version} is newer than runtime (supports <= {SCHEMA_VERSION})"
-        )
+        raise IncompatibleStoreError(f"{where}: schema_version={version} is newer than runtime (supports <= {SCHEMA_VERSION})")
 
 
 class JsonFileStore:
@@ -376,6 +372,7 @@ class JsonFileStore:
         segment_type: SegmentType | None = None,
         raw_segment_ref: dict[str, Any] | None = None,
         punc_cache: dict[str, list[str]] | None = None,
+        chunk_cache: dict[str, list[str]] | None = None,
         summary: dict[str, Any] | None = None,
     ) -> None:
         if not any(
@@ -389,6 +386,7 @@ class JsonFileStore:
                 segment_type,
                 raw_segment_ref,
                 punc_cache,
+                chunk_cache,
                 summary,
             )
         ):
@@ -422,6 +420,10 @@ class JsonFileStore:
                 existing = data.get("punc_cache") or {}
                 existing.update(punc_cache)
                 data["punc_cache"] = existing
+            if chunk_cache is not None:
+                existing = data.get("chunk_cache") or {}
+                existing.update(chunk_cache)
+                data["chunk_cache"] = existing
             if summary is not None:
                 data["summary"] = dict(summary)
 
@@ -786,6 +788,7 @@ def _apply_step_cleanup(data: dict[str, Any], step: str) -> None:
         data["records"] = []
         records = []
     if "preprocess.chunk" in cascaded:
+        data.pop("chunk_cache", None)
         for rec in records:
             if isinstance(rec, dict):
                 rec.pop("chunk_cache", None)

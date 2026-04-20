@@ -48,7 +48,7 @@ async def test_patch_summary_replaces(store: JsonFileStore) -> None:
 
 
 @pytest.mark.asyncio
-async def test_patch_record_nested_chunk_cache_and_segments(
+async def test_patch_record_nested_fields_and_segments(
     store: JsonFileStore,
 ) -> None:
     await store.patch_video(
@@ -58,7 +58,6 @@ async def test_patch_record_nested_chunk_cache_and_segments(
                 "src_text": "Hello world.",
                 "start": 0.0,
                 "end": 1.0,
-                "chunk_cache.chunk_llm": ["Hello", "world."],
                 "segments": [
                     Segment(0.0, 0.5, "Hello").to_dict(),
                     Segment(0.5, 1.0, "world.").to_dict(),
@@ -70,9 +69,16 @@ async def test_patch_record_nested_chunk_cache_and_segments(
     data = await store.load_video("v1")
     rec = data["records"][0]
     assert rec["src_text"] == "Hello world."
-    assert rec["chunk_cache"] == {"chunk_llm": ["Hello", "world."]}
     assert rec["translations"] == {"zh": "你好世界。"}
     assert len(rec["segments"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_patch_video_level_chunk_cache(store: JsonFileStore) -> None:
+    """Video-level chunk_cache is persisted via patch_video."""
+    await store.patch_video("v1", chunk_cache={"Hello world.": ["Hello", "world."]})
+    data = await store.load_video("v1")
+    assert data["chunk_cache"] == {"Hello world.": ["Hello", "world."]}
 
 
 @pytest.mark.asyncio
