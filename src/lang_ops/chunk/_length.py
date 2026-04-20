@@ -62,5 +62,3 @@ def split_tokens_by_length(
         result.append(chunk)
 
     return result
-
-

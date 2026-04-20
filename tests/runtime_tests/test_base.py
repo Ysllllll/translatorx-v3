@@ -143,12 +143,8 @@ def test_record_with_error_accumulates() -> None:
 
 def test_record_with_error_preserves_other_extras() -> None:
     p = _Concrete()
-    rec = SentenceRecord(
-        src_text="hi", start=0.0, end=1.0, extra={"terms_ready_at_translate": True}
-    )
-    new_rec = p._record_with_error(
-        rec, category="degraded", code="missing_input", message="need translations[zh]"
-    )
+    rec = SentenceRecord(src_text="hi", start=0.0, end=1.0, extra={"terms_ready_at_translate": True})
+    new_rec = p._record_with_error(rec, category="degraded", code="missing_input", message="need translations[zh]")
     assert new_rec.extra["terms_ready_at_translate"] is True
     assert len(new_rec.extra["errors"]) == 1
 
@@ -157,16 +153,12 @@ def test_record_with_error_cause_exception_formatted() -> None:
     p = _Concrete()
     rec = SentenceRecord(src_text="hi", start=0.0, end=1.0)
     cause = ValueError("bad input")
-    new_rec = p._record_with_error(
-        rec, category="permanent", code="e", message="m", cause=cause
-    )
+    new_rec = p._record_with_error(rec, category="permanent", code="e", message="m", cause=cause)
     assert new_rec.extra["errors"][0].cause == "ValueError: bad input"
 
 
 def test_record_with_error_cause_string_passthrough() -> None:
     p = _Concrete()
     rec = SentenceRecord(src_text="hi", start=0.0, end=1.0)
-    new_rec = p._record_with_error(
-        rec, category="permanent", code="e", message="m", cause="raw cause"
-    )
+    new_rec = p._record_with_error(rec, category="permanent", code="e", message="m", cause="raw cause")
     assert new_rec.extra["errors"][0].cause == "raw cause"

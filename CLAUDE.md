@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Code Style
+
+After writing or modifying any Python file, always run:
+
+```bash
+/home/ysl/workspace/.venv/bin/ruff format <file>
+```
+
+Or for multiple files / full directory:
+
+```bash
+/home/ysl/workspace/.venv/bin/ruff format src/ tests/
+```
+
+This ensures consistent formatting. Never skip this step.
+
 ## Commands
 
 ```bash

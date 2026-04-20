@@ -125,9 +125,7 @@ class TestLlmChunker:
         # LLM output is rejected → falls back to rule split
         # Verify reconstructed text matches source (alnum-wise)
         src_alnum = "".join(ch for ch in text.lower() if ch.isalnum())
-        out_alnum = "".join(
-            ch for p in chunks for ch in p.lower() if ch.isalnum()
-        )
+        out_alnum = "".join(ch for p in chunks for ch in p.lower() if ch.isalnum())
         assert src_alnum == out_alnum
 
     def test_applyfn_conformance(self) -> None:

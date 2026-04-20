@@ -34,9 +34,7 @@ class TestEnZhDefault:
         ctx = TranslationContext(
             source_lang="en",
             target_lang="zh",
-            terms_provider=StaticTerms(
-                {}, metadata={"topic": "transformers", "field": "AI"}
-            ),
+            terms_provider=StaticTerms({}, metadata={"topic": "transformers", "field": "AI"}),
         )
         prompt = get_default_system_prompt(ctx)
         assert "AI 领域关于 transformers" in prompt
@@ -58,9 +56,7 @@ class TestGenericFallback:
         ctx = TranslationContext(
             source_lang="fr",
             target_lang="de",
-            terms_provider=StaticTerms(
-                {}, metadata={"topic": "chess", "field": "games"}
-            ),
+            terms_provider=StaticTerms({}, metadata={"topic": "chess", "field": "games"}),
         )
         prompt = get_default_system_prompt(ctx)
         assert "This segment is about chess in the games domain." in prompt
@@ -85,6 +81,7 @@ class TestRegister:
         finally:
             # Clean up to avoid cross-test pollution.
             from llm_ops.prompts import _REGISTRY  # type: ignore[attr-defined]
+
             _REGISTRY.pop(("ja", "zh"), None)
 
 

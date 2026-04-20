@@ -40,7 +40,8 @@ def _ratio_thresholds(src_lang: str, tgt_lang: str) -> RatioThresholds:
 
 
 def _build_keyword_pairs(
-    src: LangProfile, tgt: LangProfile,
+    src: LangProfile,
+    tgt: LangProfile,
 ) -> list[tuple[list[str], list[str]]]:
     """Build cross-language keyword pairs from concept intersections."""
     pairs: list[tuple[list[str], list[str]]] = []
@@ -54,6 +55,7 @@ def _build_keyword_pairs(
 # -------------------------------------------------------------------
 # Build rules with profile overrides applied
 # -------------------------------------------------------------------
+
 
 def _apply_profile_overrides(
     base_kwargs: dict,
@@ -97,6 +99,7 @@ def _apply_profile_overrides(
 # -------------------------------------------------------------------
 # Factory
 # -------------------------------------------------------------------
+
 
 def default_checker(
     source_lang: str,
@@ -149,4 +152,3 @@ def default_checker(
         target_lang=target_lang,
         profile_rules=profile_rules,
     )
-

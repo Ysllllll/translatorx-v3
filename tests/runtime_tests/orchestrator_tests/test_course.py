@@ -68,9 +68,7 @@ def _write_srt(path: Path, lines: list[str]) -> None:
     for i, text in enumerate(lines, start=1):
         start = i - 1
         end = i
-        body.append(
-            f"{i}\n00:00:0{start},000 --> 00:00:0{end},000\n{text}\n"
-        )
+        body.append(f"{i}\n00:00:0{start},000 --> 00:00:0{end},000\n{text}\n")
     path.write_text("\n".join(body), encoding="utf-8")
 
 
@@ -99,9 +97,7 @@ class TestCourseOrchestrator:
         orch = CourseOrchestrator(
             store=store,
             ctx=_ctx(),
-            processors_factory=lambda: [
-                TranslateProcessor(engine, _PassChecker(), flush_every=1)
-            ],
+            processors_factory=lambda: [TranslateProcessor(engine, _PassChecker(), flush_every=1)],
         )
         result = await orch.run(
             [
@@ -157,9 +153,7 @@ class TestCourseOrchestrator:
         orch = CourseOrchestrator(
             store=store,
             ctx=_ctx(),
-            processors_factory=lambda: [
-                TranslateProcessor(_Engine(), _PassChecker())
-            ],
+            processors_factory=lambda: [TranslateProcessor(_Engine(), _PassChecker())],
         )
         result = await orch.run([])
         assert result.videos == ()
@@ -185,9 +179,7 @@ class TestCourseOrchestrator:
             ctx=_ctx(),
             processors_factory=lambda: [],
         )
-        result = await orch.run(
-            [VideoSpec(video="a", source=SrtSource(srt, language="en"))]
-        )
+        result = await orch.run([VideoSpec(video="a", source=SrtSource(srt, language="en"))])
         assert len(result.failed_videos) == 1
 
     @pytest.mark.asyncio
@@ -225,9 +217,7 @@ class TestCourseOrchestrator:
         orch = CourseOrchestrator(
             store=store,
             ctx=_ctx(),
-            processors_factory=lambda: [
-                TranslateProcessor(shared_engine, _PassChecker(), flush_every=1)
-            ],
+            processors_factory=lambda: [TranslateProcessor(shared_engine, _PassChecker(), flush_every=1)],
             max_concurrent_videos=2,
         )
 
@@ -236,12 +226,7 @@ class TestCourseOrchestrator:
             release.set()
 
         asyncio.create_task(release_soon())
-        result = await orch.run(
-            [
-                VideoSpec(video=f"v{i}", source=SrtSource(srts[i], language="en"))
-                for i in range(4)
-            ]
-        )
+        result = await orch.run([VideoSpec(video=f"v{i}", source=SrtSource(srts[i], language="en")) for i in range(4)])
 
         assert len(result.succeeded) == 4
         assert max_in_flight <= 2

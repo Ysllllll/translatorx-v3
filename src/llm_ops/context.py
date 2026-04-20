@@ -23,6 +23,7 @@ from .protocol import Message
 # TermsProvider Protocol
 # ---------------------------------------------------------------------------
 
+
 @runtime_checkable
 class TermsProvider(Protocol):
     """Async interface for supplying domain-specific terminology.
@@ -58,6 +59,7 @@ class TermsProvider(Protocol):
 # ---------------------------------------------------------------------------
 # StaticTerms — fixed glossary known upfront
 # ---------------------------------------------------------------------------
+
 
 class StaticTerms:
     """Pre-defined terminology that never changes.
@@ -99,9 +101,7 @@ class StaticTerms:
 # Hardcoded primer demonstrating the "compact term list" format to the LLM
 # and showing that spoken math should be rendered as LaTeX.  Ported from
 # legacy TranslatorX ``ChatHistory.freeze`` (model.py:143-168).
-_LATEX_PRIMER: tuple[tuple[str, str], ...] = (
-    ("Q equal gamma times beta", r"$Q = \gamma \times \beta$"),
-)
+_LATEX_PRIMER: tuple[tuple[str, str], ...] = (("Q equal gamma times beta", r"$Q = \gamma \times \beta$"),)
 
 
 def build_frozen_messages(
@@ -140,17 +140,21 @@ def build_frozen_messages(
     srcs = [s for s, _ in pairs]
     tgts = [t for _, t in pairs]
     if len(pairs) >= 8:
-        messages.extend([
-            {"role": "user", "content": ", ".join(srcs[:5])},
-            {"role": "assistant", "content": "，".join(tgts[:5])},
-            {"role": "user", "content": ", ".join(srcs[5:])},
-            {"role": "assistant", "content": "，".join(tgts[5:])},
-        ])
+        messages.extend(
+            [
+                {"role": "user", "content": ", ".join(srcs[:5])},
+                {"role": "assistant", "content": "，".join(tgts[:5])},
+                {"role": "user", "content": ", ".join(srcs[5:])},
+                {"role": "assistant", "content": "，".join(tgts[5:])},
+            ]
+        )
     else:
-        messages.extend([
-            {"role": "user", "content": ", ".join(srcs)},
-            {"role": "assistant", "content": "，".join(tgts)},
-        ])
+        messages.extend(
+            [
+                {"role": "user", "content": ", ".join(srcs)},
+                {"role": "assistant", "content": "，".join(tgts)},
+            ]
+        )
     return messages
 
 
@@ -192,7 +196,7 @@ class ContextWindow:
         """
         self._history.append((source, translation))
         if len(self._history) > self._size:
-            self._history = self._history[self._evict_num:]
+            self._history = self._history[self._evict_num :]
 
     def clear(self) -> None:
         self._history.clear()
@@ -234,6 +238,7 @@ class ContextWindow:
 # ---------------------------------------------------------------------------
 # TranslationContext — immutable carrier
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class TranslationContext:

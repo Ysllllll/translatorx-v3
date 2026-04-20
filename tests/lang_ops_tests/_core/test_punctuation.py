@@ -4,7 +4,6 @@ from lang_ops._core._punctuation import strip_punct
 
 
 class TestStripPunct:
-
     def test_no_punct(self):
         assert strip_punct("hello") == "hello"
 

@@ -39,15 +39,11 @@ TRAILING_PUNCT: frozenset[str] = frozenset(",.!?:;，。！？：；、")
 
 # 闭合标点：右括号、右引号、右书名号
 # Closing brackets, quotes, and CJK paired marks
-CLOSING_PUNCT: frozenset[str] = frozenset(
-    ")]}）》\u201d\u2019」』】〉"
-)
+CLOSING_PUNCT: frozenset[str] = frozenset(")]}）》\u201d\u2019」』】〉")
 
 # 起始标点：左括号、左引号、左书名号
 # Opening brackets, quotes, and CJK paired marks
-OPENING_PUNCT: frozenset[str] = frozenset(
-    "([{（《\u201c\u2018「『【〈"
-)
+OPENING_PUNCT: frozenset[str] = frozenset("([{（《\u201c\u2018「『【〈")
 
 # 破折号、连字符、省略号、间隔号
 # Dashes, hyphens, ellipsis, and middle dot
@@ -65,7 +61,7 @@ SYMBOLS: frozenset[str] = frozenset("/\\@#$%^&*+=|~")
 # 用于句边界检测——终止符后跟引号时，引号应归入当前句子
 # Closing quotes — subset of CLOSING_PUNCT used by sentence boundary
 # detection to absorb trailing quotes after a terminator.
-CLOSING_QUOTES: frozenset[str] = frozenset('"\u201d\'\u2019」』')
+CLOSING_QUOTES: frozenset[str] = frozenset("\"\u201d'\u2019」』")
 
 # =====================================================================
 # 复合集合 — Compound sets
@@ -77,10 +73,7 @@ ATTACH_TO_PREV: frozenset[str] = TRAILING_PUNCT | CLOSING_PUNCT
 
 # 所有标点的并集（用于判断一个 token 是否全由标点组成）
 # Union of all punctuation characters
-ALL_PUNCT: frozenset[str] = (
-    TRAILING_PUNCT | CLOSING_PUNCT | OPENING_PUNCT | DASHES | SYMBOLS
-    | frozenset('¡¿<>"\'')
-)
+ALL_PUNCT: frozenset[str] = TRAILING_PUNCT | CLOSING_PUNCT | OPENING_PUNCT | DASHES | SYMBOLS | frozenset("¡¿<>\"'")
 
 # 字符串形式，用于 decompose_token 等需要 `ch in STRIP_PUNCT` 的场景
 # String form for character-level membership tests and stripping
@@ -90,6 +83,7 @@ STRIP_PUNCT: str = "".join(sorted(ALL_PUNCT))
 # =====================================================================
 # 工具函数 — Utility functions
 # =====================================================================
+
 
 def strip_punct(s: str) -> str:
     """Strip leading and trailing punctuation from *s*.

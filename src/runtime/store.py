@@ -69,9 +69,7 @@ FINGERPRINT_CHAIN: tuple[str, ...] = (
 )
 
 
-def get_stale_steps(
-    stored: dict[str, str] | None, current: dict[str, str]
-) -> list[str]:
+def get_stale_steps(stored: dict[str, str] | None, current: dict[str, str]) -> list[str]:
     """Return the prefix of :data:`FINGERPRINT_CHAIN` that is stale (D-072).
 
     Walks the chain top-down and returns every step from the first mismatch
@@ -152,11 +150,9 @@ class Store(Protocol):
     a new Store.
     """
 
-    async def load_video(self, video: str) -> dict[str, Any]:
-        ...
+    async def load_video(self, video: str) -> dict[str, Any]: ...
 
-    async def save_video(self, video: str, data: dict[str, Any]) -> None:
-        ...
+    async def save_video(self, video: str, data: dict[str, Any]) -> None: ...
 
     async def patch_video(
         self,
@@ -171,14 +167,11 @@ class Store(Protocol):
         raw_segment_ref: dict[str, Any] | None = None,
         punc_cache: dict[str, list[str]] | None = None,
         summary: dict[str, Any] | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
-    async def load_course(self) -> dict[str, Any]:
-        ...
+    async def load_course(self) -> dict[str, Any]: ...
 
-    async def patch_course(self, **updates: Any) -> None:
-        ...
+    async def patch_course(self, **updates: Any) -> None: ...
 
     async def invalidate(
         self,
@@ -186,13 +179,11 @@ class Store(Protocol):
         *,
         processor_name: str | None = None,
         record_ids: Iterable[int] | None = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     # -- raw_segment sidecar (D-069) -------------------------------------
 
-    async def raw_segment_exists(self, video: str, segment_type: SegmentType) -> bool:
-        ...
+    async def raw_segment_exists(self, video: str, segment_type: SegmentType) -> bool: ...
 
     async def write_raw_segment(
         self,
@@ -212,24 +203,18 @@ class Store(Protocol):
         """Streaming append; caller must invoke :meth:`finalize_raw_segment` on EOF."""
         ...
 
-    async def finalize_raw_segment(
-        self, video: str, segment_type: SegmentType
-    ) -> dict[str, Any]:
+    async def finalize_raw_segment(self, video: str, segment_type: SegmentType) -> dict[str, Any]:
         """Recompute file stats + sha256 and return a ``raw_segment_ref`` dict."""
         ...
 
-    async def load_raw_segment(
-        self, video: str, segment_type: SegmentType
-    ) -> list[Word | Segment]:
-        ...
+    async def load_raw_segment(self, video: str, segment_type: SegmentType) -> list[Word | Segment]: ...
 
     async def verify_raw_segment(
         self,
         video: str,
         segment_type: SegmentType,
         expected_sha256: str,
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     # -- fingerprint chain (D-072) ---------------------------------------
 
@@ -266,31 +251,24 @@ def _dumps_pretty(data: Any, indent: int = 2, level: int = 0) -> str:
         if not data:
             return "{}"
         items = [
-            f"{pad_inner}{json.dumps(k, ensure_ascii=False)}: "
-            f"{_dumps_pretty(v, indent, level + 1)}"
+            f"{pad_inner}{json.dumps(k, ensure_ascii=False)}: {_dumps_pretty(v, indent, level + 1)}"
             for k, v in data.items()
         ]
         return "{\n" + ",\n".join(items) + "\n" + pad_close + "}"
     if isinstance(data, list):
         if not data:
             return "[]"
-        if all(
-            isinstance(x, (str, int, float, bool)) or x is None for x in data
-        ):
+        if all(isinstance(x, (str, int, float, bool)) or x is None for x in data):
             inner = ", ".join(json.dumps(x, ensure_ascii=False) for x in data)
             return f"[{inner}]"
-        items = [
-            f"{pad_inner}{_dumps_pretty(x, indent, level + 1)}" for x in data
-        ]
+        items = [f"{pad_inner}{_dumps_pretty(x, indent, level + 1)}" for x in data]
         return "[\n" + ",\n".join(items) + "\n" + pad_close + "]"
     return json.dumps(data, ensure_ascii=False)
 
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=path.parent
-    )
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(_dumps_pretty(data))
@@ -320,8 +298,7 @@ def _check_schema(data: dict[str, Any], where: str) -> None:
         return
     if version > SCHEMA_VERSION:
         raise IncompatibleStoreError(
-            f"{where}: schema_version={version} is newer than runtime "
-            f"(supports <= {SCHEMA_VERSION})"
+            f"{where}: schema_version={version} is newer than runtime (supports <= {SCHEMA_VERSION})"
         )
 
 
@@ -493,11 +470,7 @@ class JsonFileStore:
                             rec[bucket].pop(processor_name, None)
             # Drop failed entries matching the filter.
             if "failed" in data:
-                data["failed"] = [
-                    f
-                    for f in data["failed"]
-                    if not _failed_matches(f, processor_name, ids)
-                ]
+                data["failed"] = [f for f in data["failed"] if not _failed_matches(f, processor_name, ids)]
             await asyncio.to_thread(_atomic_write_json, path, data)
 
     # -- course ops ------------------------------------------------------
@@ -538,15 +511,10 @@ class JsonFileStore:
             raise ValueError(f"invalid video name: {video!r}")
         suffix = _RAW_SUFFIX.get(segment_type)
         if suffix is None:
-            raise ValueError(
-                f"unknown segment_type {segment_type!r}; expected one of "
-                f"{sorted(_RAW_SUFFIX)}"
-            )
+            raise ValueError(f"unknown segment_type {segment_type!r}; expected one of {sorted(_RAW_SUFFIX)}")
         return self._ws.subtitle_jsonl.path_for(video, suffix=suffix)
 
-    async def raw_segment_exists(
-        self, video: str, segment_type: SegmentType
-    ) -> bool:
+    async def raw_segment_exists(self, video: str, segment_type: SegmentType) -> bool:
         path = self._raw_segment_path(video, segment_type)
         return await asyncio.to_thread(path.is_file)
 
@@ -560,12 +528,8 @@ class JsonFileStore:
         materialized = list(items)
         lock = await self._video_lock(video)
         async with lock:
-            await asyncio.to_thread(
-                _atomic_write_jsonl, path, materialized, segment_type
-            )
-            return await asyncio.to_thread(
-                _build_raw_segment_ref, path, materialized, segment_type
-            )
+            await asyncio.to_thread(_atomic_write_jsonl, path, materialized, segment_type)
+            return await asyncio.to_thread(_build_raw_segment_ref, path, materialized, segment_type)
 
     async def append_raw_segment(
         self,
@@ -579,26 +543,18 @@ class JsonFileStore:
             return
         lock = await self._video_lock(video)
         async with lock:
-            await asyncio.to_thread(
-                _append_jsonl, path, materialized, segment_type
-            )
+            await asyncio.to_thread(_append_jsonl, path, materialized, segment_type)
 
-    async def finalize_raw_segment(
-        self, video: str, segment_type: SegmentType
-    ) -> dict[str, Any]:
+    async def finalize_raw_segment(self, video: str, segment_type: SegmentType) -> dict[str, Any]:
         path = self._raw_segment_path(video, segment_type)
         lock = await self._video_lock(video)
         async with lock:
             if not await asyncio.to_thread(path.is_file):
                 raise FileNotFoundError(path)
             items = await asyncio.to_thread(_read_jsonl_items, path, segment_type)
-            return await asyncio.to_thread(
-                _build_raw_segment_ref, path, items, segment_type
-            )
+            return await asyncio.to_thread(_build_raw_segment_ref, path, items, segment_type)
 
-    async def load_raw_segment(
-        self, video: str, segment_type: SegmentType
-    ) -> list[Word | Segment]:
+    async def load_raw_segment(self, video: str, segment_type: SegmentType) -> list[Word | Segment]:
         path = self._raw_segment_path(video, segment_type)
         if not await asyncio.to_thread(path.is_file):
             raise FileNotFoundError(path)
@@ -623,9 +579,7 @@ class JsonFileStore:
         raw = data.get("meta", {}).get("_fingerprints") or {}
         return {k: v for k, v in raw.items() if isinstance(v, str)}
 
-    async def set_fingerprints(
-        self, video: str, fingerprints: dict[str, str]
-    ) -> None:
+    async def set_fingerprints(self, video: str, fingerprints: dict[str, str]) -> None:
         if not fingerprints:
             return
         path = self._video_path(video)
@@ -648,10 +602,7 @@ class JsonFileStore:
 
     async def invalidate_from_step(self, video: str, step: str) -> None:
         if step not in FINGERPRINT_CHAIN:
-            raise ValueError(
-                f"unknown fingerprint step {step!r}; expected one of "
-                f"{list(FINGERPRINT_CHAIN)}"
-            )
+            raise ValueError(f"unknown fingerprint step {step!r}; expected one of {list(FINGERPRINT_CHAIN)}")
         path = self._video_path(video)
         lock = await self._video_lock(video)
         async with lock:
@@ -665,9 +616,7 @@ class JsonFileStore:
             await asyncio.to_thread(_atomic_write_json, path, data)
 
 
-def _apply_record_patches(
-    data: dict[str, Any], records: dict[int, dict[str, Any]]
-) -> None:
+def _apply_record_patches(data: dict[str, Any], records: dict[int, dict[str, Any]]) -> None:
     by_id: dict[int, dict[str, Any]] = {}
     for rec in data["records"]:
         rid = rec.get("id")
@@ -708,25 +657,17 @@ def _row_bytes(item: Word | Segment) -> bytes:
     regardless of Python's default ``json.dumps`` settings changing.
     """
     payload = item.to_dict()
-    return json.dumps(payload, ensure_ascii=False, separators=(", ", ": ")).encode(
-        "utf-8"
-    )
+    return json.dumps(payload, ensure_ascii=False, separators=(", ", ": ")).encode("utf-8")
 
 
 def _validate_item(item: Any, segment_type: SegmentType) -> None:
     if segment_type == "whisperx" and not isinstance(item, Word):
-        raise TypeError(
-            f"whisperx raw_segment expects Word, got {type(item).__name__}"
-        )
+        raise TypeError(f"whisperx raw_segment expects Word, got {type(item).__name__}")
     if segment_type == "srt" and not isinstance(item, Segment):
-        raise TypeError(
-            f"srt raw_segment expects Segment, got {type(item).__name__}"
-        )
+        raise TypeError(f"srt raw_segment expects Segment, got {type(item).__name__}")
 
 
-def _write_jsonl_bytes(
-    items: Iterable[Word | Segment], segment_type: SegmentType
-) -> bytes:
+def _write_jsonl_bytes(items: Iterable[Word | Segment], segment_type: SegmentType) -> bytes:
     buf = bytearray()
     for item in items:
         _validate_item(item, segment_type)
@@ -735,14 +676,10 @@ def _write_jsonl_bytes(
     return bytes(buf)
 
 
-def _atomic_write_jsonl(
-    path: Path, items: Iterable[Word | Segment], segment_type: SegmentType
-) -> None:
+def _atomic_write_jsonl(path: Path, items: Iterable[Word | Segment], segment_type: SegmentType) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = _write_jsonl_bytes(items, segment_type)
-    fd, tmp = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=path.parent
-    )
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(payload)
@@ -757,9 +694,7 @@ def _atomic_write_jsonl(
         raise
 
 
-def _append_jsonl(
-    path: Path, items: Iterable[Word | Segment], segment_type: SegmentType
-) -> None:
+def _append_jsonl(path: Path, items: Iterable[Word | Segment], segment_type: SegmentType) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = _write_jsonl_bytes(items, segment_type)
     with path.open("ab") as f:
@@ -768,9 +703,7 @@ def _append_jsonl(
         os.fsync(f.fileno())
 
 
-def _read_jsonl_items(
-    path: Path, segment_type: SegmentType
-) -> list[Word | Segment]:
+def _read_jsonl_items(path: Path, segment_type: SegmentType) -> list[Word | Segment]:
     out: list[Word | Segment] = []
     with path.open("r", encoding="utf-8") as f:
         for lineno, line in enumerate(f, 1):
@@ -796,9 +729,7 @@ def _sha256_file(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def _build_raw_segment_ref(
-    path: Path, items: list[Word | Segment], segment_type: SegmentType
-) -> dict[str, Any]:
+def _build_raw_segment_ref(path: Path, items: list[Word | Segment], segment_type: SegmentType) -> dict[str, Any]:
     """Compute the ``raw_segment_ref`` dict stored in the main JSON."""
     if items:
         start = min(item.start for item in items)

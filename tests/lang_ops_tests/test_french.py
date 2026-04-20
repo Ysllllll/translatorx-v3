@@ -16,8 +16,26 @@ class FrenchTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text0, expect_split_text, expect_join_text0)
 
         text1 = "Bonjour à tous : aujourd'hui, notre système traite les sous-titres français, allemands et portugais !"
-        expect_split_text = ["Bonjour", "à", "tous", ":", "aujourd'hui,", "notre", "système", "traite", "les", "sous-titres", "français,", "allemands", "et", "portugais", "!"]
-        expect_join_text1 = "Bonjour à tous : aujourd'hui, notre système traite les sous-titres français, allemands et portugais !"
+        expect_split_text = [
+            "Bonjour",
+            "à",
+            "tous",
+            ":",
+            "aujourd'hui,",
+            "notre",
+            "système",
+            "traite",
+            "les",
+            "sous-titres",
+            "français,",
+            "allemands",
+            "et",
+            "portugais",
+            "!",
+        ]
+        expect_join_text1 = (
+            "Bonjour à tous : aujourd'hui, notre système traite les sous-titres français, allemands et portugais !"
+        )
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Gardez I'm deeplearning.ai et https://www.com intacts."

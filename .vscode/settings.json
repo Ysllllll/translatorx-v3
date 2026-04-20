@@ -1,4 +1,14 @@
 {
-    "editor.fontFamily": "'JetBrains Mono'",
-    "editor.fontSize": 13
+	"editor.fontFamily": "'JetBrains Mono'",
+	"editor.fontSize": 14,
+	"claudeCode.useTerminal": false,
+	"terminal.integrated.fontFamily": "'JetBrains Mono'",
+	"chat.fontFamily": "'JetBrains Mono'",
+	"editor.lineHeight": 23,
+	"editor.letterSpacing": 0.3,
+	"editor.cursorSmoothCaretAnimation": "on",
+	"[python]": {
+		"editor.defaultFormatter": "charliermarsh.ruff",
+		"editor.formatOnSave": true
+	}
 }

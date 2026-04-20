@@ -73,4 +73,3 @@ __all__ = [
     "Checker",
     "default_checker",
 ]
-

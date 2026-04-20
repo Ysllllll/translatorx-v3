@@ -17,14 +17,13 @@ from lang_ops import LangOps
 # Helpers
 # ---------------------------------------------------------------------------
 
-def W(text: str, start: float, end: float,
-      speaker: str | None = None) -> Word:
+
+def W(text: str, start: float, end: float, speaker: str | None = None) -> Word:
     """Shorthand Word constructor."""
     return Word(word=text, start=start, end=end, speaker=speaker)
 
 
-def S(text: str, start: float, end: float,
-      words: list[Word] | None = None) -> Segment:
+def S(text: str, start: float, end: float, words: list[Word] | None = None) -> Segment:
     """Shorthand Segment constructor."""
     return Segment(start=start, end=end, text=text, words=words or [])
 
@@ -32,6 +31,7 @@ def S(text: str, start: float, end: float,
 # ---------------------------------------------------------------------------
 # Base class
 # ---------------------------------------------------------------------------
+
 
 class BuilderTestBase:
     """Subtitle test base.

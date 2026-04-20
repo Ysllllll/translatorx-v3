@@ -11,13 +11,7 @@ class TestWordDisplay:
     def test_word_pretty_includes_optional_fields(self) -> None:
         word = Word("Hello", 0.0, 1.25, speaker="A", extra={"lang": "en"})
         assert word.pretty() == (
-            "Word(\n"
-            "  word='Hello',\n"
-            "  start=0.00,\n"
-            "  end=1.25,\n"
-            "  speaker='A',\n"
-            "  extra={'lang': 'en'},\n"
-            ")"
+            "Word(\n  word='Hello',\n  start=0.00,\n  end=1.25,\n  speaker='A',\n  extra={'lang': 'en'},\n)"
         )
 
 

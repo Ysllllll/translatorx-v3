@@ -103,16 +103,20 @@ class App:
             return None
         if cfg.punc_mode == "ner":
             from preprocess import NerPuncRestorer
+
             return NerPuncRestorer.get_instance()
         if cfg.punc_mode == "llm":
             from preprocess import LlmPuncRestorer
+
             engine = self.engine(cfg.punc_engine)
             return LlmPuncRestorer(
-                engine, threshold=cfg.punc_threshold,
+                engine,
+                threshold=cfg.punc_threshold,
                 max_concurrent=cfg.max_concurrent,
             )
         if cfg.punc_mode == "remote":
             from preprocess import RemotePuncRestorer
+
             if cfg.punc_endpoint is None:
                 raise ValueError("preprocess.punc_endpoint required for punc_mode='remote'")
             return RemotePuncRestorer(cfg.punc_endpoint, threshold=cfg.punc_threshold)
@@ -131,21 +135,26 @@ class App:
             return None
         if cfg.chunk_mode == "spacy":
             from preprocess import SpacySplitter
+
             return SpacySplitter.get_instance(cfg.spacy_model)
         if cfg.chunk_mode == "llm":
             from preprocess import LlmChunker
+
             engine = self.engine(cfg.chunk_engine)
             return LlmChunker(
-                engine, chunk_len=cfg.chunk_len,
+                engine,
+                chunk_len=cfg.chunk_len,
                 max_concurrent=cfg.max_concurrent,
             )
         if cfg.chunk_mode == "spacy_llm":
             from preprocess import LlmChunker, SpacySplitter
             from preprocess._spacy_llm_chunk import SpacyLlmChunker
+
             splitter = SpacySplitter.get_instance(cfg.spacy_model)
             engine = self.engine(cfg.chunk_engine)
             llm = LlmChunker(
-                engine, chunk_len=cfg.chunk_len,
+                engine,
+                chunk_len=cfg.chunk_len,
                 max_concurrent=cfg.max_concurrent,
             )
             return SpacyLlmChunker(splitter, llm, chunk_len=cfg.chunk_len)

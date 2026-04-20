@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from preprocess._protocol import ApplyFn
 
 
-
 def _extract(
     segments: list[Segment],
     ops: _BaseOps,
@@ -85,10 +84,7 @@ def _call_apply_fn(
     if batch_size == 0:
         batches = [texts]
     else:
-        batches = [
-            texts[i : i + batch_size]
-            for i in range(0, len(texts), batch_size)
-        ]
+        batches = [texts[i : i + batch_size] for i in range(0, len(texts), batch_size)]
 
     if workers <= 1 or len(batches) <= 1:
         batch_results = [fn(b) for b in batches]
@@ -100,10 +96,7 @@ def _call_apply_fn(
     result: list[list[str]] = []
     for br, batch in zip(batch_results, batches):
         if len(br) != len(batch):
-            raise ValueError(
-                f"apply fn returned {len(br)} results for a batch of "
-                f"{len(batch)} texts"
-            )
+            raise ValueError(f"apply fn returned {len(br)} results for a batch of {len(batch)} texts")
         result.extend(br)
     return result
 
@@ -171,8 +164,10 @@ class Subtitle:
             return cls([], language=language)
         text = "".join(w.word for w in words)
         seg = Segment(
-            start=words[0].start, end=words[-1].end,
-            text=text, words=words,
+            start=words[0].start,
+            end=words[-1].end,
+            text=text,
+            words=words,
         )
         if ops is not None:
             return cls([seg], ops=ops)
@@ -219,16 +214,8 @@ class Subtitle:
                 rec_words.extend(seg.words)
             words_list.append(rec_words)
             caches.append({k: list(v) for k, v in rec.chunk_cache.items()})
-            if (
-                chunk_cache_key is not None
-                and chunk_cache_key in rec.chunk_cache
-                and rec.chunk_cache[chunk_cache_key]
-            ):
-                pipelines.append(
-                    TextPipeline.from_chunks(
-                        list(rec.chunk_cache[chunk_cache_key]), ops=resolved_ops
-                    )
-                )
+            if chunk_cache_key is not None and chunk_cache_key in rec.chunk_cache and rec.chunk_cache[chunk_cache_key]:
+                pipelines.append(TextPipeline.from_chunks(list(rec.chunk_cache[chunk_cache_key]), ops=resolved_ops))
             else:
                 pipelines.append(TextPipeline(rec.src_text, ops=resolved_ops))
         new._pipelines = pipelines
@@ -255,9 +242,7 @@ class Subtitle:
             new._chunk_caches = [dict(c) for c in self._chunk_caches]
         else:
             new._chunk_caches = [{} for _ in pipelines]
-        new._sentence_split = (
-            sentence_split if sentence_split is not None else self._sentence_split
-        )
+        new._sentence_split = sentence_split if sentence_split is not None else self._sentence_split
         return new
 
     # ---- text structuring (delegated to TextPipeline) ----------------
@@ -305,9 +290,7 @@ class Subtitle:
         Args:
             merge_under: If given, merge back clauses shorter than this.
         """
-        return self._with_pipelines(
-            [p.clauses(merge_under=merge_under) for p in self._pipelines]
-        )
+        return self._with_pipelines([p.clauses(merge_under=merge_under) for p in self._pipelines])
 
     def split(self, max_len: int) -> Subtitle:
         """Split each chunk by length.
@@ -315,18 +298,14 @@ class Subtitle:
         Args:
             max_len: Upper bound on chunk length.
         """
-        return self._with_pipelines(
-            [p.split(max_len) for p in self._pipelines]
-        )
+        return self._with_pipelines([p.split(max_len) for p in self._pipelines])
 
     def merge(self, max_len: int) -> Subtitle:
         """Greedily merge adjacent chunks within each pipeline.
 
         Merging is per-pipeline (i.e. per-sentence after ``sentences()``).
         """
-        return self._with_pipelines(
-            [p.merge(max_len) for p in self._pipelines]
-        )
+        return self._with_pipelines([p.merge(max_len) for p in self._pipelines])
 
     # ---- transform (unified content transform dispatch) --------------
 
@@ -418,7 +397,7 @@ class Subtitle:
         offset = 0
         for i, texts in enumerate(pipeline_texts):
             n = len(texts)
-            pipeline_results = all_results[offset:offset + n]
+            pipeline_results = all_results[offset : offset + n]
             offset += n
 
             new_groups: list[list[str]] = []
@@ -481,18 +460,16 @@ class Subtitle:
 
             sub_segments = align_segments(sub_chunks, words)
             if sub_segments:
-                cc = (
-                    dict(sub._chunk_caches[i])
-                    if i < len(sub._chunk_caches) and sub._chunk_caches[i]
-                    else {}
+                cc = dict(sub._chunk_caches[i]) if i < len(sub._chunk_caches) and sub._chunk_caches[i] else {}
+                records.append(
+                    SentenceRecord(
+                        src_text=src_text,
+                        start=sub_segments[0].start,
+                        end=sub_segments[-1].end,
+                        segments=sub_segments,
+                        chunk_cache=cc,
+                    )
                 )
-                records.append(SentenceRecord(
-                    src_text=src_text,
-                    start=sub_segments[0].start,
-                    end=sub_segments[-1].end,
-                    segments=sub_segments,
-                    chunk_cache=cc,
-                ))
 
         return records
 
@@ -508,6 +485,7 @@ class Subtitle:
     ) -> SubtitleStream:
         """Create a streaming processor that accepts segments one at a time."""
         from lang_ops import LangOps
+
         if ops is not None:
             resolved_ops = ops
         elif language is not None:
@@ -549,7 +527,8 @@ class SubtitleStream:
             segs = [segment]
 
         sub = Subtitle(
-            segs, self._ops,
+            segs,
+            self._ops,
             split_by_speaker=self._split_by_speaker,
         )
         all_sentences = sub.sentences().build()
@@ -571,7 +550,8 @@ class SubtitleStream:
             return []
 
         sub = Subtitle(
-            [self._incomplete], self._ops,
+            [self._incomplete],
+            self._ops,
             split_by_speaker=self._split_by_speaker,
         )
         result = sub.sentences().build()

@@ -36,21 +36,21 @@ from runtime import App
 def _write_srt(path: Path, lines: list[str]) -> None:
     body = []
     for i, text in enumerate(lines, start=1):
-        body.append(
-            f"{i}\n00:00:0{i - 1},000 --> 00:00:0{i},000\n{text}\n"
-        )
+        body.append(f"{i}\n00:00:0{i - 1},000 --> 00:00:0{i},000\n{text}\n")
     path.write_text("\n".join(body), encoding="utf-8")
 
 
 def _make_app(root: Path) -> App:
     return App.from_dict(
         {
-            "engines": {"default": {
-                "kind": "openai_compat",
-                "model": "mock",
-                "base_url": "http://localhost:0/v1",
-                "api_key": "EMPTY",
-            }},
+            "engines": {
+                "default": {
+                    "kind": "openai_compat",
+                    "model": "mock",
+                    "base_url": "http://localhost:0/v1",
+                    "api_key": "EMPTY",
+                }
+            },
             "contexts": {"en_zh": {"src": "en", "tgt": "zh"}},
             "store": {"kind": "json", "root": root.as_posix()},
             "runtime": {"flush_every": 1, "max_concurrent_videos": 2},
@@ -110,12 +110,7 @@ class TestRerunCacheHit:
         app1 = _make_app(ws)
         eng1 = _CountingEngine()
         _bind(app1, eng1)
-        r1 = await (
-            app1.video(course="c", video="v")
-            .source(srt, language="en")
-            .translate(src="en", tgt="zh")
-            .run()
-        )
+        r1 = await app1.video(course="c", video="v").source(srt, language="en").translate(src="en", tgt="zh").run()
         assert len(r1.records) == 3
         assert len(eng1.calls) == 3, "first run must translate all 3"
 
@@ -130,12 +125,7 @@ class TestRerunCacheHit:
         app2 = _make_app(ws)
         eng2 = _CountingEngine()
         _bind(app2, eng2)
-        r2 = await (
-            app2.video(course="c", video="v")
-            .source(srt, language="en")
-            .translate(src="en", tgt="zh")
-            .run()
-        )
+        r2 = await app2.video(course="c", video="v").source(srt, language="en").translate(src="en", tgt="zh").run()
         assert len(r2.records) == 3
         assert eng2.calls == [], "second run must hit cache, no LLM calls"
         for rec in r2.records:
@@ -162,12 +152,7 @@ class TestPartialFailureResume:
         eng1 = _CountingEngine(fail_on={"BAD"})
         _bind(app1, eng1)
         with pytest.raises(RuntimeError, match="engine refused"):
-            await (
-                app1.video(course="c", video="mix")
-                .source(srt, language="en")
-                .translate(src="en", tgt="zh")
-                .run()
-            )
+            await app1.video(course="c", video="mix").source(srt, language="en").translate(src="en", tgt="zh").run()
 
         # Alpha was processed before BAD → must be persisted (flush_every=1).
         store_file = ws / "c" / "zzz_translation" / "mix.json"
@@ -180,12 +165,7 @@ class TestPartialFailureResume:
         app2 = _make_app(ws)
         eng2 = _CountingEngine()
         _bind(app2, eng2)
-        r2 = await (
-            app2.video(course="c", video="mix")
-            .source(srt, language="en")
-            .translate(src="en", tgt="zh")
-            .run()
-        )
+        r2 = await app2.video(course="c", video="mix").source(srt, language="en").translate(src="en", tgt="zh").run()
         assert len(r2.records) == 3
         assert all(r.translations["zh"].startswith("[zh]") for r in r2.records)
         # Engine called only for records not previously persisted (BAD + Bravo)
@@ -247,11 +227,7 @@ class TestStreamE2E:
         eng = _CountingEngine()
         _bind(app, eng)
 
-        handle = (
-            app.stream(course="c", video="live", language="en")
-            .translate(src="en", tgt="zh")
-            .start()
-        )
+        handle = app.stream(course="c", video="live", language="en").translate(src="en", tgt="zh").start()
 
         # Pump in two segments and drain concurrently — close after feed.
         collected: list = []
@@ -286,11 +262,7 @@ class TestStreamE2E:
         app1 = _make_app(ws)
         eng1 = _CountingEngine()
         _bind(app1, eng1)
-        handle = (
-            app1.stream(course="c", video="hybrid", language="en")
-            .translate(src="en", tgt="zh")
-            .start()
-        )
+        handle = app1.stream(course="c", video="hybrid", language="en").translate(src="en", tgt="zh").start()
         collected: list = []
 
         async def drain():
@@ -340,10 +312,5 @@ class TestConfigVariants:
 
         srt = tmp_path / "y.srt"
         _write_srt(srt, ["YAML works."])
-        result = await (
-            app.video(course="c", video="y")
-            .source(srt, language="en")
-            .translate(src="en", tgt="zh")
-            .run()
-        )
+        result = await app.video(course="c", video="y").source(srt, language="en").translate(src="en", tgt="zh").run()
         assert result.records[0].translations["zh"] == "[zh]YAML works."

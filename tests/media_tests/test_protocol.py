@@ -68,4 +68,5 @@ class TestProtocolConformance:
 
     def test_ytdlp_is_media_source(self):
         from media import YtdlpSource
+
         assert isinstance(YtdlpSource(), MediaSource)

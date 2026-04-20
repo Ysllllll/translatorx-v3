@@ -103,9 +103,7 @@ class TestWhisperXSource:
 
 
 def _seg(text: str, start: float, end: float) -> Segment:
-    return Segment(start=start, end=end, text=text, words=[
-        Word(word=text, start=start, end=end)
-    ])
+    return Segment(start=start, end=end, text=text, words=[Word(word=text, start=start, end=end)])
 
 
 class TestPushQueueSource:

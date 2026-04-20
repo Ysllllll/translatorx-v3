@@ -40,9 +40,7 @@ def _chunks_match_source(parts: list[str], source: str) -> bool:
         return True
     # Alphanumeric fallback (handles minor whitespace differences)
     src_alnum = "".join(ch for ch in source.lower() if ch.isalnum())
-    parts_alnum = "".join(
-        ch for p in parts for ch in p.lower() if ch.isalnum()
-    )
+    parts_alnum = "".join(ch for p in parts for ch in p.lower() if ch.isalnum())
     return src_alnum == parts_alnum
 
 
@@ -89,9 +87,7 @@ class LlmChunker:
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(
-                    lambda: asyncio.run(self._process_batch(texts))
-                ).result()
+                return pool.submit(lambda: asyncio.run(self._process_batch(texts))).result()
         return asyncio.run(self._process_batch(texts))
 
     async def _process_batch(self, texts: list[str]) -> list[list[str]]:
@@ -104,8 +100,7 @@ class LlmChunker:
                 parts = await self._chunk_recursive(text, depth=0)
             if not _chunks_match_source(parts, text):
                 logger.warning(
-                    "Chunk result does not reconstruct source, "
-                    "falling back to rule split: %r",
+                    "Chunk result does not reconstruct source, falling back to rule split: %r",
                     text[:80],
                 )
                 parts = self._rule_split(text)
@@ -144,11 +139,7 @@ class LlmChunker:
             return None
 
         raw = completion.text.strip()
-        lines = [
-            _STRIP_LEADING_NUM.sub("", line).strip()
-            for line in raw.splitlines()
-            if line.strip()
-        ]
+        lines = [_STRIP_LEADING_NUM.sub("", line).strip() for line in raw.splitlines() if line.strip()]
 
         if len(lines) != 2:
             logger.debug(

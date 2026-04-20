@@ -57,9 +57,4 @@ class SplitterTestBase:
         return ops.split_clauses(self.TEXT_SAMPLE)
 
     def _pipeline_sentences_clauses(self) -> list[str]:
-        return (
-            TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE)
-            .sentences()
-            .clauses()
-            .result()
-        )
+        return TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result()

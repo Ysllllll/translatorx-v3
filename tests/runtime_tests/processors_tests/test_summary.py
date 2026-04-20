@@ -66,9 +66,7 @@ def _ctx() -> TranslationContext:
 
 
 def _rec(rid: int, text: str) -> SentenceRecord:
-    return SentenceRecord(
-        src_text=text, start=0.0, end=1.0, extra={"id": rid}
-    )
+    return SentenceRecord(src_text=text, start=0.0, end=1.0, extra={"id": rid})
 
 
 @pytest.fixture
@@ -108,12 +106,8 @@ class TestFingerprint:
 
     def test_sensitive_to_window(self) -> None:
         e = _ScriptedEngine([])
-        p1 = SummaryProcessor(
-            e, source_lang="en", target_lang="zh", window_words=4500
-        )
-        p2 = SummaryProcessor(
-            e, source_lang="en", target_lang="zh", window_words=1000
-        )
+        p1 = SummaryProcessor(e, source_lang="en", target_lang="zh", window_words=4500)
+        p2 = SummaryProcessor(e, source_lang="en", target_lang="zh", window_words=1000)
         assert p1.fingerprint() != p2.fingerprint()
 
     def test_sensitive_to_lang_pair(self) -> None:
@@ -127,9 +121,7 @@ class TestPassThrough:
     @pytest.mark.asyncio
     async def test_records_unchanged(self, store, video_key) -> None:
         engine = _ScriptedEngine([_SUMMARY_JSON_1])
-        proc = SummaryProcessor(
-            engine, source_lang="en", target_lang="zh", window_words=100000
-        )
+        proc = SummaryProcessor(engine, source_lang="en", target_lang="zh", window_words=100000)
 
         recs = [_rec(0, "hello world"), _rec(1, "foo bar baz")]
 
@@ -137,9 +129,7 @@ class TestPassThrough:
             for r in recs:
                 yield r
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert out == recs
 
 
@@ -148,16 +138,12 @@ class TestWindowTrigger:
     async def test_merge_writes_summary(self, store, video_key) -> None:
         engine = _ScriptedEngine([_SUMMARY_JSON_1])
         # Small window — a single record of 3 words triggers merge.
-        proc = SummaryProcessor(
-            engine, source_lang="en", target_lang="zh", window_words=3
-        )
+        proc = SummaryProcessor(engine, source_lang="en", target_lang="zh", window_words=3)
 
         async def src():
             yield _rec(0, "alpha beta gamma")
 
-        _ = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        _ = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
 
         data = await store.load_video("v1")
         assert data is not None
@@ -171,51 +157,33 @@ class TestWindowTrigger:
 
 class TestWarmStart:
     @pytest.mark.asyncio
-    async def test_state_restored_on_matching_fingerprint(
-        self, store, video_key
-    ) -> None:
+    async def test_state_restored_on_matching_fingerprint(self, store, video_key) -> None:
         # First run — produce summary v1.
         engine_a = _ScriptedEngine([_SUMMARY_JSON_1])
-        proc_a = SummaryProcessor(
-            engine_a, source_lang="en", target_lang="zh", window_words=3
-        )
+        proc_a = SummaryProcessor(engine_a, source_lang="en", target_lang="zh", window_words=3)
 
         async def src_a():
             yield _rec(0, "alpha beta gamma")
 
-        await _drain(
-            proc_a.process(
-                src_a(), ctx=_ctx(), store=store, video_key=video_key
-            )
-        )
+        await _drain(proc_a.process(src_a(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine_a.calls == 1
 
         # Second run with *same* fingerprint — summary resumed; no merge
         # happens because completed=True (agent no-ops).
         engine_b = _ScriptedEngine([_SUMMARY_JSON_2])
-        proc_b = SummaryProcessor(
-            engine_b, source_lang="en", target_lang="zh", window_words=3
-        )
+        proc_b = SummaryProcessor(engine_b, source_lang="en", target_lang="zh", window_words=3)
 
         async def src_b():
             yield _rec(1, "delta epsilon zeta")
 
-        await _drain(
-            proc_b.process(
-                src_b(), ctx=_ctx(), store=store, video_key=video_key
-            )
-        )
+        await _drain(proc_b.process(src_b(), ctx=_ctx(), store=store, video_key=video_key))
         # State was completed → feed is a no-op; engine_b not called.
         assert engine_b.calls == 0
 
     @pytest.mark.asyncio
-    async def test_fingerprint_mismatch_starts_fresh(
-        self, store, video_key
-    ) -> None:
+    async def test_fingerprint_mismatch_starts_fresh(self, store, video_key) -> None:
         # Seed a stored summary from a *different* fingerprint.
-        seeded = IncrementalSummaryState(
-            current=None, completed=True
-        ).to_dict()
+        seeded = IncrementalSummaryState(current=None, completed=True).to_dict()
         await store.patch_video(
             "v1",
             summary=seeded,
@@ -223,22 +191,16 @@ class TestWarmStart:
         )
 
         engine = _ScriptedEngine([_SUMMARY_JSON_1])
-        proc = SummaryProcessor(
-            engine, source_lang="en", target_lang="zh", window_words=3
-        )
+        proc = SummaryProcessor(engine, source_lang="en", target_lang="zh", window_words=3)
 
         async def src():
             yield _rec(0, "alpha beta gamma")
 
-        await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
 
         # Fresh start → LLM was called.
         assert engine.calls == 1
         data = await store.load_video("v1")
         assert data is not None
         # Fingerprint was updated to current.
-        assert (
-            data["meta"]["_fingerprints"]["summary"] == proc.fingerprint()
-        )
+        assert data["meta"]["_fingerprints"]["summary"] == proc.fingerprint()

@@ -52,6 +52,4 @@ def test_segments_are_ordered(srt_files: list[str]) -> None:
     for path in srt_files:
         segments = read_srt(path)
         for i in range(1, len(segments)):
-            assert segments[i].start >= segments[i - 1].start, (
-                f"Out-of-order segments in {path} at index {i}"
-            )
+            assert segments[i].start >= segments[i - 1].start, f"Out-of-order segments in {path} at index {i}"

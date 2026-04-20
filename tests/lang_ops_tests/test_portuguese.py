@@ -16,7 +16,22 @@ class PortugueseTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text0, expect_split_text, expect_join_text0)
 
         text1 = "Hoje o mecanismo organiza legendas em português, espanhol e inglês para uma série inteira."
-        expect_split_text = ["Hoje", "o", "mecanismo", "organiza", "legendas", "em", "português,", "espanhol", "e", "inglês", "para", "uma", "série", "inteira."]
+        expect_split_text = [
+            "Hoje",
+            "o",
+            "mecanismo",
+            "organiza",
+            "legendas",
+            "em",
+            "português,",
+            "espanhol",
+            "e",
+            "inglês",
+            "para",
+            "uma",
+            "série",
+            "inteira.",
+        ]
         expect_join_text1 = "Hoje o mecanismo organiza legendas em português, espanhol e inglês para uma série inteira."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
@@ -79,7 +94,7 @@ class PortugueseTextTest(LangOpsTestCase):
         self.assertEqual(o.lstrip_punc(""), "")
         self.assertEqual(o.lstrip_punc("Olá"), "Olá")
 
-                # rstrip_punc()
+        # rstrip_punc()
         self.assertEqual(o.rstrip_punc("(Olá, mundo!)"), "(Olá, mundo")
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("Olá"), "Olá")

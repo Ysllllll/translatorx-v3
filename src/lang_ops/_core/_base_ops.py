@@ -66,6 +66,7 @@ class _BaseOps(ABC):
 
     def plength(self, text: str, font_path: str, font_size: int) -> int:
         from PIL import ImageFont
+
         left, _, right, _ = ImageFont.truetype(font_path, font_size).getbbox(text)
         return max(0, int(right - left))
 
@@ -100,10 +101,7 @@ class _BaseOps(ABC):
         tokens_a = self.split(text_a)
         tokens_b = self.split(text_b)
         if len(tokens_a) != len(tokens_b):
-            raise ValueError(
-                f"Token count mismatch: text_a has {len(tokens_a)}, "
-                f"text_b has {len(tokens_b)}"
-            )
+            raise ValueError(f"Token count mismatch: text_a has {len(tokens_a)}, text_b has {len(tokens_b)}")
         result: list[str] = []
         for ta, tb in zip(tokens_a, tokens_b):
             _, content_a, _ = decompose_token(ta)
@@ -116,24 +114,29 @@ class _BaseOps(ABC):
     def split_sentences(self, text: str) -> list[str]:
         """Split text into sentences (token-based)."""
         from lang_ops.chunk._pipeline import TextPipeline
+
         return TextPipeline(text, ops=self).sentences().result()
 
     def split_clauses(self, text: str) -> list[str]:
         """Split text into clauses (sentence boundaries included, token-based)."""
         from lang_ops.chunk._pipeline import TextPipeline
+
         return TextPipeline(text, ops=self).clauses().result()
 
     def split_by_length(self, text: str, max_len: int) -> list[str]:
         """Split text into chunks whose length ≤ *max_len* (token-based)."""
         from lang_ops.chunk._pipeline import TextPipeline
+
         return TextPipeline(text, ops=self).split(max_len).result()
 
     def merge_by_length(self, chunks: list[str], max_len: int) -> list[str]:
         """Greedily merge adjacent chunks whose combined length ≤ *max_len*."""
         from lang_ops.chunk._merge import merge_chunks_by_length
+
         return merge_chunks_by_length(chunks, self, max_len)
 
     def chunk(self, text: str) -> "TextPipeline":
         """Create a TextPipeline for chainable text structuring."""
         from lang_ops.chunk._pipeline import TextPipeline
+
         return TextPipeline(text, ops=self)

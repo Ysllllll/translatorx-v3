@@ -26,6 +26,7 @@ from .types import Issue, Severity
 # Rule Protocol
 # -------------------------------------------------------------------
 
+
 @runtime_checkable
 class Rule(Protocol):
     """Interface that every checker rule must satisfy."""
@@ -42,6 +43,7 @@ class Rule(Protocol):
 # -------------------------------------------------------------------
 # Helpers
 # -------------------------------------------------------------------
+
 
 def _cjk_char_count(text: str) -> int:
     """Count CJK unified ideograph characters."""
@@ -64,10 +66,7 @@ def _hangul_char_count(text: str) -> int:
 
 
 def _kana_char_count(text: str) -> int:
-    return sum(
-        1 for ch in text
-        if 0x3040 <= ord(ch) <= 0x309F or 0x30A0 <= ord(ch) <= 0x30FF
-    )
+    return sum(1 for ch in text if 0x3040 <= ord(ch) <= 0x309F or 0x30A0 <= ord(ch) <= 0x30FF)
 
 
 def _estimate_words(text: str) -> int:
@@ -82,13 +81,14 @@ def _estimate_words(text: str) -> int:
 # Rule: LengthRatioRule
 # -------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class RatioThresholds:
     """Character-length-ratio thresholds segmented by source word count."""
 
-    short: float = 5.0     # < 3 words
-    medium: float = 3.0    # < 8 words
-    long: float = 2.0      # < 20 words
+    short: float = 5.0  # < 3 words
+    medium: float = 3.0  # < 8 words
+    long: float = 2.0  # < 20 words
     very_long: float = 1.6  # >= 20 words
 
 
@@ -128,28 +128,28 @@ class LengthRatioRule:
         t = self._thresholds
 
         threshold = (
-            t.short if word_count < 3
-            else t.medium if word_count < 8
-            else t.long if word_count < 20
-            else t.very_long
+            t.short if word_count < 3 else t.medium if word_count < 8 else t.long if word_count < 20 else t.very_long
         )
 
         if ratio > threshold:
-            return [Issue(
-                rule="length_ratio",
-                severity=self._severity,
-                message=(
-                    f"length_ratio={ratio:.2f} exceeds threshold={threshold:.1f} "
-                    f"(src_len={src_len}, tgt_len={tgt_len}, ~{word_count} words)"
-                ),
-                details={"ratio": ratio, "threshold": threshold, "words": word_count},
-            )]
+            return [
+                Issue(
+                    rule="length_ratio",
+                    severity=self._severity,
+                    message=(
+                        f"length_ratio={ratio:.2f} exceeds threshold={threshold:.1f} "
+                        f"(src_len={src_len}, tgt_len={tgt_len}, ~{word_count} words)"
+                    ),
+                    details={"ratio": ratio, "threshold": threshold, "words": word_count},
+                )
+            ]
         return []
 
 
 # -------------------------------------------------------------------
 # Rule: FormatRule
 # -------------------------------------------------------------------
+
 
 class FormatRule:
     """Check structural issues: newlines, markdown, hallucination starts, brackets."""
@@ -191,36 +191,48 @@ class FormatRule:
         # Unexpected newlines
         if not self._allow_newlines and "\n" in tgt:
             if tgt.count("$$") < 2:
-                issues.append(Issue(
-                    "format_newline", self._severity,
-                    "unexpected newline in translation",
-                ))
+                issues.append(
+                    Issue(
+                        "format_newline",
+                        self._severity,
+                        "unexpected newline in translation",
+                    )
+                )
 
         # Markdown bold artifacts
         if "**" in tgt:
-            issues.append(Issue(
-                "format_markdown", self._severity,
-                "markdown bold artifact '**' in translation",
-            ))
+            issues.append(
+                Issue(
+                    "format_markdown",
+                    self._severity,
+                    "markdown bold artifact '**' in translation",
+                )
+            )
 
         # Hallucination opening patterns
         for pattern, exclude in self._hallucination_starts:
             full = f"{pattern}(?!{exclude})" if exclude else pattern
             if re.match(full, tgt_lower):
-                issues.append(Issue(
-                    "format_hallucination", self._severity,
-                    f"hallucination pattern: translation starts with '{tgt[:10]}...'",
-                ))
+                issues.append(
+                    Issue(
+                        "format_hallucination",
+                        self._severity,
+                        f"hallucination pattern: translation starts with '{tgt[:10]}...'",
+                    )
+                )
                 break
 
         # Bracket inconsistency
         zh_openers = ("（", "【", "[", "(")
         en_openers = ("[", "(")
         if tgt.startswith(zh_openers) and not src.startswith(en_openers):
-            issues.append(Issue(
-                "format_bracket", self._severity,
-                "translation starts with bracket but source does not",
-            ))
+            issues.append(
+                Issue(
+                    "format_bracket",
+                    self._severity,
+                    "translation starts with bracket but source does not",
+                )
+            )
 
         return issues
 
@@ -228,6 +240,7 @@ class FormatRule:
 # -------------------------------------------------------------------
 # Rule: QuestionMarkRule
 # -------------------------------------------------------------------
+
 
 class QuestionMarkRule:
     """Source ends with ``?``/``？`` but translation has no question mark."""
@@ -258,16 +271,20 @@ class QuestionMarkRule:
         src = source.rstrip()
         if src.endswith("?") or src.endswith("？"):
             if not any(m in translation for m in self._expected_marks):
-                return [Issue(
-                    "question_mark", self._severity,
-                    "source ends with '?' but translation has no question mark",
-                )]
+                return [
+                    Issue(
+                        "question_mark",
+                        self._severity,
+                        "source ends with '?' but translation has no question mark",
+                    )
+                ]
         return []
 
 
 # -------------------------------------------------------------------
 # Rule: KeywordRule
 # -------------------------------------------------------------------
+
 
 class KeywordRule:
     """Check forbidden terms and cross-language keyword consistency."""
@@ -307,10 +324,13 @@ class KeywordRule:
 
         for term in self._forbidden_terms:
             if term.lower() in tgt_lower:
-                issues.append(Issue(
-                    "keyword_forbidden", self._severity,
-                    f"forbidden term found: '{term}'",
-                ))
+                issues.append(
+                    Issue(
+                        "keyword_forbidden",
+                        self._severity,
+                        f"forbidden term found: '{term}'",
+                    )
+                )
                 break
 
         for src_keywords, tgt_keywords in self._keyword_pairs:
@@ -318,10 +338,13 @@ class KeywordRule:
             if tgt_match:
                 src_match = any(kw.lower() in src_lower for kw in src_keywords)
                 if not src_match:
-                    issues.append(Issue(
-                        "keyword_inconsistency", self._severity,
-                        f"target contains {tgt_keywords} but source lacks any of {src_keywords}",
-                    ))
+                    issues.append(
+                        Issue(
+                            "keyword_inconsistency",
+                            self._severity,
+                            f"target contains {tgt_keywords} but source lacks any of {src_keywords}",
+                        )
+                    )
                     break
 
         return issues
@@ -330,6 +353,7 @@ class KeywordRule:
 # -------------------------------------------------------------------
 # Rule: TrailingAnnotationRule
 # -------------------------------------------------------------------
+
 
 class TrailingAnnotationRule:
     """Detect LLM-added trailing annotations in parentheses.
@@ -358,22 +382,26 @@ class TrailingAnnotationRule:
         return self._severity
 
     def check(self, source: str, translation: str) -> list[Issue]:
-        pattern = r'（([^（）]*?)）[,.?;!，。？；！]*$'
+        pattern = r"（([^（）]*?)）[,.?;!，。？；！]*$"
         results = re.findall(pattern, translation)
         if results and len(results) > 0:
             non_ascii = sum(1 for ch in results[-1] if not ch.isascii())
             if non_ascii > self._min_non_ascii:
-                return [Issue(
-                    "trailing_annotation", self._severity,
-                    f"trailing parenthesized annotation ({non_ascii} non-ASCII chars): "
-                    f"...（{results[-1][:20]}...）",
-                )]
+                return [
+                    Issue(
+                        "trailing_annotation",
+                        self._severity,
+                        f"trailing parenthesized annotation ({non_ascii} non-ASCII chars): "
+                        f"...（{results[-1][:20]}...）",
+                    )
+                ]
         return []
 
 
 # -------------------------------------------------------------------
 # Default rule list builder
 # -------------------------------------------------------------------
+
 
 def build_default_rules(
     *,
@@ -412,4 +440,3 @@ def build_default_rules(
             min_non_ascii=annotation_min_non_ascii,
         ),
     ]
-

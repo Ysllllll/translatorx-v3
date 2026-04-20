@@ -22,6 +22,7 @@ from model.usage import CompletionResult
 # Test helpers
 # ---------------------------------------------------------------------------
 
+
 class _MockEngine:
     """Engine that returns pre-configured responses in order."""
 
@@ -80,9 +81,7 @@ class _FailNTimesChecker:
     def check(self, source: str, translation: str, profile: str | None = None) -> CheckReport:
         self.call_count += 1
         if self.call_count <= self._fail_count:
-            return CheckReport(issues=(
-                Issue(rule="test_rule", severity=Severity.ERROR, message="bad"),
-            ))
+            return CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="bad"),))
         return CheckReport.ok()
 
 
@@ -102,14 +101,13 @@ class _AlwaysFailChecker:
 
     def check(self, source: str, translation: str, profile: str | None = None) -> CheckReport:
         self.call_count += 1
-        return CheckReport(issues=(
-            Issue(rule="test_rule", severity=Severity.ERROR, message="always bad"),
-        ))
+        return CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="always bad"),))
 
 
 # ---------------------------------------------------------------------------
 # Prompt builder tests
 # ---------------------------------------------------------------------------
+
 
 class TestPromptBuilders:
     def test_full_with_system_and_context(self):
@@ -159,19 +157,16 @@ class TestPromptBuilders:
 # TranslateResult
 # ---------------------------------------------------------------------------
 
+
 class TestTranslateResult:
     def test_fields(self):
-        r = TranslateResult(
-            translation="你好", report=CheckReport.ok(), attempts=1, accepted=True
-        )
+        r = TranslateResult(translation="你好", report=CheckReport.ok(), attempts=1, accepted=True)
         assert r.translation == "你好"
         assert r.accepted is True
         assert r.attempts == 1
 
     def test_frozen(self):
-        r = TranslateResult(
-            translation="你好", report=CheckReport.ok(), attempts=1, accepted=True
-        )
+        r = TranslateResult(translation="你好", report=CheckReport.ok(), attempts=1, accepted=True)
         with pytest.raises(AttributeError):
             r.translation = "世界"  # type: ignore[misc]
 
@@ -179,6 +174,7 @@ class TestTranslateResult:
 # ---------------------------------------------------------------------------
 # translate_with_verify
 # ---------------------------------------------------------------------------
+
 
 class TestTranslateWithVerify:
     @pytest.mark.asyncio
@@ -233,7 +229,11 @@ class TestTranslateWithVerify:
         window.add("prev", "前")
 
         await translate_with_verify(
-            "hello", engine, ctx, checker, window,
+            "hello",
+            engine,
+            ctx,
+            checker,
+            window,
             system_prompt="System.",
         )
 
@@ -334,11 +334,18 @@ class TestTranslateWithVerify:
     async def test_provider_terms_not_injected_when_not_ready(self):
         class _NotReadyProvider:
             @property
-            def ready(self): return False
-            async def get_terms(self): return {"should": "not-appear"}
-            async def request_generation(self, texts): return None
+            def ready(self):
+                return False
+
+            async def get_terms(self):
+                return {"should": "not-appear"}
+
+            async def request_generation(self, texts):
+                return None
+
             @property
-            def metadata(self): return {}
+            def metadata(self):
+                return {}
 
         engine = _MockEngine(["翻译"])
         checker = _AlwaysPassChecker()
@@ -370,7 +377,12 @@ class TestTranslateWithVerify:
 
         # system_prompt arg is ignored when template is set
         await translate_with_verify(
-            "hello", engine, ctx, checker, window, system_prompt="ignored-base",
+            "hello",
+            engine,
+            ctx,
+            checker,
+            window,
+            system_prompt="ignored-base",
         )
 
         system = engine.calls[0][0]

@@ -27,13 +27,16 @@ class TestLineEndings:
 
 
 class TestInvisibleChars:
-    @pytest.mark.parametrize("char,name", [
-        ("\u200b", "ZERO WIDTH SPACE"),
-        ("\u200c", "ZERO WIDTH NON-JOINER"),
-        ("\u200d", "ZERO WIDTH JOINER"),
-        ("\u2060", "WORD JOINER"),
-        ("\u007f", "DEL"),
-    ])
+    @pytest.mark.parametrize(
+        "char,name",
+        [
+            ("\u200b", "ZERO WIDTH SPACE"),
+            ("\u200c", "ZERO WIDTH NON-JOINER"),
+            ("\u200d", "ZERO WIDTH JOINER"),
+            ("\u2060", "WORD JOINER"),
+            ("\u007f", "DEL"),
+        ],
+    )
     def test_invisible_stripped(self, char, name):
         raw = f"1\n00:00:00,000 --> 00:00:01,000\nHel{char}lo"
         result = sanitize_srt(raw)

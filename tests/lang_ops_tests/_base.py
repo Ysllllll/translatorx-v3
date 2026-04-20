@@ -24,22 +24,71 @@ class LangOpsTestCase(unittest.TestCase):
         actual_vs_expect = [
             [self.ops.join(self.ops.split(text)), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text)))), resolved],
-
             [self.ops.join(self.ops.split(text, attach_punctuation=False)), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)))), resolved],
-            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)), attach_punctuation=False)), resolved],
-            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)), attach_punctuation=False, mode="word")), resolved],
-
+            [
+                self.ops.join(
+                    self.ops.split(
+                        self.ops.join(self.ops.split(text, attach_punctuation=False)), attach_punctuation=False
+                    )
+                ),
+                resolved,
+            ],
+            [
+                self.ops.join(
+                    self.ops.split(
+                        self.ops.join(self.ops.split(text, attach_punctuation=False)),
+                        attach_punctuation=False,
+                        mode="word",
+                    )
+                ),
+                resolved,
+            ],
             [self.ops.join(self.ops.split(text, mode="word")), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")))), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")), mode="word")), resolved],
-            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")), mode="word", attach_punctuation=False)), resolved],
-
+            [
+                self.ops.join(
+                    self.ops.split(
+                        self.ops.join(self.ops.split(text, mode="word")), mode="word", attach_punctuation=False
+                    )
+                ),
+                resolved,
+            ],
             [self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), resolved],
-            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)))), resolved],
-            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), mode="word")), resolved],
-            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), attach_punctuation=False)), resolved],
-            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), mode="word", attach_punctuation=False)), resolved],
+            [
+                self.ops.join(
+                    self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)))
+                ),
+                resolved,
+            ],
+            [
+                self.ops.join(
+                    self.ops.split(
+                        self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), mode="word"
+                    )
+                ),
+                resolved,
+            ],
+            [
+                self.ops.join(
+                    self.ops.split(
+                        self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)),
+                        attach_punctuation=False,
+                    )
+                ),
+                resolved,
+            ],
+            [
+                self.ops.join(
+                    self.ops.split(
+                        self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)),
+                        mode="word",
+                        attach_punctuation=False,
+                    )
+                ),
+                resolved,
+            ],
         ]
         self.assert_actual_vs_expect(actual_vs_expect)
 
@@ -53,9 +102,7 @@ class LangOpsTestCase(unittest.TestCase):
         """EnType: verify split (all modes), length, plength, and join roundtrip."""
         expected_chars = [ch for ch in text if not ch.isspace()]
         expected_split_without_punctuation = (
-            expected_split
-            if expected_split_without_punctuation is None
-            else expected_split_without_punctuation
+            expected_split if expected_split_without_punctuation is None else expected_split_without_punctuation
         )
         actual_vs_expect = [
             [self.ops.split(text), expected_split],

@@ -13,14 +13,17 @@ def _run_ffprobe(path: Path) -> dict:
     """Run ffprobe and return the parsed JSON output."""
     cmd = [
         "ffprobe",
-        "-v", "quiet",
-        "-print_format", "json",
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
         "-show_format",
         "-show_streams",
         str(path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     import json
+
     return json.loads(result.stdout)
 
 
@@ -38,12 +41,8 @@ def probe(path: Path) -> MediaFileInfo:
     streams = data.get("streams", [])
     fmt = data.get("format", {})
 
-    audio_stream = next(
-        (s for s in streams if s.get("codec_type") == "audio"), None
-    )
-    video_stream = next(
-        (s for s in streams if s.get("codec_type") == "video"), None
-    )
+    audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
 
     return MediaFileInfo(
         duration=float(fmt.get("duration", 0.0)),
@@ -85,10 +84,12 @@ def extract_audio(
 
     cmd = [
         "ffmpeg",
-        "-i", str(video_path),
-        "-vn",                    # no video
-        "-acodec", codec,
-        "-y",                     # overwrite
+        "-i",
+        str(video_path),
+        "-vn",  # no video
+        "-acodec",
+        codec,
+        "-y",  # overwrite
         str(output_path),
     ]
     subprocess.run(cmd, capture_output=True, check=True)

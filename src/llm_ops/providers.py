@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 # PreloadableTerms — batch
 # ---------------------------------------------------------------------------
 
+
 class PreloadableTerms:
     """Terms generated once from a complete batch of source texts.
 
@@ -42,8 +43,12 @@ class PreloadableTerms:
     """
 
     __slots__ = (
-        "_agent", "_terms", "_metadata", "_ready",
-        "_lock", "_max_retries",
+        "_agent",
+        "_terms",
+        "_metadata",
+        "_ready",
+        "_lock",
+        "_max_retries",
     )
 
     def __init__(
@@ -92,6 +97,7 @@ class PreloadableTerms:
 # OneShotTerms — streaming
 # ---------------------------------------------------------------------------
 
+
 class OneShotTerms:
     """Streaming provider that generates terms exactly once.
 
@@ -111,10 +117,16 @@ class OneShotTerms:
     """
 
     __slots__ = (
-        "_agent", "_char_threshold", "_max_retries",
-        "_terms", "_metadata", "_ready",
-        "_seen_texts", "_char_count",
-        "_task", "_state_lock",
+        "_agent",
+        "_char_threshold",
+        "_max_retries",
+        "_terms",
+        "_metadata",
+        "_ready",
+        "_seen_texts",
+        "_char_count",
+        "_task",
+        "_state_lock",
     )
 
     def __init__(
@@ -205,6 +217,7 @@ class OneShotTerms:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 async def _run_with_retries(
     agent: TermsAgent,
     texts: list[str],
@@ -219,7 +232,9 @@ async def _run_with_retries(
             last_exc = exc
             logger.warning(
                 "TermsAgent attempt %d/%d failed: %s",
-                attempt + 1, max_retries + 1, exc,
+                attempt + 1,
+                max_retries + 1,
+                exc,
             )
     logger.warning("TermsAgent: all retries exhausted, falling back to empty terms (%s)", last_exc)
     return TermsAgentResult.empty()

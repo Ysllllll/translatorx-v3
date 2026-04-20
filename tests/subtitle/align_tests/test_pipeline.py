@@ -11,12 +11,17 @@ from lang_ops import LangOps
 # English pipeline
 # ---------------------------------------------------------------------------
 
-class TestPipelineSegments:
 
+class TestPipelineSegments:
     def test_sentences_segments(self):
         ops = LangOps.for_language("en")
-        words = [Word("Hello", 0, .5), Word("world.", .6, 1),
-                 Word("How", 1.1, 1.3), Word("are", 1.4, 1.6), Word("you?", 1.7, 2)]
+        words = [
+            Word("Hello", 0, 0.5),
+            Word("world.", 0.6, 1),
+            Word("How", 1.1, 1.3),
+            Word("are", 1.4, 1.6),
+            Word("you?", 1.7, 2),
+        ]
         chunks = ops.chunk("Hello world. How are you?").sentences().result()
         segs = align_segments(chunks, words)
         assert len(segs) == 2
@@ -29,8 +34,14 @@ class TestPipelineSegments:
 
     def test_clauses_segments(self):
         ops = LangOps.for_language("en")
-        words = [Word("Well,", 0, .5), Word("hello", .6, 1), Word("world.", 1.1, 1.5),
-                 Word("How", 1.6, 1.8), Word("are", 1.9, 2.1), Word("you?", 2.2, 2.5)]
+        words = [
+            Word("Well,", 0, 0.5),
+            Word("hello", 0.6, 1),
+            Word("world.", 1.1, 1.5),
+            Word("How", 1.6, 1.8),
+            Word("are", 1.9, 2.1),
+            Word("you?", 2.2, 2.5),
+        ]
         chunks = ops.chunk("Well, hello world. How are you?").clauses().result()
         segs = align_segments(chunks, words)
         assert len(segs) == 3
@@ -44,15 +55,27 @@ class TestPipelineSegments:
 # ---------------------------------------------------------------------------
 
 PIPELINE_CASES = {
-    "zh": ("zh",
-           "你好。再见。",
-           [Word("你", 0, .2), Word("好", .2, .4), Word("。", .4, .5),
-            Word("再", .5, .7), Word("见", .7, .9), Word("。", .9, 1.0)],
-           2, ["你好。", "再见。"]),
-    "ko": ("ko",
-           "안녕하세요. 반갑습니다.",
-           [Word("안녕하세요.", 0, 1), Word("반갑습니다.", 1.5, 2.5)],
-           2, None),  # None = skip text check, verify count + timing
+    "zh": (
+        "zh",
+        "你好。再见。",
+        [
+            Word("你", 0, 0.2),
+            Word("好", 0.2, 0.4),
+            Word("。", 0.4, 0.5),
+            Word("再", 0.5, 0.7),
+            Word("见", 0.7, 0.9),
+            Word("。", 0.9, 1.0),
+        ],
+        2,
+        ["你好。", "再见。"],
+    ),
+    "ko": (
+        "ko",
+        "안녕하세요. 반갑습니다.",
+        [Word("안녕하세요.", 0, 1), Word("반갑습니다.", 1.5, 2.5)],
+        2,
+        None,
+    ),  # None = skip text check, verify count + timing
 }
 
 

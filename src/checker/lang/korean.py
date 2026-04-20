@@ -2,9 +2,13 @@ from . import LangProfile
 
 PROFILE = LangProfile(
     forbidden_terms=[
-        "번역해 주세요", "번역해주세요", "번역 결과",
-        "원문", "다음은 번역입니다",
-        "도움이 되셨", "도와드릴",
+        "번역해 주세요",
+        "번역해주세요",
+        "번역 결과",
+        "원문",
+        "다음은 번역입니다",
+        "도움이 되셨",
+        "도와드릴",
         "```",
     ],
     hallucination_starts=[

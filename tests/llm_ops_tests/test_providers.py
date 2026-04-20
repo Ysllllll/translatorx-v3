@@ -15,6 +15,7 @@ from llm_ops.providers import OneShotTerms, PreloadableTerms
 # Test helpers
 # ---------------------------------------------------------------------------
 
+
 class _FakeAgent:
     """Drop-in replacement for TermsAgent with configurable behavior."""
 
@@ -49,6 +50,7 @@ class _FakeAgent:
 # ---------------------------------------------------------------------------
 # PreloadableTerms
 # ---------------------------------------------------------------------------
+
 
 class TestPreloadableTerms:
     def test_satisfies_protocol(self):
@@ -124,6 +126,7 @@ class TestPreloadableTerms:
 # OneShotTerms
 # ---------------------------------------------------------------------------
 
+
 class TestOneShotTerms:
     @pytest.mark.asyncio
     async def test_not_ready_before_threshold(self):
@@ -180,7 +183,12 @@ class TestOneShotTerms:
             raises=[RuntimeError("1"), RuntimeError("2"), RuntimeError("3")],
         )
         provider = OneShotTerms(
-            agent, "en", "zh", char_threshold=1, max_retries=2, agent=agent,
+            agent,
+            "en",
+            "zh",
+            char_threshold=1,
+            max_retries=2,
+            agent=agent,
         )
         await provider.request_generation(["hi"])
         await provider.wait_until_ready()
@@ -192,7 +200,7 @@ class TestOneShotTerms:
         """Generation sees all accumulated texts, not just the triggering batch."""
         agent = _FakeAgent(terms={"a": "b"})
         provider = OneShotTerms(agent, "en", "zh", char_threshold=20, agent=agent)
-        await provider.request_generation(["first"])   # 5 chars
+        await provider.request_generation(["first"])  # 5 chars
         await provider.request_generation(["second"])  # 6 chars
         await provider.request_generation(["third one"])  # 9 → total 20 triggers
         await provider.wait_until_ready()
@@ -212,8 +220,6 @@ class TestOneShotTerms:
         agent = _FakeAgent(terms={"a": "b"})
         provider = OneShotTerms(agent, "en", "zh", char_threshold=5, agent=agent)
         # Fire many concurrent requests
-        await asyncio.gather(*[
-            provider.request_generation(["hellohello"]) for _ in range(10)
-        ])
+        await asyncio.gather(*[provider.request_generation(["hellohello"]) for _ in range(10)])
         await provider.wait_until_ready()
         assert len(agent.calls) == 1

@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 from lang_ops._core._punctuation import CLOSING_QUOTES as _CLOSING_QUOTES
+
 _ACRONYM_RE = re.compile(r"^([A-Za-z]\.)+$")
 
 
@@ -158,7 +159,7 @@ def split_tokens_by_boundaries(
     groups: list[list[str]] = []
     start = 0
     for end_idx in boundaries:
-        group = tokens[start:end_idx + 1]
+        group = tokens[start : end_idx + 1]
         if group:
             groups.append(group)
         start = end_idx + 1

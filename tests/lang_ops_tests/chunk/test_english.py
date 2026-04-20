@@ -89,6 +89,7 @@ class TestEnglishSplitter(SplitterTestBase):
 
         # Errors
         import pytest
+
         with pytest.raises(ValueError):
             _ops.split_by_length("Hello", max_len=0)
         with pytest.raises(ValueError):
@@ -98,10 +99,13 @@ class TestEnglishSplitter(SplitterTestBase):
 
         # Chunk chains
         assert _ops.chunk("Hello world. This is a test sentence.").sentences().split(25).result() == [
-            "Hello world.", "This is a test sentence.",
+            "Hello world.",
+            "This is a test sentence.",
         ]
         assert _ops.chunk("First clause, second clause, and a third one.").clauses().split(20).result() == [
-            "First clause,", "second clause,", "and a third one.",
+            "First clause,",
+            "second clause,",
+            "and a third one.",
         ]
 
         with pytest.raises(AttributeError):
@@ -111,35 +115,41 @@ class TestEnglishSplitter(SplitterTestBase):
         # Long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
             'Dr. Smith works at Acme Inc. She earned a degree from MIT and published 3.2 million copies... Prof. Jones asked, "Is this the best we can do?"',
-            'Yes!',
-            'The company, founded in Jan. 2010, has offices in St. Petersburg, London, and New York.',
-            'What a remarkable achievement!',
-            'Revenue grew 4.5% in 2024, reaching $2.1 billion.',
-            'Can you believe it?',
-            'The future is bright.',
+            "Yes!",
+            "The company, founded in Jan. 2010, has offices in St. Petersburg, London, and New York.",
+            "What a remarkable achievement!",
+            "Revenue grew 4.5% in 2024, reaching $2.1 billion.",
+            "Can you believe it?",
+            "The future is bright.",
         ]
 
         # Long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
-            'Dr. Smith works at Acme Inc. She earned a degree from MIT and published 3.2 million copies... Prof. Jones asked,',
+            "Dr. Smith works at Acme Inc. She earned a degree from MIT and published 3.2 million copies... Prof. Jones asked,",
             '"Is this the best we can do?"',
-            'Yes!',
-            'The company,',
-            'founded in Jan. 2010,',
-            'has offices in St. Petersburg,',
-            'London,',
-            'and New York.',
-            'What a remarkable achievement!',
-            'Revenue grew 4.5% in 2024,',
-            'reaching $2.1 billion.',
-            'Can you believe it?',
-            'The future is bright.',
+            "Yes!",
+            "The company,",
+            "founded in Jan. 2010,",
+            "has offices in St. Petersburg,",
+            "London,",
+            "and New York.",
+            "What a remarkable achievement!",
+            "Revenue grew 4.5% in 2024,",
+            "reaching $2.1 billion.",
+            "Can you believe it?",
+            "The future is bright.",
         ]
 
         # Long text chunk chain equivalence
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(
+            self.TEXT_SAMPLE
+        )
+        assert TextPipeline(
+            self.TEXT_SAMPLE, language=self.LANGUAGE
+        ).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(
+            self.TEXT_SAMPLE
+        )
 
         # Pipeline immutability
         p1 = TextPipeline("Hello. World.", language="en")

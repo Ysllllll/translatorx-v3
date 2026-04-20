@@ -14,6 +14,7 @@ from model.usage import CompletionResult
 # Helpers — minimal implementations
 # ---------------------------------------------------------------------------
 
+
 class _GoodEngine:
     """Satisfies the LLMEngine Protocol."""
 
@@ -48,6 +49,7 @@ class _BadEngine:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 class TestLLMEngineProtocol:
     def test_good_engine_is_instance(self):

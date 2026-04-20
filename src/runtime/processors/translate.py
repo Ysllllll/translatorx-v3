@@ -120,14 +120,8 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         self._engine = engine
         self._checker = checker
         self._config = config or TranslateNodeConfig()
-        self._prefix_handler = (
-            PrefixHandler(self._config.prefix_rules)
-            if self._config.prefix_rules
-            else None
-        )
-        self._direct_map = {
-            k.lower(): v for k, v in (self._config.direct_translate or {}).items()
-        }
+        self._prefix_handler = PrefixHandler(self._config.prefix_rules) if self._config.prefix_rules else None
+        self._direct_map = {k.lower(): v for k, v in (self._config.direct_translate or {}).items()}
         self._flush_every = flush_every
         self._flush_interval_s = flush_interval_s
         self._fp_cache: str | None = None
@@ -149,13 +143,8 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
 
         prefix_sig = ""
         if self._config.prefix_rules:
-            prefix_sig = ";".join(
-                f"{r.pattern}=>{r.target_prefix}"
-                for r in self._config.prefix_rules
-            )
-        direct_sig = ";".join(
-            f"{k}=>{v}" for k, v in sorted(self._direct_map.items())
-        )
+            prefix_sig = ";".join(f"{r.pattern}=>{r.target_prefix}" for r in self._config.prefix_rules)
+        direct_sig = ";".join(f"{k}=>{v}" for k, v in sorted(self._direct_map.items()))
 
         raw = (
             f"engine={engine_id}"
@@ -205,11 +194,7 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         # and the cache-hit branch below is unreachable).
         existing = await store.load_video(video_key.video)
         existing_meta = existing.get("meta", {}) if isinstance(existing, dict) else {}
-        existing_fps = (
-            existing_meta.get("_fingerprints", {})
-            if isinstance(existing_meta, dict)
-            else {}
-        )
+        existing_fps = existing_meta.get("_fingerprints", {}) if isinstance(existing_meta, dict) else {}
         fp_matches = existing_fps.get(self.name) == fp
         stored_by_id: dict[int, dict[str, Any]] = {}
         if fp_matches and isinstance(existing, dict):
@@ -243,24 +228,16 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                         rec = replace(rec, translations=merged_tr)
 
                 # 1. cache hit — fingerprint matches and translation present
-                if (
-                    fp_matches
-                    and target in rec.translations
-                    and rec.translations[target]
-                ):
+                if fp_matches and target in rec.translations and rec.translations[target]:
                     cached = rec.translations[target]
                     if rec.src_text.lower() not in self._direct_map:
                         window.add(rec.src_text, cached)
-                    logger.debug(
-                        "translate hit id=%s src=%r", rec_id, rec.src_text[:40]
-                    )
+                    logger.debug("translate hit id=%s src=%r", rec_id, rec.src_text[:40])
                     yield rec
                     continue
 
                 # 2. compute
-                new_rec, _result = await self._translate_one(
-                    rec, ctx, target, window
-                )
+                new_rec, _result = await self._translate_one(rec, ctx, target, window)
 
                 # 3. buffered flush (only records with id survive to disk)
                 if isinstance(rec_id, int):
@@ -283,10 +260,7 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                         patch["chunk_cache"] = rec_payload["chunk_cache"]
                     buffer[rec_id] = patch
                     now = time.monotonic()
-                    if (
-                        len(buffer) >= self._flush_every
-                        or (now - last_flush_at) >= self._flush_interval_s
-                    ):
+                    if len(buffer) >= self._flush_every or (now - last_flush_at) >= self._flush_interval_s:
                         await _flush()
                         last_flush_at = time.monotonic()
 
@@ -298,9 +272,7 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             # Use set_fingerprints (merge) rather than patch_video(meta=)
             # so we don't clobber sibling processors' fingerprints that
             # were written concurrently (e.g. SummaryProcessor).
-            await asyncio.shield(
-                store.set_fingerprints(video_key.video, {self.name: fp})
-            )
+            await asyncio.shield(store.set_fingerprints(video_key.video, {self.name: fp}))
             await asyncio.shield(self.aclose())
 
     # ------------------------------------------------------------------

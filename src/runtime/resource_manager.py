@@ -133,15 +133,11 @@ class ResourceManager(Protocol):
     managers; callers ``async with`` them for the critical section.
     """
 
-    async def acquire_video_slot(
-        self, user_id: str, tier: UserTier
-    ) -> AsyncIterator[None]:
+    async def acquire_video_slot(self, user_id: str, tier: UserTier) -> AsyncIterator[None]:
         """Block until a video slot is available; release on exit."""
         ...
 
-    async def acquire_request_slot(
-        self, user_id: str, tier: UserTier
-    ) -> AsyncIterator[None]:
+    async def acquire_request_slot(self, user_id: str, tier: UserTier) -> AsyncIterator[None]:
         """Block until a per-video request slot is available."""
         ...
 
@@ -199,9 +195,7 @@ class InMemoryResourceManager:
         return sem
 
     @asynccontextmanager
-    async def acquire_video_slot(
-        self, user_id: str, tier: UserTier
-    ) -> AsyncIterator[None]:
+    async def acquire_video_slot(self, user_id: str, tier: UserTier) -> AsyncIterator[None]:
         sem = self._video_sem(user_id, tier)
         await sem.acquire()
         try:
@@ -210,9 +204,7 @@ class InMemoryResourceManager:
             sem.release()
 
     @asynccontextmanager
-    async def acquire_request_slot(
-        self, user_id: str, tier: UserTier
-    ) -> AsyncIterator[None]:
+    async def acquire_request_slot(self, user_id: str, tier: UserTier) -> AsyncIterator[None]:
         sem = self._request_sem(user_id, tier)
         await sem.acquire()
         try:
@@ -247,9 +239,7 @@ class InMemoryResourceManager:
             if usage.cost_usd is not None:
                 entry.cost_usd += usage.cost_usd
                 if usage.model:
-                    entry.by_model[usage.model] = (
-                        entry.by_model.get(usage.model, 0.0) + usage.cost_usd
-                    )
+                    entry.by_model[usage.model] = entry.by_model.get(usage.model, 0.0) + usage.cost_usd
             entry.prompt_tokens += usage.prompt_tokens
             entry.completion_tokens += usage.completion_tokens
             entry.requests += usage.requests

@@ -13,9 +13,7 @@ import pytest
 from media import extract_audio, probe
 
 ffmpeg_available = shutil.which("ffmpeg") is not None
-requires_ffmpeg = pytest.mark.skipif(
-    not ffmpeg_available, reason="ffmpeg not installed"
-)
+requires_ffmpeg = pytest.mark.skipif(not ffmpeg_available, reason="ffmpeg not installed")
 
 
 @pytest.fixture
@@ -24,9 +22,14 @@ def sample_audio(tmp_path: Path) -> Path:
     path = tmp_path / "test.wav"
     subprocess.run(
         [
-            "ffmpeg", "-y",
-            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
-            "-t", "0.5",
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=44100:cl=mono",
+            "-t",
+            "0.5",
             str(path),
         ],
         capture_output=True,
@@ -41,12 +44,24 @@ def sample_video(tmp_path: Path) -> Path:
     path = tmp_path / "test.mp4"
     subprocess.run(
         [
-            "ffmpeg", "-y",
-            "-f", "lavfi", "-i", "color=c=black:s=320x240:r=10:d=0.5",
-            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
-            "-t", "0.5",
-            "-c:v", "libx264", "-preset", "ultrafast",
-            "-c:a", "aac",
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=black:s=320x240:r=10:d=0.5",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=44100:cl=mono",
+            "-t",
+            "0.5",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-c:a",
+            "aac",
             "-shortest",
             str(path),
         ],

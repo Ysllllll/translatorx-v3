@@ -66,6 +66,7 @@ from typing import (
 try:
     from natsort import natsorted  # type: ignore
 except ImportError:  # pragma: no cover — natsort is a hard dependency
+
     def natsorted(seq, key=None):  # type: ignore
         return sorted(seq, key=key)
 
@@ -308,9 +309,7 @@ class SubDir:
         self.spec = spec
         self.workspace = workspace
         self.path = (
-            workspace.root / workspace.course
-            if spec.name == ""
-            else workspace.root / workspace.course / spec.name
+            workspace.root / workspace.course if spec.name == "" else workspace.root / workspace.course / spec.name
         )
         self._by_id: dict[str, Path] = {}
         self._by_stem: dict[str, Path] = {}
@@ -335,9 +334,7 @@ class SubDir:
           (useful for cross-subdir joins).
         """
         if missing not in ("skip", "raise", "none"):
-            raise ValueError(
-                f"missing must be 'skip'|'raise'|'none', got {missing!r}"
-            )
+            raise ValueError(f"missing must be 'skip'|'raise'|'none', got {missing!r}")
         if keys is None:
             return natsorted(list(self._all), key=lambda p: p.stem)
         if isinstance(keys, (str, Path)):
@@ -350,9 +347,7 @@ class SubDir:
             p = self._resolve_one(k)
             if p is None:
                 if missing == "raise":
-                    raise FileNotFoundError(
-                        f"{self.spec.call}: no file for key {k!r} under {self.path}"
-                    )
+                    raise FileNotFoundError(f"{self.spec.call}: no file for key {k!r} under {self.path}")
                 if missing == "none":
                     result.append(None)
                 # "skip" → drop; validation already done above
@@ -502,9 +497,7 @@ class Workspace:
         # Expose each SubDir as a plain attribute for discoverability.
         for call, sd in self._subdirs.items():
             if hasattr(self, call):
-                raise ValueError(
-                    f"subdir call name {call!r} collides with Workspace attribute"
-                )
+                raise ValueError(f"subdir call name {call!r} collides with Workspace attribute")
             object.__setattr__(self, call, sd)
 
     # -- lookup ----------------------------------------------------------

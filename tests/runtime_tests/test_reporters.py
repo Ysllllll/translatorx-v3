@@ -65,9 +65,7 @@ def test_logger_reporter_uses_level_map(caplog) -> None:
 def test_logger_reporter_custom_level_map(caplog) -> None:
     lg = logging.getLogger("test.runtime.reporter.custom")
     lg.setLevel(logging.DEBUG)
-    reporter = LoggerReporter(
-        logger=lg, level_map={"permanent": logging.CRITICAL}
-    )
+    reporter = LoggerReporter(logger=lg, level_map={"permanent": logging.CRITICAL})
     with caplog.at_level(logging.DEBUG, logger="test.runtime.reporter.custom"):
         reporter.report(_make_err(category="permanent"), _make_rec(), {})
     levels = [r.levelno for r in caplog.records if r.name == "test.runtime.reporter.custom"]
@@ -124,10 +122,7 @@ def test_jsonl_reporter_category_filter(tmp_path: Path) -> None:
     finally:
         reporter.close()
 
-    rows = [
-        json.loads(line)
-        for line in log_file.read_text(encoding="utf-8").strip().splitlines()
-    ]
+    rows = [json.loads(line) for line in log_file.read_text(encoding="utf-8").strip().splitlines()]
     assert len(rows) == 1
     assert rows[0]["category"] == "permanent"
 
@@ -136,9 +131,7 @@ def test_jsonl_reporter_handles_unicode(tmp_path: Path) -> None:
     log_file = tmp_path / "errors.jsonl"
     reporter = JsonlErrorReporter(log_file)
     try:
-        reporter.report(
-            _make_err(message="中文 错误 メッセージ"), _make_rec(), {"video": "视频"}
-        )
+        reporter.report(_make_err(message="中文 错误 メッセージ"), _make_rec(), {"video": "视频"})
     finally:
         reporter.close()
     row = json.loads(log_file.read_text(encoding="utf-8").strip())

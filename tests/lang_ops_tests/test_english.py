@@ -21,13 +21,57 @@ class EnglishTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         text2 = "In 2026, the translation engine processed English, Russian, and Japanese subtitles in one pass."
-        expect_split_text = ["In", "2026,", "the", "translation", "engine", "processed", "English,", "Russian,", "and", "Japanese", "subtitles", "in", "one", "pass."]
-        expect_join_text2 = "In 2026, the translation engine processed English, Russian, and Japanese subtitles in one pass."
+        expect_split_text = [
+            "In",
+            "2026,",
+            "the",
+            "translation",
+            "engine",
+            "processed",
+            "English,",
+            "Russian,",
+            "and",
+            "Japanese",
+            "subtitles",
+            "in",
+            "one",
+            "pass.",
+        ]
+        expect_join_text2 = (
+            "In 2026, the translation engine processed English, Russian, and Japanese subtitles in one pass."
+        )
         self._assert_entype_text_case(text2, expect_split_text, expect_join_text2)
 
         text3 = "He said, \"It's AI.\" (Really?) [Yes.] {'OK.'} \"orphan 'solo tail) [loose {brace ,"
-        expect_split_text = ["He", "said,", "\"It's", "AI.\"", "(Really?)", "[Yes.]", "{'OK.'}", "\"orphan", "'solo", "tail)", "[loose", "{brace,"]
-        expect_split_text_raw = ["He", "said,", "\"It's", "AI.\"", "(Really?)", "[Yes.]", "{'OK.'}", "\"orphan", "'solo", "tail)", "[loose", "{brace", ","]
+        expect_split_text = [
+            "He",
+            "said,",
+            "\"It's",
+            'AI."',
+            "(Really?)",
+            "[Yes.]",
+            "{'OK.'}",
+            '"orphan',
+            "'solo",
+            "tail)",
+            "[loose",
+            "{brace,",
+        ]
+        expect_split_text_raw = [
+            "He",
+            "said,",
+            "\"It's",
+            'AI."',
+            "(Really?)",
+            "[Yes.]",
+            "{'OK.'}",
+            '"orphan',
+            "'solo",
+            "tail)",
+            "[loose",
+            "{brace",
+            ",",
+        ]
         expect_join_text3 = "He said, \"It's AI.\" (Really?) [Yes.] {'OK.'} \"orphan 'solo tail) [loose {brace,"
         self._assert_entype_text_case(
             text3,
@@ -50,7 +94,9 @@ class EnglishTextTest(LangOpsTestCase):
         self.assertEqual(o.split("Hello    , world      !"), ["Hello,", "world!"])
         self.assertEqual(o.split("Hello    ,            world      !"), ["Hello,", "world!"])
         self.assertEqual(o.split("Hello, world !", attach_punctuation=False), ["Hello,", "world", "!"])
-        self.assertEqual(o.split("Hello    ,            world      !", attach_punctuation=False), ["Hello", ",", "world", "!"])
+        self.assertEqual(
+            o.split("Hello    ,            world      !", attach_punctuation=False), ["Hello", ",", "world", "!"]
+        )
 
         # length()
         self.assertEqual(o.length("Hello"), 5)
@@ -59,18 +105,20 @@ class EnglishTextTest(LangOpsTestCase):
         # join()
         self.assertEqual(o.join(["Hello,", "world!"]), "Hello, world!")
         self.assertEqual(o.join(["It's", "AI."]), "It's AI.")
-        self.assert_actual_vs_expect([
-            [o.join(["\"", "Hello", ",", "world", "!", "\""]), "\"Hello, world!\""],
-            [o.join(["'", "Hello", "'"]), "'Hello'"],
-            [o.join(["It", "'", "s", "\"", "AI", "\""]), "It's \"AI\""],
-        ])
+        self.assert_actual_vs_expect(
+            [
+                [o.join(['"', "Hello", ",", "world", "!", '"']), '"Hello, world!"'],
+                [o.join(["'", "Hello", "'"]), "'Hello'"],
+                [o.join(["It", "'", "s", '"', "AI", '"']), 'It\'s "AI"'],
+            ]
+        )
 
         # strip()
         self.assertEqual(o.strip("  Hello  "), "Hello")
         self.assertEqual(o.strip(""), "")
         self.assertEqual(o.strip("Hello, world!", "!"), "Hello, world")
         self.assertEqual(o.strip("...Hello...", "."), "Hello")
-        self.assertEqual(o.strip('!Hello!', "!"), "Hello")
+        self.assertEqual(o.strip("!Hello!", "!"), "Hello")
         self.assertEqual(o.strip('"Hello"', '"'), "Hello")
         self.assertEqual(o.strip("'Hello'", "'"), "Hello")
         self.assertEqual(o.strip("Hello", "!"), "Hello")
@@ -81,7 +129,7 @@ class EnglishTextTest(LangOpsTestCase):
         self.assertEqual(o.lstrip("  Hello  "), "Hello  ")
         self.assertEqual(o.lstrip(""), "")
         self.assertEqual(o.lstrip("...Hello...", "."), "Hello...")
-        self.assertEqual(o.lstrip('Hello!', "!"), "Hello!")
+        self.assertEqual(o.lstrip("Hello!", "!"), "Hello!")
         self.assertEqual(o.lstrip("", "!"), "")
 
         # rstrip()
@@ -100,13 +148,13 @@ class EnglishTextTest(LangOpsTestCase):
 
         # lstrip_punc()
         self.assertEqual(o.lstrip_punc("(Hello World!)"), "Hello World!)")
-        self.assertEqual(o.lstrip_punc('"Hello"'), "Hello\"")
+        self.assertEqual(o.lstrip_punc('"Hello"'), 'Hello"')
         self.assertEqual(o.lstrip_punc(""), "")
         self.assertEqual(o.lstrip_punc("Hello!"), "Hello!")
 
         # rstrip_punc()
         self.assertEqual(o.rstrip_punc("(Hello World!)"), "(Hello World")
-        self.assertEqual(o.rstrip_punc('"Hello"'), "\"Hello")
+        self.assertEqual(o.rstrip_punc('"Hello"'), '"Hello')
         self.assertEqual(o.rstrip_punc(""), "")
         self.assertEqual(o.rstrip_punc("!Hello"), "!Hello")
 

@@ -27,6 +27,7 @@ from checker import (
 # Types: Severity, Issue, CheckReport
 # ===================================================================
 
+
 class TestSeverity:
     def test_values(self):
         assert Severity.ERROR.value == "error"
@@ -64,11 +65,13 @@ class TestCheckReport:
         assert not r.passed
 
     def test_errors_property(self):
-        r = CheckReport(issues=(
-            Issue("a", Severity.ERROR, "e"),
-            Issue("b", Severity.WARNING, "w"),
-            Issue("c", Severity.ERROR, "e2"),
-        ))
+        r = CheckReport(
+            issues=(
+                Issue("a", Severity.ERROR, "e"),
+                Issue("b", Severity.WARNING, "w"),
+                Issue("c", Severity.ERROR, "e2"),
+            )
+        )
         assert len(r.errors) == 2
         assert len(r.warnings) == 1
 
@@ -86,6 +89,7 @@ class TestCheckReport:
 # ===================================================================
 # Config: ProfileOverrides, RatioThresholds
 # ===================================================================
+
 
 class TestRatioThresholds:
     def test_defaults(self):
@@ -139,6 +143,7 @@ class TestProfileOverrides:
 # ===================================================================
 # Rules: individual rule classes
 # ===================================================================
+
 
 class TestLengthRatioRule:
     def _rule(self, **kw) -> LengthRatioRule:
@@ -251,10 +256,7 @@ class TestFormatRule:
         assert any(i.rule == "format_bracket" for i in issues)
 
     def test_bracket_consistent(self):
-        assert not any(
-            i.rule == "format_bracket"
-            for i in self._rule().check("[note] Hello", "【注】你好")
-        )
+        assert not any(i.rule == "format_bracket" for i in self._rule().check("[note] Hello", "【注】你好"))
 
     def test_severity_from_config(self):
         rule = self._rule(severity=Severity.WARNING)
@@ -292,15 +294,19 @@ class TestKeywordRule:
         assert len(rule.check("test", "please translate this")) > 0
 
     def test_keyword_pair_passes_when_consistent(self):
-        rule = self._rule(keyword_pairs=[
-            (["translate", "translation"], ["翻译"]),
-        ])
+        rule = self._rule(
+            keyword_pairs=[
+                (["translate", "translation"], ["翻译"]),
+            ]
+        )
         assert rule.check("Please translate this", "请翻译这个") == []
 
     def test_keyword_pair_fails_when_inconsistent(self):
-        rule = self._rule(keyword_pairs=[
-            (["translate", "translation"], ["翻译"]),
-        ])
+        rule = self._rule(
+            keyword_pairs=[
+                (["translate", "translation"], ["翻译"]),
+            ]
+        )
         issues = rule.check("Hello world", "翻译结果：你好世界")
         assert len(issues) > 0
         assert issues[0].rule == "keyword_inconsistency"
@@ -310,10 +316,12 @@ class TestKeywordRule:
         assert rule.check("Hello world", "你好世界") == []
 
     def test_multiple_pairs(self):
-        rule = self._rule(keyword_pairs=[
-            (["english"], ["英语", "英文"]),
-            (["subtitle"], ["字幕"]),
-        ])
+        rule = self._rule(
+            keyword_pairs=[
+                (["english"], ["英语", "英文"]),
+                (["subtitle"], ["字幕"]),
+            ]
+        )
         assert len(rule.check("Hello", "英文翻译")) > 0
         assert len(rule.check("Hello", "字幕翻译")) > 0
         assert rule.check("Hello", "你好") == []
@@ -427,6 +435,7 @@ class TestBuildDefaultRules:
 # Checker class
 # ===================================================================
 
+
 class TestChecker:
     def _make(self, **kw) -> Checker:
         return Checker(
@@ -449,6 +458,7 @@ class TestChecker:
         class RuleA:
             name = "a"
             severity = Severity.ERROR
+
             def check(self, s, t):
                 call_log.append("a")
                 return [Issue("a", Severity.ERROR, "fail")]
@@ -456,6 +466,7 @@ class TestChecker:
         class RuleB:
             name = "b"
             severity = Severity.INFO
+
             def check(self, s, t):
                 call_log.append("b")
                 return []
@@ -471,6 +482,7 @@ class TestChecker:
         class RuleA:
             name = "a"
             severity = Severity.WARNING
+
             def check(self, s, t):
                 call_log.append("a")
                 return [Issue("a", Severity.WARNING, "warn")]
@@ -478,6 +490,7 @@ class TestChecker:
         class RuleB:
             name = "b"
             severity = Severity.INFO
+
             def check(self, s, t):
                 call_log.append("b")
                 return []
@@ -515,7 +528,8 @@ class TestChecker:
     def test_lang_properties(self):
         checker = Checker(
             rules=[],
-            source_lang="en", target_lang="zh",
+            source_lang="en",
+            target_lang="zh",
         )
         assert checker.source_lang == "en"
         assert checker.target_lang == "zh"
@@ -529,15 +543,18 @@ class TestChecker:
 
     def test_collects_all_non_error_issues(self):
         """Multiple WARNING issues from different rules are all collected."""
+
         class RuleA:
             name = "a"
             severity = Severity.WARNING
+
             def check(self, s, t):
                 return [Issue("a", Severity.WARNING, "w1")]
 
         class RuleB:
             name = "b"
             severity = Severity.WARNING
+
             def check(self, s, t):
                 return [Issue("b", Severity.WARNING, "w2")]
 
@@ -599,10 +616,18 @@ class TestCheckerData:
         assert len(translate_pair) == 1
         assert "翻译" in translate_pair[0][1]
 
-    @pytest.mark.parametrize("src,tgt", [
-        ("en", "ja"), ("en", "ko"), ("en", "ru"), ("en", "es"),
-        ("zh", "en"), ("ja", "en"), ("ko", "en"),
-    ])
+    @pytest.mark.parametrize(
+        "src,tgt",
+        [
+            ("en", "ja"),
+            ("en", "ko"),
+            ("en", "ru"),
+            ("en", "es"),
+            ("zh", "en"),
+            ("ja", "en"),
+            ("ko", "en"),
+        ],
+    )
     def test_concept_overlap_exists(self, src, tgt):
         src_p = get_profile(src)
         tgt_p = get_profile(tgt)
@@ -614,14 +639,27 @@ class TestCheckerData:
 # default_checker factory — integration tests
 # ===================================================================
 
+
 class TestDefaultChecker:
-    @pytest.mark.parametrize("src,tgt", [
-        ("en", "zh"), ("en", "ja"), ("en", "ko"),
-        ("en", "ru"), ("en", "es"), ("en", "fr"),
-        ("en", "de"), ("en", "pt"), ("en", "vi"),
-        ("zh", "en"), ("ja", "en"), ("ko", "en"),
-        ("zh", "ja"), ("ru", "es"),
-    ])
+    @pytest.mark.parametrize(
+        "src,tgt",
+        [
+            ("en", "zh"),
+            ("en", "ja"),
+            ("en", "ko"),
+            ("en", "ru"),
+            ("en", "es"),
+            ("en", "fr"),
+            ("en", "de"),
+            ("en", "pt"),
+            ("en", "vi"),
+            ("zh", "en"),
+            ("ja", "en"),
+            ("ko", "en"),
+            ("zh", "ja"),
+            ("ru", "es"),
+        ],
+    )
     def test_returns_checker_with_rules(self, src, tgt):
         checker = default_checker(src, tgt)
         assert isinstance(checker, Checker)

@@ -17,6 +17,7 @@ from llm_ops.engines.openai_compat import (
 # Unit tests — response cleaning
 # ---------------------------------------------------------------------------
 
+
 class TestStripThinkTags:
     def test_removes_think_block(self):
         assert _strip_think_tags("<think>内部思考</think>翻译结果") == "翻译结果"
@@ -60,6 +61,7 @@ class TestCleanResponse:
 # EngineConfig
 # ---------------------------------------------------------------------------
 
+
 class TestEngineConfig:
     def test_defaults(self):
         cfg = EngineConfig()
@@ -79,15 +81,14 @@ class TestEngineConfig:
         assert cfg.temperature == 0.5
 
     def test_extra_body(self):
-        cfg = EngineConfig(
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}}
-        )
+        cfg = EngineConfig(extra_body={"chat_template_kwargs": {"enable_thinking": False}})
         assert "chat_template_kwargs" in cfg.extra_body
 
 
 # ---------------------------------------------------------------------------
 # OpenAICompatEngine — construction & protocol
 # ---------------------------------------------------------------------------
+
 
 class TestOpenAICompatEngine:
     def test_satisfies_protocol(self):
@@ -119,6 +120,7 @@ class TestOpenAICompatEngine:
 # ---------------------------------------------------------------------------
 # Integration test — requires running LLM server
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(True, reason="Requires live LLM server; run manually")
 class TestOpenAICompatEngineLive:

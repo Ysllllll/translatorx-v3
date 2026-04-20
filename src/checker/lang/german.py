@@ -2,8 +2,10 @@ from . import LangProfile
 
 PROFILE = LangProfile(
     forbidden_terms=[
-        "hier ist die übersetzung", "die übersetzung lautet",
-        "ich werde übersetzen", "originaltext",
+        "hier ist die übersetzung",
+        "die übersetzung lautet",
+        "ich werde übersetzen",
+        "originaltext",
         "```",
     ],
     hallucination_starts=[

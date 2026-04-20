@@ -122,9 +122,7 @@ class TestFingerprint:
     def test_sensitive_to_prompt(self):
         e = _RecordingEngine()
         p1 = TranslateProcessor(e, _PassChecker())
-        p2 = TranslateProcessor(
-            e, _PassChecker(), config=TranslateNodeConfig(system_prompt="diff")
-        )
+        p2 = TranslateProcessor(e, _PassChecker(), config=TranslateNodeConfig(system_prompt="diff"))
         assert p1.fingerprint() != p2.fingerprint()
 
     def test_sensitive_to_direct_map(self):
@@ -173,9 +171,7 @@ class TestHitPath:
             for r in recs:
                 yield r
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine.calls == 0
         assert [r.translations["zh"] for r in out] == ["你好。", "再见。"]
 
@@ -208,9 +204,7 @@ class TestHitPath:
             for r in recs:
                 yield r
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine.calls == 0
         assert [r.translations["zh"] for r in out] == ["你好。", "再见。"]
 
@@ -220,9 +214,7 @@ class TestHitPath:
         proc = TranslateProcessor(engine, _PassChecker())
 
         # Stale fingerprint — should force miss even though translation is present.
-        await store.patch_video(
-            video_key.video, meta={"_fingerprints": {"translate": "stale"}}
-        )
+        await store.patch_video(video_key.video, meta={"_fingerprints": {"translate": "stale"}})
 
         recs = [replace(_rec(0, "Hello."), translations={"zh": "旧译"})]
 
@@ -230,9 +222,7 @@ class TestHitPath:
             for r in recs:
                 yield r
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine.calls == 1
         assert out[0].translations["zh"] == "[翻译]Hello."
 
@@ -246,9 +236,7 @@ class TestMissPath:
     @pytest.mark.asyncio
     async def test_translation_persisted(self, store, video_key):
         engine = _RecordingEngine()
-        proc = TranslateProcessor(
-            engine, _PassChecker(), flush_every=1, flush_interval_s=0.01
-        )
+        proc = TranslateProcessor(engine, _PassChecker(), flush_every=1, flush_interval_s=0.01)
 
         recs = [_rec(0, "Hello."), _rec(1, "Bye.")]
 
@@ -256,19 +244,13 @@ class TestMissPath:
             for r in recs:
                 yield r
 
-        await _drain(
-            proc.process(
-                src(), ctx=_ctx(terms_provider=_NotReadyTerms({})), store=store, video_key=video_key
-            )
-        )
+        await _drain(proc.process(src(), ctx=_ctx(terms_provider=_NotReadyTerms({})), store=store, video_key=video_key))
         data = await store.load_video(video_key.video)
         by_id = {r["id"]: r for r in data["records"]}
         assert by_id[0]["translations"]["zh"] == "[翻译]Hello."
         assert by_id[1]["translations"]["zh"] == "[翻译]Bye."
         assert by_id[0]["extra"]["terms_ready_at_translate"] is False
-        assert (
-            data["meta"]["_fingerprints"]["translate"] == proc.fingerprint()
-        )
+        assert data["meta"]["_fingerprints"]["translate"] == proc.fingerprint()
 
     @pytest.mark.asyncio
     async def test_terms_ready_flag_reflects_provider(self, store, video_key):
@@ -287,9 +269,7 @@ class TestMissPath:
             for r in recs:
                 yield r
 
-        out = await _drain(
-            proc.process(src(), ctx=ctx, store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=ctx, store=store, video_key=video_key))
         # Clean case: the marker is absent (terms ready → nothing to record).
         assert "terms_ready_at_translate" not in out[0].extra
 
@@ -310,9 +290,7 @@ class TestMissPath:
             for r in recs:
                 yield r
 
-        out = await _drain(
-            proc.process(src(), ctx=ctx, store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=ctx, store=store, video_key=video_key))
         # Only the explicit False marker is recorded — enables future
         # retranslate when terms arrive.
         assert out[0].extra["terms_ready_at_translate"] is False
@@ -337,9 +315,7 @@ class TestRefinements:
             yield _rec(0, "hi")
             yield _rec(1, "other")
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine.calls == 1  # only "other" hit the engine
         assert out[0].translations["zh"] == "你好"
 
@@ -355,9 +331,7 @@ class TestRefinements:
         async def src():
             yield _rec(0, "hello world")  # len 11 > 5
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine.calls == 0
         assert out[0].translations["zh"] == "hello world"
 
@@ -376,9 +350,7 @@ class TestRefinements:
         async def src():
             yield replace(_rec(0, "Hello."), translations={"zh": "preloaded"})
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine.calls == 0
         assert out[0].translations["zh"] == "preloaded"
 
@@ -394,9 +366,7 @@ class TestRefinements:
         async def src():
             yield _rec(0, "ok, let's go")
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         # prefix readded → starts with 好的，
         assert out[0].translations["zh"].startswith("好的，")
 
@@ -439,9 +409,7 @@ class TestStaleDetection:
             provider._ready = True
             yield recs[1]
 
-        out = await _drain(
-            proc.process(src(), ctx=ctx, store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=ctx, store=store, video_key=video_key))
         # First record was translated while provider not ready → stale
         # Second record was translated after flip → not stale
         assert proc.output_is_stale(out[0]) is True
@@ -468,9 +436,7 @@ class TestBufferedFlush:
             for i in range(5):
                 yield _rec(i, f"s{i}")
 
-        await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         data = await store.load_video(video_key.video)
         assert len(data["records"]) == 5  # all landed (final flush + 2 batches)
 
@@ -491,9 +457,7 @@ class TestBufferedFlush:
             raise asyncio.CancelledError  # cancel mid-stream
 
         with pytest.raises(asyncio.CancelledError):
-            await _drain(
-                proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-            )
+            await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
 
         data = await store.load_video(video_key.video)
         # Both records were computed before cancel → both must be persisted
@@ -521,9 +485,7 @@ class TestNoIdRecords:
             # No id in extra
             yield SentenceRecord(src_text="Hello.", start=0.0, end=1.0)
 
-        out = await _drain(
-            proc.process(src(), ctx=_ctx(), store=store, video_key=video_key)
-        )
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert out[0].translations["zh"] == "[翻译]Hello."
 
         data = await store.load_video(video_key.video)

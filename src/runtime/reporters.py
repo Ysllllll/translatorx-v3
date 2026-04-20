@@ -120,9 +120,7 @@ class JsonlErrorReporter:
     ):
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._categories: frozenset[str] | None = (
-            frozenset(categories) if categories is not None else None
-        )
+        self._categories: frozenset[str] | None = frozenset(categories) if categories is not None else None
 
         # Dedicated logger per path; name encodes the path to prevent
         # accidental handler reuse across reporters.

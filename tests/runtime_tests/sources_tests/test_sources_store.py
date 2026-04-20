@@ -40,16 +40,12 @@ def srt_path(tmp_path: Path) -> Path:
 
 class TestSrtSourceStoreIntegration:
     @pytest.mark.asyncio
-    async def test_store_without_video_key_rejected(
-        self, store: JsonFileStore, srt_path: Path
-    ) -> None:
+    async def test_store_without_video_key_rejected(self, store: JsonFileStore, srt_path: Path) -> None:
         with pytest.raises(ValueError, match="supplied together"):
             SrtSource(srt_path, language="en", store=store)  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
-    async def test_raw_segment_sidecar_written(
-        self, store: JsonFileStore, srt_path: Path
-    ) -> None:
+    async def test_raw_segment_sidecar_written(self, store: JsonFileStore, srt_path: Path) -> None:
         vk = VideoKey(course="c", video="v1")
         src = SrtSource(srt_path, language="en", store=store, video_key=vk)
         records = await _drain(src.read())
@@ -61,9 +57,7 @@ class TestSrtSourceStoreIntegration:
         assert data["raw_segment_ref"]["n"] == 2
 
     @pytest.mark.asyncio
-    async def test_restore_punc_populates_and_persists_cache(
-        self, store: JsonFileStore, srt_path: Path
-    ) -> None:
+    async def test_restore_punc_populates_and_persists_cache(self, store: JsonFileStore, srt_path: Path) -> None:
         vk = VideoKey(course="c", video="v1")
 
         calls: list[list[str]] = []
@@ -85,9 +79,7 @@ class TestSrtSourceStoreIntegration:
         assert calls  # was called
 
     @pytest.mark.asyncio
-    async def test_chunk_populates_chunk_cache_on_records(
-        self, store: JsonFileStore, srt_path: Path
-    ) -> None:
+    async def test_chunk_populates_chunk_cache_on_records(self, store: JsonFileStore, srt_path: Path) -> None:
         vk = VideoKey(course="c", video="v1")
 
         def chunker(batch: list[str]) -> list[list[str]]:

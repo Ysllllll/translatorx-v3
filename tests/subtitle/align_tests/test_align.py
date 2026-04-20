@@ -18,10 +18,14 @@ def _seg_view(segs):
 
 
 class TestAlignSegments:
-
     def test_basic_alignment(self):
-        words = [Word("Hello", 0, .5), Word("world", .6, 1),
-                 Word("How", 1.1, 1.3), Word("are", 1.4, 1.6), Word("you", 1.7, 2)]
+        words = [
+            Word("Hello", 0, 0.5),
+            Word("world", 0.6, 1),
+            Word("How", 1.1, 1.3),
+            Word("are", 1.4, 1.6),
+            Word("you", 1.7, 2),
+        ]
         segs = align_segments(["Hello world.", "How are you?"], words)
         assert _seg_view(segs) == [
             {
@@ -39,7 +43,7 @@ class TestAlignSegments:
         ]
 
     def test_single_chunk(self):
-        words = [Word("Hi", 0, .5), Word("there", .6, 1)]
+        words = [Word("Hi", 0, 0.5), Word("there", 0.6, 1)]
         segs = align_segments(["Hi there"], words)
         assert _seg_view(segs) == [
             {
@@ -51,7 +55,7 @@ class TestAlignSegments:
         ]
 
     def test_empty_chunks(self):
-        assert align_segments([], [Word("Hi", 0, .5)]) == []
+        assert align_segments([], [Word("Hi", 0, 0.5)]) == []
 
     def test_empty_words(self):
         segs = align_segments(["Hello world"], [])

@@ -19,6 +19,7 @@ _ops = LangOps.for_language("en")
 # Realistic test data — simulates ASR / Whisper output
 # ---------------------------------------------------------------------------
 
+
 def _asr_interview_segments() -> list[Segment]:
     """Simulates a real interview transcript from ASR.
 
@@ -31,104 +32,140 @@ def _asr_interview_segments() -> list[Segment]:
     and transportation. However, we must proceed with caution."
     """
     return [
-        S("Welcome to the show. Today we're discussing artificial", 0.0, 5.2, words=[
-            W("Welcome", 0.0, 0.6, speaker="host"),
-            W("to", 0.6, 0.8, speaker="host"),
-            W("the", 0.8, 1.0, speaker="host"),
-            W("show.", 1.0, 1.5, speaker="host"),
-            W("Today", 2.0, 2.4, speaker="host"),
-            W("we're", 2.4, 2.7, speaker="host"),
-            W("discussing", 2.7, 3.4, speaker="host"),
-            W("artificial", 3.5, 5.2, speaker="host"),
-        ]),
-        S("intelligence and its impact on society. Dr. Smith, what are your", 5.2, 10.0, words=[
-            W("intelligence", 5.2, 6.0, speaker="host"),
-            W("and", 6.0, 6.2, speaker="host"),
-            W("its", 6.2, 6.5, speaker="host"),
-            W("impact", 6.5, 7.0, speaker="host"),
-            W("on", 7.0, 7.2, speaker="host"),
-            W("society.", 7.2, 8.0, speaker="host"),
-            W("Dr.", 8.3, 8.5, speaker="host"),
-            W("Smith,", 8.5, 8.9, speaker="host"),
-            W("what", 8.9, 9.1, speaker="host"),
-            W("are", 9.1, 9.3, speaker="host"),
-            W("your", 9.3, 10.0, speaker="host"),
-        ]),
-        S("thoughts? Well, I believe AI will transform healthcare,", 10.0, 15.5, words=[
-            W("thoughts?", 10.0, 10.8, speaker="host"),
-            W("Well,", 11.5, 11.8, speaker="guest"),
-            W("I", 11.8, 11.9, speaker="guest"),
-            W("believe", 11.9, 12.5, speaker="guest"),
-            W("AI", 12.5, 12.8, speaker="guest"),
-            W("will", 12.8, 13.0, speaker="guest"),
-            W("transform", 13.0, 13.8, speaker="guest"),
-            W("healthcare,", 13.8, 15.5, speaker="guest"),
-        ]),
-        S("education, and transportation. However, we must proceed with caution.", 15.5, 22.0, words=[
-            W("education,", 15.5, 16.5, speaker="guest"),
-            W("and", 16.5, 16.7, speaker="guest"),
-            W("transportation.", 16.7, 18.0, speaker="guest"),
-            W("However,", 18.5, 19.0, speaker="guest"),
-            W("we", 19.0, 19.2, speaker="guest"),
-            W("must", 19.2, 19.5, speaker="guest"),
-            W("proceed", 19.5, 20.0, speaker="guest"),
-            W("with", 20.0, 20.3, speaker="guest"),
-            W("caution.", 20.3, 22.0, speaker="guest"),
-        ]),
+        S(
+            "Welcome to the show. Today we're discussing artificial",
+            0.0,
+            5.2,
+            words=[
+                W("Welcome", 0.0, 0.6, speaker="host"),
+                W("to", 0.6, 0.8, speaker="host"),
+                W("the", 0.8, 1.0, speaker="host"),
+                W("show.", 1.0, 1.5, speaker="host"),
+                W("Today", 2.0, 2.4, speaker="host"),
+                W("we're", 2.4, 2.7, speaker="host"),
+                W("discussing", 2.7, 3.4, speaker="host"),
+                W("artificial", 3.5, 5.2, speaker="host"),
+            ],
+        ),
+        S(
+            "intelligence and its impact on society. Dr. Smith, what are your",
+            5.2,
+            10.0,
+            words=[
+                W("intelligence", 5.2, 6.0, speaker="host"),
+                W("and", 6.0, 6.2, speaker="host"),
+                W("its", 6.2, 6.5, speaker="host"),
+                W("impact", 6.5, 7.0, speaker="host"),
+                W("on", 7.0, 7.2, speaker="host"),
+                W("society.", 7.2, 8.0, speaker="host"),
+                W("Dr.", 8.3, 8.5, speaker="host"),
+                W("Smith,", 8.5, 8.9, speaker="host"),
+                W("what", 8.9, 9.1, speaker="host"),
+                W("are", 9.1, 9.3, speaker="host"),
+                W("your", 9.3, 10.0, speaker="host"),
+            ],
+        ),
+        S(
+            "thoughts? Well, I believe AI will transform healthcare,",
+            10.0,
+            15.5,
+            words=[
+                W("thoughts?", 10.0, 10.8, speaker="host"),
+                W("Well,", 11.5, 11.8, speaker="guest"),
+                W("I", 11.8, 11.9, speaker="guest"),
+                W("believe", 11.9, 12.5, speaker="guest"),
+                W("AI", 12.5, 12.8, speaker="guest"),
+                W("will", 12.8, 13.0, speaker="guest"),
+                W("transform", 13.0, 13.8, speaker="guest"),
+                W("healthcare,", 13.8, 15.5, speaker="guest"),
+            ],
+        ),
+        S(
+            "education, and transportation. However, we must proceed with caution.",
+            15.5,
+            22.0,
+            words=[
+                W("education,", 15.5, 16.5, speaker="guest"),
+                W("and", 16.5, 16.7, speaker="guest"),
+                W("transportation.", 16.7, 18.0, speaker="guest"),
+                W("However,", 18.5, 19.0, speaker="guest"),
+                W("we", 19.0, 19.2, speaker="guest"),
+                W("must", 19.2, 19.5, speaker="guest"),
+                W("proceed", 19.5, 20.0, speaker="guest"),
+                W("with", 20.0, 20.3, speaker="guest"),
+                W("caution.", 20.3, 22.0, speaker="guest"),
+            ],
+        ),
     ]
 
 
 def _short_segments() -> list[Segment]:
     """Two simple segments, each a complete sentence."""
     return [
-        S("Hello world.", 0.0, 2.0, words=[
-            W("Hello", 0.0, 0.8),
-            W("world.", 0.9, 2.0),
-        ]),
-        S("How are you?", 2.5, 5.0, words=[
-            W("How", 2.5, 3.0),
-            W("are", 3.1, 3.5),
-            W("you?", 3.6, 5.0),
-        ]),
+        S(
+            "Hello world.",
+            0.0,
+            2.0,
+            words=[
+                W("Hello", 0.0, 0.8),
+                W("world.", 0.9, 2.0),
+            ],
+        ),
+        S(
+            "How are you?",
+            2.5,
+            5.0,
+            words=[
+                W("How", 2.5, 3.0),
+                W("are", 3.1, 3.5),
+                W("you?", 3.6, 5.0),
+            ],
+        ),
     ]
 
 
 def _single_long_segment() -> list[Segment]:
     """One segment with multiple sentences, clauses, and varied punctuation."""
     return [
-        S("The quick brown fox jumped over the lazy dog. Meanwhile, "
-          "the cat sat on the mat; it was very comfortable. "
-          "What a day!", 0.0, 12.0, words=[
-            W("The", 0.0, 0.3),
-            W("quick", 0.3, 0.6),
-            W("brown", 0.6, 0.9),
-            W("fox", 0.9, 1.2),
-            W("jumped", 1.2, 1.6),
-            W("over", 1.6, 1.9),
-            W("the", 1.9, 2.1),
-            W("lazy", 2.1, 2.5),
-            W("dog.", 2.5, 3.0),
-            W("Meanwhile,", 3.5, 4.2),
-            W("the", 4.2, 4.4),
-            W("cat", 4.4, 4.7),
-            W("sat", 4.7, 5.0),
-            W("on", 5.0, 5.2),
-            W("the", 5.2, 5.4),
-            W("mat;", 5.4, 5.9),
-            W("it", 6.0, 6.2),
-            W("was", 6.2, 6.5),
-            W("very", 6.5, 6.9),
-            W("comfortable.", 6.9, 8.0),
-            W("What", 9.0, 9.3),
-            W("a", 9.3, 9.4),
-            W("day!", 9.4, 12.0),
-        ]),
+        S(
+            "The quick brown fox jumped over the lazy dog. Meanwhile, "
+            "the cat sat on the mat; it was very comfortable. "
+            "What a day!",
+            0.0,
+            12.0,
+            words=[
+                W("The", 0.0, 0.3),
+                W("quick", 0.3, 0.6),
+                W("brown", 0.6, 0.9),
+                W("fox", 0.9, 1.2),
+                W("jumped", 1.2, 1.6),
+                W("over", 1.6, 1.9),
+                W("the", 1.9, 2.1),
+                W("lazy", 2.1, 2.5),
+                W("dog.", 2.5, 3.0),
+                W("Meanwhile,", 3.5, 4.2),
+                W("the", 4.2, 4.4),
+                W("cat", 4.4, 4.7),
+                W("sat", 4.7, 5.0),
+                W("on", 5.0, 5.2),
+                W("the", 5.2, 5.4),
+                W("mat;", 5.4, 5.9),
+                W("it", 6.0, 6.2),
+                W("was", 6.2, 6.5),
+                W("very", 6.5, 6.9),
+                W("comfortable.", 6.9, 8.0),
+                W("What", 9.0, 9.3),
+                W("a", 9.3, 9.4),
+                W("day!", 9.4, 12.0),
+            ],
+        ),
     ]
 
 
 # ---------------------------------------------------------------------------
 # Inherits structural invariants
 # ---------------------------------------------------------------------------
+
 
 class TestEnglishBuilder(BuilderTestBase):
     LANGUAGE = "en"
@@ -138,8 +175,8 @@ class TestEnglishBuilder(BuilderTestBase):
 # Sentences
 # ---------------------------------------------------------------------------
 
-class TestEnglishSentences:
 
+class TestEnglishSentences:
     def test_two_segments_two_sentences(self) -> None:
         result = Subtitle(_short_segments(), _ops).sentences().build()
         assert [s.text for s in result] == [
@@ -196,8 +233,8 @@ class TestEnglishSentences:
 # Clauses
 # ---------------------------------------------------------------------------
 
-class TestEnglishClauses:
 
+class TestEnglishClauses:
     def test_clause_split(self) -> None:
         result = Subtitle(_single_long_segment(), _ops).clauses().build()
         texts = [s.text for s in result]
@@ -211,10 +248,7 @@ class TestEnglishClauses:
 
     def test_sentences_then_clauses(self) -> None:
         """Chaining: first split by sentence, then by clause."""
-        result = (Subtitle(_single_long_segment(), _ops)
-                  .sentences()
-                  .clauses()
-                  .build())
+        result = Subtitle(_single_long_segment(), _ops).sentences().clauses().build()
         texts = [s.text for s in result]
         assert texts == [
             "The quick brown fox jumped over the lazy dog.",
@@ -236,23 +270,18 @@ class TestEnglishClauses:
 # By length
 # ---------------------------------------------------------------------------
 
-class TestEnglishByLength:
 
+class TestEnglishByLength:
     def test_length_constraint(self) -> None:
-        result = (Subtitle(_single_long_segment(), _ops)
-                  .sentences()
-                  .split(25)
-                  .build())
+        result = Subtitle(_single_long_segment(), _ops).sentences().split(25).build()
         for seg in result:
             # Each chunk ≤ 25 chars, or is a single oversized token
-            assert _ops.length(seg.text.strip()) <= 25 or len(_ops.split(seg.text.strip())) == 1, \
+            assert _ops.length(seg.text.strip()) <= 25 or len(_ops.split(seg.text.strip())) == 1, (
                 f"Segment too long: {seg.text!r} ({_ops.length(seg.text.strip())} chars)"
+            )
 
     def test_text_preserved_after_length_split(self) -> None:
-        result = (Subtitle(_single_long_segment(), _ops)
-                  .sentences()
-                  .split(25)
-                  .build())
+        result = Subtitle(_single_long_segment(), _ops).sentences().split(25).build()
         # split re-tokenizes via ops.split()/join(), which normalizes
         # whitespace; verify all content words are present
         result_words = " ".join(s.text for s in result).split()
@@ -261,26 +290,32 @@ class TestEnglishByLength:
 
     def test_chain_sentences_clauses_length(self) -> None:
         """Full chain: sentences → clauses → split."""
-        result = (Subtitle(_asr_interview_segments(), _ops)
-                  .sentences()
-                  .clauses()
-                  .split(30)
-                  .build())
+        result = Subtitle(_asr_interview_segments(), _ops).sentences().clauses().split(30).build()
         for seg in result:
             stripped = seg.text.strip()
-            assert _ops.length(stripped) <= 30 or len(_ops.split(stripped)) == 1, \
-                f"Segment too long: {seg.text!r}"
+            assert _ops.length(stripped) <= 30 or len(_ops.split(stripped)) == 1, f"Segment too long: {seg.text!r}"
         # Verify all content words preserved
         result_words = " ".join(s.text for s in result).split()
         original_words = " ".join(s.text for s in _asr_interview_segments()).split()
         assert result_words == original_words
 
     def test_split_exact_results(self) -> None:
-        segs = [S("one two three four five six seven", 0.0, 7.0, words=[
-            W("one", 0.0, 1.0), W("two", 1.0, 2.0), W("three", 2.0, 3.0),
-            W("four", 3.0, 4.0), W("five", 4.0, 5.0), W("six", 5.0, 6.0),
-            W("seven", 6.0, 7.0),
-        ])]
+        segs = [
+            S(
+                "one two three four five six seven",
+                0.0,
+                7.0,
+                words=[
+                    W("one", 0.0, 1.0),
+                    W("two", 1.0, 2.0),
+                    W("three", 2.0, 3.0),
+                    W("four", 3.0, 4.0),
+                    W("five", 4.0, 5.0),
+                    W("six", 5.0, 6.0),
+                    W("seven", 6.0, 7.0),
+                ],
+            )
+        ]
         result = Subtitle(segs, _ops).split(12).build()
         # split re-tokenizes each chunk, so no leading spaces
         assert [s.text for s in result] == [
@@ -295,14 +330,12 @@ class TestEnglishByLength:
 # Merge (greedy bin-packing)
 # ---------------------------------------------------------------------------
 
-class TestEnglishMerge:
 
+class TestEnglishMerge:
     def test_merge_clauses_back(self) -> None:
         """sentences → clauses → merge: small clauses are recombined."""
-        clause_result = (Subtitle(_asr_interview_segments(), _ops)
-                         .sentences().clauses().build())
-        merged_result = (Subtitle(_asr_interview_segments(), _ops)
-                         .sentences().clauses().merge(60).build())
+        clause_result = Subtitle(_asr_interview_segments(), _ops).sentences().clauses().build()
+        merged_result = Subtitle(_asr_interview_segments(), _ops).sentences().clauses().merge(60).build()
         # Merge only combines, never splits — so result count ≤ clause count
         assert len(merged_result) <= len(clause_result)
         # Text content is preserved
@@ -312,22 +345,29 @@ class TestEnglishMerge:
 
     def test_merge_preserves_text(self) -> None:
         """Merged text matches original content."""
-        result = (Subtitle(_asr_interview_segments(), _ops)
-                  .sentences()
-                  .clauses()
-                  .merge(80)
-                  .build())
+        result = Subtitle(_asr_interview_segments(), _ops).sentences().clauses().merge(80).build()
         result_words = " ".join(s.text for s in result).split()
         original_words = " ".join(s.text for s in _asr_interview_segments()).split()
         assert result_words == original_words
 
     def test_merge_exact_results(self) -> None:
         """Known input → known output for merge."""
-        segs = [S("one two three four five six seven", 0.0, 7.0, words=[
-            W("one", 0.0, 1.0), W("two", 1.0, 2.0), W("three", 2.0, 3.0),
-            W("four", 3.0, 4.0), W("five", 4.0, 5.0), W("six", 5.0, 6.0),
-            W("seven", 6.0, 7.0),
-        ])]
+        segs = [
+            S(
+                "one two three four five six seven",
+                0.0,
+                7.0,
+                words=[
+                    W("one", 0.0, 1.0),
+                    W("two", 1.0, 2.0),
+                    W("three", 2.0, 3.0),
+                    W("four", 3.0, 4.0),
+                    W("five", 4.0, 5.0),
+                    W("six", 5.0, 6.0),
+                    W("seven", 6.0, 7.0),
+                ],
+            )
+        ]
         # split(8) → ["one two", "three", "four", "five six", "seven"]
         # merge(12): "one two"(7) +"three"→13>12 flush; "three"(5)+"four"→10≤12;
         #   "three four"(10)+"five six"→18>12 flush; "five six"(8)+"seven"→14>12 flush
@@ -341,10 +381,7 @@ class TestEnglishMerge:
 
     def test_merge_all_fit_single(self) -> None:
         """After sentences(), merge(100) merges within each sentence only."""
-        result = (Subtitle(_short_segments(), _ops)
-                  .sentences()
-                  .merge(100)
-                  .build())
+        result = Subtitle(_short_segments(), _ops).sentences().merge(100).build()
         # Each sentence is its own pipeline — merge can't cross sentences
         assert len(result) == 2
         assert result[0].text == "Hello world."
@@ -352,19 +389,13 @@ class TestEnglishMerge:
 
     def test_merge_nothing_fits(self) -> None:
         """When split limit is smaller than each chunk, no merging occurs."""
-        result = (Subtitle(_short_segments(), _ops)
-                  .sentences()
-                  .merge(5)
-                  .build())
+        result = Subtitle(_short_segments(), _ops).sentences().merge(5).build()
         # Each sentence is > 5 chars, so nothing merges
         assert len(result) == 2
 
     def test_merge_words_timing(self) -> None:
         """After sentences(), merge preserves per-sentence timing."""
-        result = (Subtitle(_short_segments(), _ops)
-                  .sentences()
-                  .merge(100)
-                  .build())
+        result = Subtitle(_short_segments(), _ops).sentences().merge(100).build()
         assert len(result) == 2
         assert result[0].start == 0.0
         assert result[0].end == 2.0
@@ -373,35 +404,24 @@ class TestEnglishMerge:
 
     def test_merge_chain_full(self) -> None:
         """Full chain: sentences → clauses → split → merge."""
-        result = (Subtitle(_single_long_segment(), _ops)
-                  .sentences()
-                  .clauses()
-                  .split(20)
-                  .merge(40)
-                  .build())
+        result = Subtitle(_single_long_segment(), _ops).sentences().clauses().split(20).merge(40).build()
         for seg in result:
             assert _ops.length(seg.text.strip()) <= 40 or len(_ops.split(seg.text.strip())) == 1
 
     def test_merge_respects_sentence_boundaries(self) -> None:
         """sentences → clauses → merge: merge only within each sentence."""
-        proc = (Subtitle(_asr_interview_segments(), _ops)
-                .sentences().clauses())
+        proc = Subtitle(_asr_interview_segments(), _ops).sentences().clauses()
         clause_count = len(proc.build())
 
         # merge(500) — huge limit, but respects sentence boundaries
         merged = proc.merge(500).build()
         # Each sentence's clauses are merged into 1, but sentences stay separate
-        sentence_count = len(
-            Subtitle(_asr_interview_segments(), _ops).sentences().build()
-        )
+        sentence_count = len(Subtitle(_asr_interview_segments(), _ops).sentences().build())
         assert len(merged) == sentence_count
 
     def test_merge_without_prior_split_can_combine_all(self) -> None:
         """Without sentences(), split shares one pipeline — merge is free."""
-        result = (Subtitle(_short_segments(), _ops)
-                  .split(5)
-                  .merge(100)
-                  .build())
+        result = Subtitle(_short_segments(), _ops).split(5).merge(100).build()
         assert len(result) == 1
 
 
@@ -409,10 +429,11 @@ class TestEnglishMerge:
 # Split (external fn splitting)
 # ---------------------------------------------------------------------------
 
-class TestEnglishTransform:
 
+class TestEnglishTransform:
     def test_transform_split(self) -> None:
         """transform() with a rule-based splitting fn."""
+
         def rule_split(texts: list[str]) -> list[list[str]]:
             result = []
             for t in texts:
@@ -421,7 +442,7 @@ class TestEnglishTransform:
                     # Find nearest space
                     sp = t.rfind(" ", 0, mid)
                     if sp > 0:
-                        result.append([t[:sp], t[sp + 1:]])
+                        result.append([t[:sp], t[sp + 1 :]])
                     else:
                         result.append([t])
                 else:
@@ -429,12 +450,7 @@ class TestEnglishTransform:
             return result
 
         segs = _asr_interview_segments()
-        result = (Subtitle(segs, _ops)
-                  .sentences()
-                  .clauses()
-                  .merge(60)
-                  .transform(rule_split)
-                  .build())
+        result = Subtitle(segs, _ops).sentences().clauses().merge(60).transform(rule_split).build()
         # Text is preserved
         result_words = " ".join(s.text for s in result).split()
         original_words = " ".join(s.text for s in segs).split()
@@ -442,6 +458,7 @@ class TestEnglishTransform:
 
     def test_transform_noop(self) -> None:
         """transform() with a fn that returns [text] — no change."""
+
         def noop(texts):
             return [[t] for t in texts]
 
@@ -452,6 +469,7 @@ class TestEnglishTransform:
 
     def test_transform_replace(self) -> None:
         """transform() for 1:1 text replacement (e.g. punct restoration)."""
+
         def upper_fn(texts):
             return [[t.upper()] for t in texts]
 
@@ -484,13 +502,14 @@ class TestEnglishTransform:
 
     def test_transform_respects_sentence_boundaries(self) -> None:
         """transform() after sentences → merge only within sentences."""
+
         def split_long(texts):
             result = []
             for t in texts:
                 if len(t) > 30:
                     mid = t.find(" ", len(t) // 2)
                     if mid > 0:
-                        result.append([t[:mid], t[mid + 1:]])
+                        result.append([t[:mid], t[mid + 1 :]])
                     else:
                         result.append([t])
                 else:
@@ -498,15 +517,9 @@ class TestEnglishTransform:
             return result
 
         segs = _asr_interview_segments()
-        result = (Subtitle(segs, _ops)
-                  .sentences()
-                  .transform(split_long)
-                  .merge(200)
-                  .build())
+        result = Subtitle(segs, _ops).sentences().transform(split_long).merge(200).build()
         # merge(200) after transform: merge only within each sentence
-        sentence_count = len(
-            Subtitle(segs, _ops).sentences().build()
-        )
+        sentence_count = len(Subtitle(segs, _ops).sentences().build())
         assert len(result) == sentence_count
 
     def test_transform_batch_and_workers(self) -> None:
@@ -519,7 +532,9 @@ class TestEnglishTransform:
 
         segs = _asr_interview_segments()
         Subtitle(segs, _ops).sentences().transform(
-            tracking_fn, batch_size=2, workers=1,
+            tracking_fn,
+            batch_size=2,
+            workers=1,
         ).build()
         # Each batch should have at most 2 texts
         assert all(b <= 2 for b in received_batches)
@@ -536,13 +551,15 @@ class TestEnglishTransform:
         segs = _asr_interview_segments()
         sentences = Subtitle(segs, _ops).sentences().build()
         Subtitle(segs, _ops).sentences().transform(
-            tracking_fn, batch_size=0,
+            tracking_fn,
+            batch_size=0,
         ).build()
         assert len(received_batches) == 1
         assert received_batches[0] == len(sentences)
 
     def test_transform_fn_bad_count_raises(self) -> None:
         """fn returning wrong count raises ValueError."""
+
         def bad_fn(texts):
             return [[t] for t in texts[:-1]]  # one fewer
 
@@ -573,19 +590,16 @@ class TestEnglishTransform:
         assert call_count == long_count
         # Short chunks are unchanged, long chunks are uppercased
         for seg in result:
-            original = next(
-                (s for s in all_texts if s.text == seg.text or s.text.upper() == seg.text), None
-            )
+            original = next((s for s in all_texts if s.text == seg.text or s.text.upper() == seg.text), None)
             assert original is not None
-
 
 
 # ---------------------------------------------------------------------------
 # Records (SentenceRecord output)
 # ---------------------------------------------------------------------------
 
-class TestEnglishRecords:
 
+class TestEnglishRecords:
     def test_records_without_split(self) -> None:
         records = Subtitle(_short_segments(), _ops).records()
         assert len(records) == 2
@@ -603,8 +617,9 @@ class TestEnglishRecords:
         for rec in records:
             for seg in rec.segments:
                 stripped = seg.text.strip()
-                assert _ops.length(stripped) <= 20 or len(_ops.split(stripped)) == 1, \
+                assert _ops.length(stripped) <= 20 or len(_ops.split(stripped)) == 1, (
                     f"Sub-segment too long in {rec.src_text!r}: {seg.text!r}"
+                )
 
     def test_records_timing(self) -> None:
         records = Subtitle(_asr_interview_segments(), _ops).records()
@@ -616,16 +631,15 @@ class TestEnglishRecords:
         records = Subtitle(_asr_interview_segments(), _ops).sentences().clauses().split(20).records()
         for rec in records:
             for seg in rec.segments:
-                assert len(seg.words) >= 1, \
-                    f"Sub-segment {seg.text!r} in {rec.src_text!r} has no words"
+                assert len(seg.words) >= 1, f"Sub-segment {seg.text!r} in {rec.src_text!r} has no words"
 
 
 # ---------------------------------------------------------------------------
 # Auto-fill words (segments without words)
 # ---------------------------------------------------------------------------
 
-class TestEnglishAutoFill:
 
+class TestEnglishAutoFill:
     def test_no_words_auto_interpolated(self) -> None:
         """Segments without words get auto-filled via fill_words."""
         segments = [
@@ -645,9 +659,15 @@ class TestEnglishAutoFill:
     def test_mixed_words_and_no_words(self) -> None:
         """Mix of segments with and without words."""
         segments = [
-            S("Hello world.", 0.0, 2.0, words=[
-                W("Hello", 0.0, 0.8), W("world.", 0.8, 2.0),
-            ]),
+            S(
+                "Hello world.",
+                0.0,
+                2.0,
+                words=[
+                    W("Hello", 0.0, 0.8),
+                    W("world.", 0.8, 2.0),
+                ],
+            ),
             S("How are you?", 2.5, 5.0),  # no words
         ]
         result = Subtitle(segments, _ops).sentences().build()
@@ -660,14 +680,11 @@ class TestEnglishAutoFill:
 # Speaker splitting
 # ---------------------------------------------------------------------------
 
-class TestEnglishSpeaker:
 
+class TestEnglishSpeaker:
     def test_speaker_change_creates_boundary(self) -> None:
         """Speaker changes force sentence-level boundaries."""
-        result = (Subtitle(_asr_interview_segments(), _ops,
-                                 split_by_speaker=True)
-                  .sentences()
-                  .build())
+        result = Subtitle(_asr_interview_segments(), _ops, split_by_speaker=True).sentences().build()
         texts = [s.text for s in result]
         # The speaker change between host→guest forces a split at "thoughts?"
         # Host says everything up to "thoughts?", guest says "Well, ..."
@@ -676,13 +693,20 @@ class TestEnglishSpeaker:
 
     def test_same_speaker_no_extra_splits(self) -> None:
         """When all words have the same speaker, no extra splits."""
-        segments = [S("Hello world. How are you?", 0.0, 5.0, words=[
-            W("Hello", 0.0, 0.8, speaker="A"),
-            W("world.", 0.8, 2.0, speaker="A"),
-            W("How", 2.5, 3.0, speaker="A"),
-            W("are", 3.0, 3.5, speaker="A"),
-            W("you?", 3.5, 5.0, speaker="A"),
-        ])]
+        segments = [
+            S(
+                "Hello world. How are you?",
+                0.0,
+                5.0,
+                words=[
+                    W("Hello", 0.0, 0.8, speaker="A"),
+                    W("world.", 0.8, 2.0, speaker="A"),
+                    W("How", 2.5, 3.0, speaker="A"),
+                    W("are", 3.0, 3.5, speaker="A"),
+                    W("you?", 3.5, 5.0, speaker="A"),
+                ],
+            )
+        ]
         result_with = Subtitle(segments, _ops, split_by_speaker=True).sentences().build()
         result_without = Subtitle(segments, _ops).sentences().build()
         assert [s.text for s in result_with] == [s.text for s in result_without]
@@ -692,31 +716,45 @@ class TestEnglishSpeaker:
 # Stream mode
 # ---------------------------------------------------------------------------
 
-class TestEnglishStream:
 
+class TestEnglishStream:
     def test_stream_incremental_emission(self) -> None:
         """Streaming emits confirmed sentences progressively."""
         stream = Subtitle.stream(_ops)
 
         # Feed first segment: contains "Welcome to the show." + "Today"
         # Since there are 2 sentences, the first is confirmed immediately
-        done1 = stream.feed(S("Welcome to the show. Today", 0.0, 3.0, words=[
-            W("Welcome", 0.0, 0.6),
-            W("to", 0.6, 0.8),
-            W("the", 0.8, 1.0),
-            W("show.", 1.0, 1.5),
-            W("Today", 2.0, 3.0),
-        ]))
+        done1 = stream.feed(
+            S(
+                "Welcome to the show. Today",
+                0.0,
+                3.0,
+                words=[
+                    W("Welcome", 0.0, 0.6),
+                    W("to", 0.6, 0.8),
+                    W("the", 0.8, 1.0),
+                    W("show.", 1.0, 1.5),
+                    W("Today", 2.0, 3.0),
+                ],
+            )
+        )
         assert len(done1) == 1
         assert done1[0].text == "Welcome to the show."
 
         # Feed second segment (completes "Today we're here." + starts "Thank you!")
-        done2 = stream.feed(S("we're here. Thank you!", 3.0, 6.0, words=[
-            W("we're", 3.0, 3.5),
-            W("here.", 3.5, 4.0),
-            W("Thank", 5.0, 5.5),
-            W("you!", 5.5, 6.0),
-        ]))
+        done2 = stream.feed(
+            S(
+                "we're here. Thank you!",
+                3.0,
+                6.0,
+                words=[
+                    W("we're", 3.0, 3.5),
+                    W("here.", 3.5, 4.0),
+                    W("Thank", 5.0, 5.5),
+                    W("you!", 5.5, 6.0),
+                ],
+            )
+        )
         # "Today we're here." is now confirmed
         assert len(done2) >= 1
         assert any("here." in s.text for s in done2)
@@ -733,9 +771,17 @@ class TestEnglishStream:
     def test_stream_single_segment_flush(self) -> None:
         """A single segment only emits on flush."""
         stream = Subtitle.stream(_ops)
-        done = stream.feed(S("Hello world.", 0.0, 2.0, words=[
-            W("Hello", 0.0, 1.0), W("world.", 1.0, 2.0),
-        ]))
+        done = stream.feed(
+            S(
+                "Hello world.",
+                0.0,
+                2.0,
+                words=[
+                    W("Hello", 0.0, 1.0),
+                    W("world.", 1.0, 2.0),
+                ],
+            )
+        )
         assert done == []
 
         rest = stream.flush()
@@ -756,13 +802,20 @@ class TestEnglishStream:
 
     def test_feed_records_emits_sentence_records(self) -> None:
         stream = Subtitle.stream(_ops)
-        done1 = stream.feed_records(S("Welcome to the show. Today", 0.0, 3.0, words=[
-            W("Welcome", 0.0, 0.6),
-            W("to", 0.6, 0.8),
-            W("the", 0.8, 1.0),
-            W("show.", 1.0, 1.5),
-            W("Today", 2.0, 3.0),
-        ]))
+        done1 = stream.feed_records(
+            S(
+                "Welcome to the show. Today",
+                0.0,
+                3.0,
+                words=[
+                    W("Welcome", 0.0, 0.6),
+                    W("to", 0.6, 0.8),
+                    W("the", 0.8, 1.0),
+                    W("show.", 1.0, 1.5),
+                    W("Today", 2.0, 3.0),
+                ],
+            )
+        )
         assert len(done1) == 1
         assert isinstance(done1[0], SentenceRecord)
         assert done1[0].src_text == "Welcome to the show."
@@ -772,9 +825,17 @@ class TestEnglishStream:
 
     def test_flush_records_returns_remaining(self) -> None:
         stream = Subtitle.stream(_ops)
-        stream.feed_records(S("Hello world.", 0.0, 2.0, words=[
-            W("Hello", 0.0, 1.0), W("world.", 1.0, 2.0),
-        ]))
+        stream.feed_records(
+            S(
+                "Hello world.",
+                0.0,
+                2.0,
+                words=[
+                    W("Hello", 0.0, 1.0),
+                    W("world.", 1.0, 2.0),
+                ],
+            )
+        )
         rest = stream.flush_records()
         assert len(rest) == 1
         assert isinstance(rest[0], SentenceRecord)

@@ -66,9 +66,7 @@ class WhisperXSource:
         if self._store is not None and self._video_key is not None:
             vid = self._video_key.video
             ref = await self._store.write_raw_segment(vid, words, "whisperx")
-            await self._store.patch_video(
-                vid, segment_type="whisperx", raw_segment_ref=ref
-            )
+            await self._store.patch_video(vid, segment_type="whisperx", raw_segment_ref=ref)
 
         sub = Subtitle.from_words(words, language=self._language)
 

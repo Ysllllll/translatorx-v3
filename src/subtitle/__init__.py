@@ -1,7 +1,11 @@
 from model import Word, Segment, SentenceRecord
 from .align import (
-    fill_words, find_words, distribute_words, align_segments,
-    attach_punct_words, normalize_words,
+    fill_words,
+    find_words,
+    distribute_words,
+    align_segments,
+    attach_punct_words,
+    normalize_words,
 )
 from .core import Subtitle, SubtitleStream
 

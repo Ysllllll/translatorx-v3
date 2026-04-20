@@ -48,9 +48,7 @@ def attach_punct_words(words: list[Word]) -> list[Word]:
     for w in words:
         if merged and not w.content and _all_in(w.word.strip(), _CLOSE):
             p = merged[-1]
-            merged[-1] = replace(
-                p, word=p.word + w.word.lstrip(), end=max(p.end, w.end)
-            )
+            merged[-1] = replace(p, word=p.word + w.word.lstrip(), end=max(p.end, w.end))
         else:
             merged.append(w)
 

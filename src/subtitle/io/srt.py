@@ -8,9 +8,7 @@ from pathlib import Path
 from model import Segment
 
 # HH:MM:SS,mmm --> HH:MM:SS,mmm
-_TIMESTAMP_RE = re.compile(
-    r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})"
-)
+_TIMESTAMP_RE = re.compile(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})")
 
 # ── sanitize_srt helpers ──────────────────────────────────────────────
 
@@ -30,21 +28,25 @@ _INVISIBLE_RE = re.compile(
 )
 
 # Smart quotes → straight quotes
-_SMART_QUOTE_MAP = str.maketrans({
-    "\u2018": "'",   # LEFT SINGLE QUOTATION MARK
-    "\u2019": "'",   # RIGHT SINGLE QUOTATION MARK
-    "\u201c": '"',   # LEFT DOUBLE QUOTATION MARK
-    "\u201d": '"',   # RIGHT DOUBLE QUOTATION MARK
-})
+_SMART_QUOTE_MAP = str.maketrans(
+    {
+        "\u2018": "'",  # LEFT SINGLE QUOTATION MARK
+        "\u2019": "'",  # RIGHT SINGLE QUOTATION MARK
+        "\u201c": '"',  # LEFT DOUBLE QUOTATION MARK
+        "\u201d": '"',  # RIGHT DOUBLE QUOTATION MARK
+    }
+)
 
 # Non-standard whitespace → regular space
-_WHITESPACE_MAP = str.maketrans({
-    "\u00a0": " ",   # NO-BREAK SPACE
-    "\u2002": " ",   # EN SPACE
-    "\u2003": " ",   # EM SPACE
-    "\u2009": " ",   # THIN SPACE
-    "\u200a": " ",   # HAIR SPACE
-})
+_WHITESPACE_MAP = str.maketrans(
+    {
+        "\u00a0": " ",  # NO-BREAK SPACE
+        "\u2002": " ",  # EN SPACE
+        "\u2003": " ",  # EM SPACE
+        "\u2009": " ",  # THIN SPACE
+        "\u200a": " ",  # HAIR SPACE
+    }
+)
 
 
 def sanitize_srt(content: str) -> str:
@@ -135,7 +137,7 @@ def parse_srt(content: str) -> list[Segment]:
         end = _parse_timestamp(*match.group(5, 6, 7, 8))
 
         # Text is everything after the timestamp line
-        text = " ".join(line.strip() for line in lines[ts_line_idx + 1:])
+        text = " ".join(line.strip() for line in lines[ts_line_idx + 1 :])
 
         if text:
             segments.append(Segment(start=start, end=end, text=text))

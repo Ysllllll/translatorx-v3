@@ -68,7 +68,7 @@ _EN_ZH_TEMPLATE = (
     "要求：\n"
     "1. 意译结果流畅自然、通俗易懂，避免生硬的翻译腔；\n"
     "2. 在意译时修正明显错误的内容；\n"
-    "3. 保持专业术语、人名、代码标识符原文不译，例如人名 \"John\"、专有名词 \"token\"；\n"
+    '3. 保持专业术语、人名、代码标识符原文不译，例如人名 "John"、专有名词 "token"；\n'
     "4. 数学口语表达请转换为 LaTeX 格式，例如 $\\sigma$；\n"
     "5. 结合上下文和背景知识提升翻译质量；\n"
     "6. 仅输出意译结果，不得附加任何解释、注释或说明。"
@@ -118,9 +118,7 @@ def register_default_prompt(
     """
 
     key = (src_lang.lower(), tgt_lang.lower())
-    chosen = scope_line or (
-        _zh_scope_line if tgt_lang.lower().startswith("zh") else _en_scope_line
-    )
+    chosen = scope_line or (_zh_scope_line if tgt_lang.lower().startswith("zh") else _en_scope_line)
     _REGISTRY[key] = (template, chosen)
 
 

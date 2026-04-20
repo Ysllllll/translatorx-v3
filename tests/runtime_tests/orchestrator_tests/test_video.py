@@ -61,9 +61,7 @@ def _ctx() -> TranslationContext:
 
 
 def _rec(rid: int, text: str) -> SentenceRecord:
-    return SentenceRecord(
-        src_text=text, start=float(rid), end=float(rid + 1), extra={"id": rid}
-    )
+    return SentenceRecord(src_text=text, start=float(rid), end=float(rid + 1), extra={"id": rid})
 
 
 class _ListSource:
@@ -101,7 +99,11 @@ class TestVideoOrchestrator:
 
         src = _ListSource([_rec(0, "Hello."), _rec(1, "Bye.")])
         orch = VideoOrchestrator(
-            source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key,
+            source=src,
+            processors=[proc],
+            ctx=_ctx(),
+            store=store,
+            video_key=video_key,
         )
         result = await orch.run()
 
@@ -119,7 +121,11 @@ class TestVideoOrchestrator:
         src = _ListSource([_rec(0, "hi")])
         with pytest.raises(ValueError):
             VideoOrchestrator(
-                source=src, processors=[], ctx=_ctx(), store=store, video_key=video_key,
+                source=src,
+                processors=[],
+                ctx=_ctx(),
+                store=store,
+                video_key=video_key,
             )
 
     @pytest.mark.asyncio
@@ -139,7 +145,11 @@ class TestVideoOrchestrator:
 
         src = _ListSource([_rec(0, "Hello.")])
         orch = VideoOrchestrator(
-            source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key,
+            source=src,
+            processors=[proc],
+            ctx=_ctx(),
+            store=store,
+            video_key=video_key,
         )
         await orch.run()
 
@@ -167,7 +177,11 @@ class TestVideoOrchestrator:
 
         src = _ListSource([_rec(0, "Hi."), _rec(1, "Bye.")])
         orch = VideoOrchestrator(
-            source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key,
+            source=src,
+            processors=[proc],
+            ctx=_ctx(),
+            store=store,
+            video_key=video_key,
         )
         result = await orch.run()
 
@@ -295,7 +309,11 @@ class TestVideoOrchestratorErrors:
         proc = _ErrorEmitter(category="permanent")
         src = _ListSource([_rec(0, "a"), _rec(1, "b")])
         orch = VideoOrchestrator(
-            source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key,
+            source=src,
+            processors=[proc],
+            ctx=_ctx(),
+            store=store,
+            video_key=video_key,
         )
         result = await orch.run()
 
@@ -346,13 +364,15 @@ class TestVideoOrchestratorErrors:
         assert len(result.failed) == 1
 
     @pytest.mark.asyncio
-    async def test_exception_in_processor_propagates_and_closes(
-        self, store, video_key
-    ):
+    async def test_exception_in_processor_propagates_and_closes(self, store, video_key):
         proc = _CrashInProcess()
         src = _ListSource([_rec(0, "a")])
         orch = VideoOrchestrator(
-            source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key,
+            source=src,
+            processors=[proc],
+            ctx=_ctx(),
+            store=store,
+            video_key=video_key,
         )
         with pytest.raises(RuntimeError, match="kaboom"):
             await orch.run()
@@ -363,7 +383,11 @@ class TestVideoOrchestratorErrors:
         proc = _Slow()
         src = _ListSource([_rec(0, "a")])
         orch = VideoOrchestrator(
-            source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key,
+            source=src,
+            processors=[proc],
+            ctx=_ctx(),
+            store=store,
+            video_key=video_key,
         )
         task = asyncio.create_task(orch.run())
         await asyncio.sleep(0.05)

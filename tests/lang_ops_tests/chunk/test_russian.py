@@ -4,7 +4,7 @@ from lang_ops import LangOps, TextPipeline
 from ._base import SplitterTestBase
 
 
-TEXT_SAMPLE: str = 'Доктор Иванов живёт на ул. Пушкина; его оклад составляет ок. 95 тыс. руб. в месяц. Он работает в НИИ, который получил 3.7 млн. рублей на исследование... Dr. Петров спросил: «Где хранятся данные?» Как удивительно! Команда из пятнадцати человек завершила работу в декабре. Это выдающийся результат! Просто невероятно? Да, технологии меняют мир.'
+TEXT_SAMPLE: str = "Доктор Иванов живёт на ул. Пушкина; его оклад составляет ок. 95 тыс. руб. в месяц. Он работает в НИИ, который получил 3.7 млн. рублей на исследование... Dr. Петров спросил: «Где хранятся данные?» Как удивительно! Команда из пятнадцати человек завершила работу в декабре. Это выдающийся результат! Просто невероятно? Да, технологии меняют мир."
 
 _ops = LangOps.for_language("ru")
 
@@ -58,6 +58,7 @@ class TestRussianSplitter(SplitterTestBase):
 
         # Errors
         import pytest
+
         with pytest.raises(ValueError):
             _ops.split_by_length("Привет", max_len=0)
         with pytest.raises(ValueError):
@@ -67,38 +68,48 @@ class TestRussianSplitter(SplitterTestBase):
 
         # Chunk chains
         assert _ops.chunk("Hello world. This is a test. Another one.").sentences().split(20).result() == [
-            "Hello world.", "This is a test.", "Another one.",
+            "Hello world.",
+            "This is a test.",
+            "Another one.",
         ]
         assert _ops.chunk("First clause, second clause, and third.").clauses().split(20).result() == [
-            "First clause,", "second clause,", "and third.",
+            "First clause,",
+            "second clause,",
+            "and third.",
         ]
 
     def test_split_long_text(self) -> None:
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
-            'Доктор Иванов живёт на ул. Пушкина; его оклад составляет ок. 95 тыс. руб. в месяц.',
-            'Он работает в НИИ, который получил 3.7 млн. рублей на исследование... Dr. Петров спросил: «Где хранятся данные?» Как удивительно!',
-            'Команда из пятнадцати человек завершила работу в декабре.',
-            'Это выдающийся результат!',
-            'Просто невероятно?',
-            'Да, технологии меняют мир.',
+            "Доктор Иванов живёт на ул. Пушкина; его оклад составляет ок. 95 тыс. руб. в месяц.",
+            "Он работает в НИИ, который получил 3.7 млн. рублей на исследование... Dr. Петров спросил: «Где хранятся данные?» Как удивительно!",
+            "Команда из пятнадцати человек завершила работу в декабре.",
+            "Это выдающийся результат!",
+            "Просто невероятно?",
+            "Да, технологии меняют мир.",
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
-            'Доктор Иванов живёт на ул. Пушкина;',
-            'его оклад составляет ок. 95 тыс. руб. в месяц.',
-            'Он работает в НИИ,',
-            'который получил 3.7 млн. рублей на исследование... Dr. Петров спросил:',
-            '«Где хранятся данные?» Как удивительно!',
-            'Команда из пятнадцати человек завершила работу в декабре.',
-            'Это выдающийся результат!',
-            'Просто невероятно?',
-            'Да,',
-            'технологии меняют мир.',
+            "Доктор Иванов живёт на ул. Пушкина;",
+            "его оклад составляет ок. 95 тыс. руб. в месяц.",
+            "Он работает в НИИ,",
+            "который получил 3.7 млн. рублей на исследование... Dr. Петров спросил:",
+            "«Где хранятся данные?» Как удивительно!",
+            "Команда из пятнадцати человек завершила работу в декабре.",
+            "Это выдающийся результат!",
+            "Просто невероятно?",
+            "Да,",
+            "технологии меняют мир.",
         ]
 
         # long text chunk chain equivalence
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(
+            self.TEXT_SAMPLE
+        )
+        assert TextPipeline(
+            self.TEXT_SAMPLE, language=self.LANGUAGE
+        ).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(
+            self.TEXT_SAMPLE
+        )

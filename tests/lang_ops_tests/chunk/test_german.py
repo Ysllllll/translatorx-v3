@@ -54,6 +54,7 @@ class TestGermanSplitter(SplitterTestBase):
 
         # Errors
         import pytest
+
         with pytest.raises(ValueError):
             _ops.split_by_length("Hallo", max_len=0)
         with pytest.raises(ValueError):
@@ -63,48 +64,58 @@ class TestGermanSplitter(SplitterTestBase):
 
         # Chunk chains
         assert _ops.chunk("Hello world. This is a test. Another one.").sentences().split(20).result() == [
-            "Hello world.", "This is a test.", "Another one.",
+            "Hello world.",
+            "This is a test.",
+            "Another one.",
         ]
         assert _ops.chunk("First clause, second clause, and third.").clauses().split(20).result() == [
-            "First clause,", "second clause,", "and third.",
+            "First clause,",
+            "second clause,",
+            "and third.",
         ]
 
     def test_split_long_text(self) -> None:
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
-            'Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.',
-            'Ihr Buch, Hrsg. von Prof. Krause, erschien in der 3.',
-            'Aufl. und kostet ca. 2.5 Millionen Euro... Das Team sammelte Daten aus Physik, Chemie, Biologie usw., bzw. aus ca. 12 Institutionen.',
+            "Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.",
+            "Ihr Buch, Hrsg. von Prof. Krause, erschien in der 3.",
+            "Aufl. und kostet ca. 2.5 Millionen Euro... Das Team sammelte Daten aus Physik, Chemie, Biologie usw., bzw. aus ca. 12 Institutionen.",
             '„Sind die Daten korrekt?"',
-            'Wahnsinn!',
-            'Im 19.',
-            'Jh. begann diese Forschung; das ist ein beachtliches Ergebnis.',
-            'Er wird evtl. die Studie in Berlin vorstellen.',
-            'Ist das nicht die Zukunft?',
-            'Die deutsche Forschung.',
+            "Wahnsinn!",
+            "Im 19.",
+            "Jh. begann diese Forschung; das ist ein beachtliches Ergebnis.",
+            "Er wird evtl. die Studie in Berlin vorstellen.",
+            "Ist das nicht die Zukunft?",
+            "Die deutsche Forschung.",
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
-            'Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.',
-            'Ihr Buch,',
-            'Hrsg. von Prof. Krause,',
-            'erschien in der 3.',
-            'Aufl. und kostet ca. 2.5 Millionen Euro... Das Team sammelte Daten aus Physik,',
-            'Chemie,',
-            'Biologie usw.,',
-            'bzw. aus ca. 12 Institutionen.',
+            "Dr. Schmidt und Hr. Müller arbeiten mit Fr. Weber zusammen.",
+            "Ihr Buch,",
+            "Hrsg. von Prof. Krause,",
+            "erschien in der 3.",
+            "Aufl. und kostet ca. 2.5 Millionen Euro... Das Team sammelte Daten aus Physik,",
+            "Chemie,",
+            "Biologie usw.,",
+            "bzw. aus ca. 12 Institutionen.",
             '„Sind die Daten korrekt?"',
-            'Wahnsinn!',
-            'Im 19.',
-            'Jh. begann diese Forschung;',
-            'das ist ein beachtliches Ergebnis.',
-            'Er wird evtl. die Studie in Berlin vorstellen.',
-            'Ist das nicht die Zukunft?',
-            'Die deutsche Forschung.',
+            "Wahnsinn!",
+            "Im 19.",
+            "Jh. begann diese Forschung;",
+            "das ist ein beachtliches Ergebnis.",
+            "Er wird evtl. die Studie in Berlin vorstellen.",
+            "Ist das nicht die Zukunft?",
+            "Die deutsche Forschung.",
         ]
 
         # long text chunk chain equivalence
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(
+            self.TEXT_SAMPLE
+        )
+        assert TextPipeline(
+            self.TEXT_SAMPLE, language=self.LANGUAGE
+        ).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(
+            self.TEXT_SAMPLE
+        )

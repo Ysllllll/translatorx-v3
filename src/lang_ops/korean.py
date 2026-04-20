@@ -20,6 +20,7 @@ _SPACE_MARKER = " "
 class KoreanOps(_BaseCjkOps):
     def __init__(self):
         from kiwipiepy import Kiwi
+
         self._kiwi = Kiwi()
 
     @property

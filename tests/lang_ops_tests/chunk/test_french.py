@@ -54,6 +54,7 @@ class TestFrenchSplitter(SplitterTestBase):
 
         # Errors
         import pytest
+
         with pytest.raises(ValueError):
             _ops.split_by_length("Bonjour", max_len=0)
         with pytest.raises(ValueError):
@@ -63,48 +64,58 @@ class TestFrenchSplitter(SplitterTestBase):
 
         # Chunk chains
         assert _ops.chunk("Hello world. This is a test. Another one.").sentences().split(20).result() == [
-            "Hello world.", "This is a test.", "Another one.",
+            "Hello world.",
+            "This is a test.",
+            "Another one.",
         ]
         assert _ops.chunk("First clause, second clause, and third.").clauses().split(20).result() == [
-            "First clause,", "second clause,", "and third.",
+            "First clause,",
+            "second clause,",
+            "and third.",
         ]
 
     def test_split_long_text(self) -> None:
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
-            'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.',
+            "Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.",
             "Elle se promène souvent sur le bd. Haussmann; elle adore l'architecture haussmannienne, éd. originaire du XIXe siècle, réf. classée depuis 3.2 décennies.",
             "C'est vraiment superbe!",
-            'Les marchés, les cafés, les librairies etc. rendent la ville unique.',
-            'Avez-vous visité le no. 1 de la Place cette année?',
-            'Chaque quartier offre des perspectives fascinantes sur les villes cités.',
-            'En janv., les lumières illuminent le monde.',
-            'Quel merveilleux!',
+            "Les marchés, les cafés, les librairies etc. rendent la ville unique.",
+            "Avez-vous visité le no. 1 de la Place cette année?",
+            "Chaque quartier offre des perspectives fascinantes sur les villes cités.",
+            "En janv., les lumières illuminent le monde.",
+            "Quel merveilleux!",
             "N'est-ce pas un bel avenir?",
-            'La culture française le promet.',
+            "La culture française le promet.",
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
-            'Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.',
-            'Elle se promène souvent sur le bd. Haussmann;',
+            "Mme. Dupont habite au 15 av. des Champs-Élysées à Paris.",
+            "Elle se promène souvent sur le bd. Haussmann;",
             "elle adore l'architecture haussmannienne,",
-            'éd. originaire du XIXe siècle,',
-            'réf. classée depuis 3.2 décennies.',
+            "éd. originaire du XIXe siècle,",
+            "réf. classée depuis 3.2 décennies.",
             "C'est vraiment superbe!",
-            'Les marchés,',
-            'les cafés,',
-            'les librairies etc. rendent la ville unique.',
-            'Avez-vous visité le no. 1 de la Place cette année?',
-            'Chaque quartier offre des perspectives fascinantes sur les villes cités.',
-            'En janv.,',
-            'les lumières illuminent le monde.',
-            'Quel merveilleux!',
+            "Les marchés,",
+            "les cafés,",
+            "les librairies etc. rendent la ville unique.",
+            "Avez-vous visité le no. 1 de la Place cette année?",
+            "Chaque quartier offre des perspectives fascinantes sur les villes cités.",
+            "En janv.,",
+            "les lumières illuminent le monde.",
+            "Quel merveilleux!",
             "N'est-ce pas un bel avenir?",
-            'La culture française le promet.',
+            "La culture française le promet.",
         ]
 
         # long text chunk chain equivalence
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(
+            self.TEXT_SAMPLE
+        )
+        assert TextPipeline(
+            self.TEXT_SAMPLE, language=self.LANGUAGE
+        ).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(
+            self.TEXT_SAMPLE
+        )

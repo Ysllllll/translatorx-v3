@@ -9,8 +9,8 @@ from subtitle import Word, Segment, fill_words, normalize_words
 # Word.content — auto-computed stripped field
 # ---------------------------------------------------------------------------
 
-class TestWordContent:
 
+class TestWordContent:
     def test_plain_word(self):
         assert Word("hello", 0, 1).content == "hello"
 
@@ -37,8 +37,8 @@ class TestWordContent:
 # normalize_words — unify (text, words) into a consistent pair
 # ---------------------------------------------------------------------------
 
-class TestNormalizeWords:
 
+class TestNormalizeWords:
     def test_only_text(self):
         text, words = normalize_words("Hello world!", [], start=0.0, end=2.0)
         assert text == "Hello world!"
@@ -79,8 +79,8 @@ class TestNormalizeWords:
 # Multilingual: Chinese normalize_words
 # ---------------------------------------------------------------------------
 
-class TestNormalizeWordsChinese:
 
+class TestNormalizeWordsChinese:
     def test_only_text(self):
         text, words = normalize_words("你好世界", [], split_fn=list, start=0.0, end=4.0)
         assert text == "你好世界"
@@ -88,12 +88,12 @@ class TestNormalizeWordsChinese:
         assert words[0].content == "你"
 
     def test_only_words(self):
-        ws = [Word("你", 0, .5), Word("好", .5, 1)]
+        ws = [Word("你", 0, 0.5), Word("好", 0.5, 1)]
         text, words = normalize_words(None, ws)
         assert text == "你好"
 
     def test_both_with_punct(self):
-        ws = [Word("你", 0, .3), Word("好", .3, .5), Word("！", .5, .6)]
+        ws = [Word("你", 0, 0.3), Word("好", 0.3, 0.5), Word("！", 0.5, 0.6)]
         text, words = normalize_words("你好！", ws)
         assert text == "你好！"
         assert len(words) == 2

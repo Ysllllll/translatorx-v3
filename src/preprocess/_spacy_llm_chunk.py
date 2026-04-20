@@ -61,9 +61,7 @@ class SpacyLlmChunker:
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(
-                    lambda: asyncio.run(self._refine_batch(coarse))
-                ).result()
+                return pool.submit(lambda: asyncio.run(self._refine_batch(coarse))).result()
         return asyncio.run(self._refine_batch(coarse))
 
     async def _refine_batch(self, coarse: list[list[str]]) -> list[list[str]]:

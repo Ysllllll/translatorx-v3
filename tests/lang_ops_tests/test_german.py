@@ -15,9 +15,26 @@ class GermanTextTest(LangOpsTestCase):
         expect_join_text0 = "Hallo, schöne Welt!"
         self._assert_entype_text_case(text0, expect_split_text, expect_join_text0)
 
-        text1 = "Heute verarbeitet unser System deutsche, französische und portugiesische Untertitel in einem Durchgang."
-        expect_split_text = ["Heute", "verarbeitet", "unser", "System", "deutsche,", "französische", "und", "portugiesische", "Untertitel", "in", "einem", "Durchgang."]
-        expect_join_text1 = "Heute verarbeitet unser System deutsche, französische und portugiesische Untertitel in einem Durchgang."
+        text1 = (
+            "Heute verarbeitet unser System deutsche, französische und portugiesische Untertitel in einem Durchgang."
+        )
+        expect_split_text = [
+            "Heute",
+            "verarbeitet",
+            "unser",
+            "System",
+            "deutsche,",
+            "französische",
+            "und",
+            "portugiesische",
+            "Untertitel",
+            "in",
+            "einem",
+            "Durchgang.",
+        ]
+        expect_join_text1 = (
+            "Heute verarbeitet unser System deutsche, französische und portugiesische Untertitel in einem Durchgang."
+        )
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Lasst I'm deeplearning.ai und https://www.com ganz."

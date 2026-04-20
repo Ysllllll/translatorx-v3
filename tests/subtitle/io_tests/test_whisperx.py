@@ -18,6 +18,7 @@ from subtitle.io.whisperx import (
 
 # ── helpers ───────────────────────────────────────────────────────────
 
+
 def _w(word: str, start=None, end=None, score=0.5) -> dict:
     """Shorthand for a word dict.  Omit start/end for untimed."""
     d: dict = {"word": word}
@@ -29,6 +30,7 @@ def _w(word: str, start=None, end=None, score=0.5) -> dict:
 
 
 # ── _dedup_untimed ────────────────────────────────────────────────────
+
 
 class TestDedupUntimed:
     def test_empty(self):
@@ -61,6 +63,7 @@ class TestDedupUntimed:
 
 
 # ── _interpolate_timestamps ──────────────────────────────────────────
+
 
 class TestInterpolateTimestamps:
     def test_empty(self):
@@ -104,6 +107,7 @@ class TestInterpolateTimestamps:
 
 
 # ── _attach_punctuation ──────────────────────────────────────────────
+
 
 class TestAttachPunctuation:
     def test_empty(self):
@@ -153,6 +157,7 @@ class TestAttachPunctuation:
 
 # ── _collapse_repeats ────────────────────────────────────────────────
 
+
 class TestCollapseRepeats:
     def test_empty(self):
         assert _collapse_repeats([]) == []
@@ -193,6 +198,7 @@ class TestCollapseRepeats:
 
 # ── _replace_long_words ──────────────────────────────────────────────
 
+
 class TestReplaceLongWords:
     def test_normal_words_unchanged(self):
         ws = [_w("hello", 0, 0.5)]
@@ -218,6 +224,7 @@ class TestReplaceLongWords:
 
 
 # ── sanitize_whisperx (integration) ──────────────────────────────────
+
 
 class TestSanitizeWhisperx:
     def test_empty(self):
@@ -252,7 +259,9 @@ class TestSanitizeWhisperx:
         """Multiple untimed ♪ → single ♪ with interpolated timestamp."""
         ws = [
             _w("Hello", 0, 0.5),
-            _w("♪"), _w("♪"), _w("♪"),
+            _w("♪"),
+            _w("♪"),
+            _w("♪"),
             _w("world", 1.0, 1.5),
         ]
         result = sanitize_whisperx(ws)
@@ -316,6 +325,7 @@ class TestSanitizeWhisperx:
 
 
 # ── parse_whisperx ───────────────────────────────────────────────────
+
 
 class TestParseWhisperx:
     def test_valid_json(self):

@@ -17,15 +17,10 @@ class TestDetectViaUnicode:
         assert _detect_via_unicode("这是一个中文句子，用来测试语言检测。") == "zh"
 
     def test_japanese(self):
-        assert (
-            _detect_via_unicode("これはテストの文章です。日本語を検出します。") == "ja"
-        )
+        assert _detect_via_unicode("これはテストの文章です。日本語を検出します。") == "ja"
 
     def test_korean(self):
-        assert (
-            _detect_via_unicode("이것은 한국어 문장입니다. 언어 감지 테스트입니다.")
-            == "ko"
-        )
+        assert _detect_via_unicode("이것은 한국어 문장입니다. 언어 감지 테스트입니다.") == "ko"
 
     def test_empty_defaults_to_english(self):
         assert _detect_via_unicode("") == "en"
@@ -50,13 +45,9 @@ class TestDetectLanguage:
         assert result == "zh"
 
     def test_japanese_text(self):
-        result = detect_language(
-            "これは日本語のテキストです。言語検出のテストに使います。"
-        )
+        result = detect_language("これは日本語のテキストです。言語検出のテストに使います。")
         assert result == "ja"
 
     def test_korean_text(self):
-        result = detect_language(
-            "이것은 한국어 텍스트입니다. 언어 감지 테스트에 사용됩니다."
-        )
+        result = detect_language("이것은 한국어 텍스트입니다. 언어 감지 테스트에 사용됩니다.")
         assert result == "ko"

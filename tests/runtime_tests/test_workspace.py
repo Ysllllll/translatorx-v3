@@ -241,9 +241,7 @@ class TestRouting:
         hits = seeded_ws.home.files("lec03")
         assert len(hits) == 1
 
-    def test_stat_fallback_picks_up_new_file(
-        self, seeded_ws: Workspace, tmp_path: Path
-    ) -> None:
+    def test_stat_fallback_picks_up_new_file(self, seeded_ws: Workspace, tmp_path: Path) -> None:
         # File created AFTER index build. stat fallback catches it.
         new = tmp_path / "c" / "lec99.mp4"
         new.touch()

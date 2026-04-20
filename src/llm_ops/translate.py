@@ -28,6 +28,7 @@ from checker import CheckReport, Checker
 # Prompt builders — one per degradation level
 # ---------------------------------------------------------------------------
 
+
 def _build_messages_full(
     system_prompt: str,
     context_messages: list[Message],
@@ -125,6 +126,7 @@ _PROMPT_LEVELS = [
 # TranslateResult
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class TranslateResult:
     """Outcome of a single translate_with_verify call."""
@@ -139,6 +141,7 @@ class TranslateResult:
 # ---------------------------------------------------------------------------
 # Core micro-loop
 # ---------------------------------------------------------------------------
+
 
 async def translate_with_verify(
     source: str,
@@ -237,11 +240,7 @@ def _resolve_system_prompt(system_prompt: str, context: TranslationContext) -> s
     """
     template = context.system_prompt_template
     if template:
-        metadata = (
-            context.terms_provider.metadata
-            if context.terms_provider.ready
-            else {}
-        )
+        metadata = context.terms_provider.metadata if context.terms_provider.ready else {}
         return template.format_map(defaultdict(str, metadata))
     if system_prompt:
         return system_prompt

@@ -80,9 +80,9 @@ class NerPuncRestorer:
         result = _OMIT_PUNCT_RE.sub("", result)
         if not _punc_content_matches(text, result):
             logger.warning(
-                "NER punc changed word content, "
-                "discarding result: %r → %r",
-                text[:80], result[:80],
+                "NER punc changed word content, discarding result: %r → %r",
+                text[:80],
+                result[:80],
             )
             return text
         return result

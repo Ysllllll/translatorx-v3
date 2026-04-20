@@ -40,9 +40,7 @@ class StreamBuilder:
     ) -> StreamBuilder:
         resolved_src = src or self.language
         resolved_tgt = tgt if isinstance(tgt, str) else tgt[0]
-        return replace(
-            self, _translate=_TranslateStage(src=resolved_src, tgt=resolved_tgt, engine_name=engine)
-        )
+        return replace(self, _translate=_TranslateStage(src=resolved_src, tgt=resolved_tgt, engine_name=engine))
 
     def with_error_reporter(self, reporter: "ErrorReporter") -> StreamBuilder:
         return replace(self, _error_reporter=reporter)
@@ -84,9 +82,7 @@ class LiveStreamHandle:
     def __init__(self, orchestrator: StreamingOrchestrator) -> None:
         self._orch = orchestrator
 
-    async def feed(
-        self, segment: Segment, *, priority: Priority = Priority.NORMAL
-    ) -> None:
+    async def feed(self, segment: Segment, *, priority: Priority = Priority.NORMAL) -> None:
         await self._orch.feed(segment, priority=priority)
 
     async def seek(self, t: float) -> None:

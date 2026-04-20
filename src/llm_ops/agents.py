@@ -91,10 +91,12 @@ class TermsAgent:
             body = body[: self._max_input_chars]
 
         system = _TERMS_SYSTEM_PROMPT.format(src=self._src, tgt=self._tgt)
-        response = await self._engine.complete([
-            {"role": "system", "content": system},
-            {"role": "user", "content": body},
-        ])
+        response = await self._engine.complete(
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": body},
+            ]
+        )
         return parse_terms_response(response.text)
 
 
@@ -187,9 +189,7 @@ class SummarySnapshot:
             title=str(d.get("title", "")),
             description=str(d.get("description", "")),
             terms={
-                str(k): str(v)
-                for k, v in (d.get("terms") or {}).items()
-                if isinstance(k, str) and isinstance(v, str)
+                str(k): str(v) for k, v in (d.get("terms") or {}).items() if isinstance(k, str) and isinstance(v, str)
             },
             word_count=int(d.get("word_count", 0)),
             timestamp=float(d.get("timestamp", 0.0)),
@@ -260,9 +260,7 @@ class IncrementalSummaryAgent:
         self._window_words = window_words
         self._max_input_chars = max_input_chars
 
-    async def feed(
-        self, state: IncrementalSummaryState, text: str
-    ) -> IncrementalSummaryState:
+    async def feed(self, state: IncrementalSummaryState, text: str) -> IncrementalSummaryState:
         """Append *text* and merge if the buffered word count crosses the window."""
         if state.completed:
             return state
@@ -270,9 +268,7 @@ class IncrementalSummaryAgent:
         if not text:
             return state
         new_words = _count_words(text)
-        buffered = (
-            f"{state.pending_text}\n{text}" if state.pending_text else text
-        )
+        buffered = f"{state.pending_text}\n{text}" if state.pending_text else text
         pending_words = state.pending_words + new_words
         if pending_words < self._window_words:
             state.pending_text = buffered
@@ -293,25 +289,21 @@ class IncrementalSummaryAgent:
             state.completed = True
         return state
 
-    async def _merge(
-        self, state: IncrementalSummaryState, new_body: str
-    ) -> IncrementalSummaryState:
+    async def _merge(self, state: IncrementalSummaryState, new_body: str) -> IncrementalSummaryState:
         body = new_body.strip()
         if len(body) > self._max_input_chars:
             body = body[: self._max_input_chars]
 
-        prior_json = (
-            json.dumps(state.current.to_dict(), ensure_ascii=False)
-            if state.current
-            else "{}"
-        )
+        prior_json = json.dumps(state.current.to_dict(), ensure_ascii=False) if state.current else "{}"
         system = _INCREMENTAL_SUMMARY_PROMPT.format(src=self._src, tgt=self._tgt)
         user = f"PRIOR SUMMARY:\n{prior_json}\n\nNEW TEXT:\n{body}"
         try:
-            response = await self._engine.complete([
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ])
+            response = await self._engine.complete(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ]
+            )
         except Exception:  # noqa: BLE001
             logger.exception("IncrementalSummaryAgent: LLM call failed; keeping prior")
             return state
@@ -323,9 +315,7 @@ class IncrementalSummaryAgent:
             version=version,
             topic=parsed.metadata.get("topic", state.current.topic if state.current else ""),
             title=parsed.metadata.get("title", state.current.title if state.current else ""),
-            description=parsed.metadata.get(
-                "description", state.current.description if state.current else ""
-            ),
+            description=parsed.metadata.get("description", state.current.description if state.current else ""),
             terms={**(state.current.terms if state.current else {}), **parsed.terms},
             word_count=total_words,
             timestamp=time.time(),

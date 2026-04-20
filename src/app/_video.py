@@ -39,10 +39,7 @@ def _detect_source_kind(path: Path) -> str:
         return "srt"
     if suffix == ".json":
         return "whisperx"
-    raise ValueError(
-        f"cannot auto-detect source kind for {path!r} (suffix={suffix!r}); "
-        "pass kind= explicitly"
-    )
+    raise ValueError(f"cannot auto-detect source kind for {path!r} (suffix={suffix!r}); pass kind= explicitly")
 
 
 def _detect_language_from_file(path: Path, kind: str) -> str:
@@ -51,10 +48,12 @@ def _detect_language_from_file(path: Path, kind: str) -> str:
 
     if kind == "srt":
         from subtitle.io import read_srt
+
         segments = read_srt(path)
         sample = " ".join(s.text for s in segments[:20])
     elif kind == "whisperx":
         from subtitle.io import read_whisperx
+
         words = read_whisperx(path)
         sample = " ".join(w.word for w in words[:100])
     else:
@@ -75,9 +74,7 @@ class VideoBuilder:
     _summary: _SummaryStage | None = None
     _error_reporter: ErrorReporter | None = None
 
-    def source(
-        self, path: str | Path, *, language: str | None = None, kind: str | None = None
-    ) -> VideoBuilder:
+    def source(self, path: str | Path, *, language: str | None = None, kind: str | None = None) -> VideoBuilder:
         """Attach a file-based :class:`Source`.
 
         ``kind`` auto-detects from the file extension: ``.srt`` → srt,
@@ -102,12 +99,18 @@ class VideoBuilder:
         )
         if resolved == "srt":
             src: Source = SrtSource(
-                p, language=detected_lang, store=store, video_key=video_key,
+                p,
+                language=detected_lang,
+                store=store,
+                video_key=video_key,
                 **preprocess_kw,
             )
         elif resolved == "whisperx":
             src = WhisperXSource(
-                p, language=detected_lang, store=store, video_key=video_key,
+                p,
+                language=detected_lang,
+                store=store,
+                video_key=video_key,
                 **preprocess_kw,
             )
         else:
@@ -128,11 +131,12 @@ class VideoBuilder:
         """
         resolved_tgt = (tgt,) if isinstance(tgt, str) else tuple(tgt)
         return replace(
-            self, _translate=_TranslateStage(
+            self,
+            _translate=_TranslateStage(
                 src=src or "",  # resolved at run() time
                 tgt=resolved_tgt,
                 engine_name=engine,
-            )
+            ),
         )
 
     def summary(
@@ -159,9 +163,7 @@ class VideoBuilder:
         t = self._translate
         src_lang = t.src or self._source_language
         if not src_lang:
-            raise ValueError(
-                "source language unknown; pass language= to .source() or src= to .translate()"
-            )
+            raise ValueError("source language unknown; pass language= to .source() or src= to .translate()")
 
         result: VideoResult | None = None
 

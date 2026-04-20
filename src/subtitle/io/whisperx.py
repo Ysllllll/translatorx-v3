@@ -21,6 +21,7 @@ from model import Word
 
 # ── Repeating-pattern detection ───────────────────────────────────────
 
+
 def _collapse_repeats(
     words: list[dict],
     pattern_len: int = 2,
@@ -68,6 +69,7 @@ def _collapse_repeats(
 
 # ── Core sanitization steps ───────────────────────────────────────────
 
+
 def _dedup_untimed(words: list[dict]) -> list[dict]:
     """Remove consecutive duplicate words that have no timestamps.
 
@@ -82,11 +84,7 @@ def _dedup_untimed(words: list[dict]) -> list[dict]:
     for w in words[1:]:
         prev = result[-1]
         # Both untimed and same word → skip
-        if (
-            prev.get("start") is None
-            and w.get("start") is None
-            and prev["word"] == w["word"]
-        ):
+        if prev.get("start") is None and w.get("start") is None and prev["word"] == w["word"]:
             continue
         result.append(w)
     return result
@@ -203,6 +201,7 @@ def _replace_long_words(
 
 
 # ── Public API ────────────────────────────────────────────────────────
+
 
 def sanitize_whisperx(word_segments: list[dict]) -> list[Word]:
     """Sanitize raw WhisperX word dicts and return ``Word`` objects.

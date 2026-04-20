@@ -85,4 +85,3 @@ class Checker:
     @property
     def rules(self) -> list[Rule]:
         return list(self._rules)
-

@@ -51,4 +51,3 @@ PROFILES: dict[str, ProfileOverrides] = {
         question_mark_severity=Severity.INFO,
     ),
 }
-

@@ -14,6 +14,7 @@ from model.usage import CompletionResult
 # parse_terms_response
 # ---------------------------------------------------------------------------
 
+
 class TestParseTermsResponse:
     def test_plain_json(self):
         text = '{"topic":"ml","title":"T","description":"D","terms":{"a":"b"}}'
@@ -28,7 +29,7 @@ class TestParseTermsResponse:
         assert r.metadata["topic"] == "x"
 
     def test_strips_think_tags(self):
-        text = "<think>let me think</think>\n{\"topic\":\"x\",\"terms\":{\"a\":\"b\"}}"
+        text = '<think>let me think</think>\n{"topic":"x","terms":{"a":"b"}}'
         r = parse_terms_response(text)
         assert r.terms == {"a": "b"}
 
@@ -61,6 +62,7 @@ class TestParseTermsResponse:
 # TermsAgent
 # ---------------------------------------------------------------------------
 
+
 class _StubEngine:
     def __init__(self, response: str):
         self.response = response
@@ -77,9 +79,7 @@ class _StubEngine:
 class TestTermsAgent:
     @pytest.mark.asyncio
     async def test_extract_parses_response(self):
-        engine = _StubEngine(
-            '{"topic":"ai","title":"T","description":"D","terms":{"neural network":"神经网络"}}'
-        )
+        engine = _StubEngine('{"topic":"ai","title":"T","description":"D","terms":{"neural network":"神经网络"}}')
         agent = TermsAgent(engine, "en", "zh")
         result = await agent.extract(["Today we discuss neural networks."])
         assert result.terms == {"neural network": "神经网络"}
@@ -112,6 +112,7 @@ class TestTermsAgent:
         class _Boom:
             async def complete(self, messages, **_):
                 raise RuntimeError("boom")
+
             async def stream(self, messages, **_):
                 yield ""
 

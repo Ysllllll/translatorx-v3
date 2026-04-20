@@ -4,7 +4,7 @@ from lang_ops import LangOps, TextPipeline
 from ._base import SplitterTestBase
 
 
-TEXT_SAMPLE: str = 'Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo. Na pág. 87 do relatório, tel. +55-11-98765-4321, descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte, ciência, música, etc. O projeto está pronto? É simplesmente incrível! A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte. A ciência transforma o mundo. Que futuro maravilhoso! Não é um grande futuro? A inovação brasileira promete.'
+TEXT_SAMPLE: str = "Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo. Na pág. 87 do relatório, tel. +55-11-98765-4321, descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte, ciência, música, etc. O projeto está pronto? É simplesmente incrível! A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte. A ciência transforma o mundo. Que futuro maravilhoso! Não é um grande futuro? A inovação brasileira promete."
 
 _ops = LangOps.for_language("pt")
 
@@ -54,6 +54,7 @@ class TestPortugueseSplitter(SplitterTestBase):
 
         # Errors
         import pytest
+
         with pytest.raises(ValueError):
             _ops.split_by_length("Olá", max_len=0)
         with pytest.raises(ValueError):
@@ -63,43 +64,53 @@ class TestPortugueseSplitter(SplitterTestBase):
 
         # Chunk chains
         assert _ops.chunk("Hello world. This is a test. Another one.").sentences().split(20).result() == [
-            "Hello world.", "This is a test.", "Another one.",
+            "Hello world.",
+            "This is a test.",
+            "Another one.",
         ]
         assert _ops.chunk("First clause, second clause, and third.").clauses().split(20).result() == [
-            "First clause,", "second clause,", "and third.",
+            "First clause,",
+            "second clause,",
+            "and third.",
         ]
 
     def test_split_long_text(self) -> None:
         # long text split_sentences()
         assert _ops.split_sentences(self.TEXT_SAMPLE) == [
-            'Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo.',
-            'Na pág. 87 do relatório, tel. +55-11-98765-4321, descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte, ciência, música, etc. O projeto está pronto?',
-            'É simplesmente incrível!',
-            'A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.',
-            'A ciência transforma o mundo.',
-            'Que futuro maravilhoso!',
-            'Não é um grande futuro?',
-            'A inovação brasileira promete.',
+            "Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo.",
+            "Na pág. 87 do relatório, tel. +55-11-98765-4321, descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte, ciência, música, etc. O projeto está pronto?",
+            "É simplesmente incrível!",
+            "A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.",
+            "A ciência transforma o mundo.",
+            "Que futuro maravilhoso!",
+            "Não é um grande futuro?",
+            "A inovação brasileira promete.",
         ]
 
         # long text split_clauses()
         assert _ops.split_clauses(self.TEXT_SAMPLE) == [
-            'Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo.',
-            'Na pág. 87 do relatório,',
-            'tel. +55-11-98765-4321,',
-            'descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte,',
-            'ciência,',
-            'música,',
-            'etc. O projeto está pronto?',
-            'É simplesmente incrível!',
-            'A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.',
-            'A ciência transforma o mundo.',
-            'Que futuro maravilhoso!',
-            'Não é um grande futuro?',
-            'A inovação brasileira promete.',
+            "Sra. Ferreira e a Dra. Santos trabalham na av. Paulista em São Paulo.",
+            "Na pág. 87 do relatório,",
+            "tel. +55-11-98765-4321,",
+            "descreve-se um projeto de aprox. 3.6 milhões... Os resultados incluem arte,",
+            "ciência,",
+            "música,",
+            "etc. O projeto está pronto?",
+            "É simplesmente incrível!",
+            "A Profa. Lima disse que o Sr. Oliveira visitou a exposição de arte.",
+            "A ciência transforma o mundo.",
+            "Que futuro maravilhoso!",
+            "Não é um grande futuro?",
+            "A inovação brasileira promete.",
         ]
 
         # long text chunk chain equivalence
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(
+            self.TEXT_SAMPLE
+        )
+        assert TextPipeline(
+            self.TEXT_SAMPLE, language=self.LANGUAGE
+        ).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(
+            self.TEXT_SAMPLE
+        )

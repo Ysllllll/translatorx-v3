@@ -15,8 +15,7 @@ def _mk_seg(start: float, end: float, text: str) -> Segment:
         return Segment(start, end, text, words=[])
     step = (end - start) / len(toks)
     words = [
-        Word(tok + " " if i < len(toks) - 1 else tok,
-             start + i * step, start + (i + 1) * step)
+        Word(tok + " " if i < len(toks) - 1 else tok, start + i * step, start + (i + 1) * step)
         for i, tok in enumerate(toks)
     ]
     return Segment(start, end, text, words=words)
@@ -32,14 +31,11 @@ def test_transform_pre_sentence() -> None:
     segs = [_mk_seg(0.0, 1.0, "hello world how are you")]
 
     cache: dict[str, list[str]] = {}
+
     def punc(batch: list[str]) -> list[list[str]]:
         return [[t + "."] for t in batch]
 
-    sub = (
-        Subtitle(segs, language="en")
-        .transform(punc, cache=cache)
-        .sentences()
-    )
+    sub = Subtitle(segs, language="en").transform(punc, cache=cache).sentences()
     records = sub.records()
     assert any("." in r.src_text for r in records)
     # cache was populated with video-level entry
@@ -49,10 +45,7 @@ def test_transform_pre_sentence() -> None:
 def test_transform_pre_sentence_name_ignored() -> None:
     """In pre-sentence mode, name parameter is ignored (no chunk_cache)."""
     segs = [_mk_seg(0.0, 1.0, "hello world")]
-    sub = (
-        Subtitle(segs, language="en")
-        .transform(lambda b: [[t] for t in b], name="should_be_ignored")
-    )
+    sub = Subtitle(segs, language="en").transform(lambda b: [[t] for t in b], name="should_be_ignored")
     # Not sentence-split, so records() auto-calls sentences()
     records = sub.records()
     for r in records:
@@ -71,11 +64,7 @@ def test_transform_post_sentence_populates_chunk_cache() -> None:
     def split_fn(batch: list[str]) -> list[list[str]]:
         return [t.split() for t in batch]
 
-    sub = (
-        Subtitle(segs, language="en")
-        .sentences()
-        .transform(split_fn, name="chunk_llm")
-    )
+    sub = Subtitle(segs, language="en").sentences().transform(split_fn, name="chunk_llm")
     records = sub.records()
     assert len(records) >= 1
     for r in records:
@@ -86,11 +75,7 @@ def test_transform_post_sentence_populates_chunk_cache() -> None:
 def test_transform_post_sentence_without_name() -> None:
     """transform() after sentences() without name — no chunk_cache stamp."""
     segs = [_mk_seg(0.0, 2.0, "hello world. foo bar.")]
-    sub = (
-        Subtitle(segs, language="en")
-        .sentences()
-        .transform(lambda b: [[t] for t in b])
-    )
+    sub = Subtitle(segs, language="en").sentences().transform(lambda b: [[t] for t in b])
     records = sub.records()
     for r in records:
         assert r.chunk_cache == {}
@@ -116,21 +101,16 @@ def test_from_records_honors_chunk_cache_key() -> None:
     def fake_chunker(batch: list[str]) -> list[list[str]]:
         return [t.split() for t in batch]
 
-    sub = (
-        Subtitle(segs, language="en")
-        .sentences()
-        .transform(fake_chunker, name="chunk_llm")
-    )
+    sub = Subtitle(segs, language="en").sentences().transform(fake_chunker, name="chunk_llm")
     records = sub.records()
     # Rehydrate using cached chunk_llm — fake_chunker should NOT be called again.
     call_count = {"n": 0}
+
     def should_not_be_called(batch: list[str]) -> list[list[str]]:
         call_count["n"] += 1
         return [["BAD"] for _ in batch]
 
-    rehydrated = Subtitle.from_records(
-        records, language="en", chunk_cache_key="chunk_llm"
-    )
+    rehydrated = Subtitle.from_records(records, language="en", chunk_cache_key="chunk_llm")
     # The pipelines already carry cached splits; subsequent records() reflect them.
     new_records = rehydrated.records()
     for r in new_records:

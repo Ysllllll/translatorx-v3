@@ -85,9 +85,7 @@ async def test_subsequent_merge_increments_version_and_unions_terms():
 
 @pytest.mark.asyncio
 async def test_flush_forces_merge_even_under_window():
-    engine = FakeEngine(
-        [{"topic": "x", "title": "y", "description": "z", "terms": {}}]
-    )
+    engine = FakeEngine([{"topic": "x", "title": "y", "description": "z", "terms": {}}])
     agent = IncrementalSummaryAgent(engine, "en", "zh", window_words=1000)
     state = IncrementalSummaryState()
     state = await agent.feed(state, "only a few words")
@@ -117,9 +115,7 @@ def test_state_to_dict_and_back_roundtrips():
         word_count=42,
         timestamp=1.5,
     )
-    state = IncrementalSummaryState(
-        current=snap, updates=[snap], pending_text="pt", pending_words=3
-    )
+    state = IncrementalSummaryState(current=snap, updates=[snap], pending_text="pt", pending_words=3)
     roundtripped = IncrementalSummaryState.from_dict(state.to_dict())
     assert roundtripped.current == snap
     assert roundtripped.updates == [snap]

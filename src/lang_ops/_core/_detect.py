@@ -48,8 +48,7 @@ def _detect_via_langdetect(text: str) -> str:
         return normalize_language(code)
     except ValueError:
         logger.warning(
-            "langdetect returned unsupported code %r; "
-            "falling back to Unicode heuristic",
+            "langdetect returned unsupported code %r; falling back to Unicode heuristic",
             raw_code,
         )
         return _detect_via_unicode(text)

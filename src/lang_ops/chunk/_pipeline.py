@@ -88,6 +88,7 @@ class TextPipeline:
 
     def sentences(self) -> TextPipeline:
         """Split each group into sentences."""
+
         def _split_fn(group):
             boundaries = find_boundaries(
                 group,
@@ -95,6 +96,7 @@ class TextPipeline:
                 self._ops.abbreviations,
             )
             return split_tokens_by_boundaries(group, boundaries)
+
         return self._split(_split_fn)
 
     def clauses(self, merge_under: int | None = None) -> TextPipeline:
@@ -104,6 +106,7 @@ class TextPipeline:
             merge_under: If given, merge back clauses shorter than this
                 threshold after splitting.  Prevents overly short chunks.
         """
+
         def _split_fn(group):
             boundaries = find_boundaries(
                 group,
@@ -115,6 +118,7 @@ class TextPipeline:
             if merge_under is not None and len(sub_groups) > 1:
                 sub_groups = _merge_short_groups(sub_groups, self._ops, merge_under)
             return sub_groups
+
         return self._split(_split_fn)
 
     def split(self, max_len: int) -> TextPipeline:
@@ -123,8 +127,10 @@ class TextPipeline:
         Args:
             max_len: Upper bound on chunk length.
         """
+
         def _split_fn(group):
             return split_tokens_by_length(group, self._ops, max_len)
+
         return self._split(_split_fn)
 
     def merge(self, max_len: int) -> TextPipeline:
@@ -145,6 +151,7 @@ class TextPipeline:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _merge_short_groups(
     groups: list[list[str]],

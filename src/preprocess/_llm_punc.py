@@ -75,9 +75,7 @@ class LlmPuncRestorer:
             import concurrent.futures
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(
-                    lambda: asyncio.run(self._process_batch(texts))
-                ).result()
+                return pool.submit(lambda: asyncio.run(self._process_batch(texts))).result()
         return asyncio.run(self._process_batch(texts))
 
     async def _process_batch(self, texts: list[str]) -> list[list[str]]:
@@ -97,8 +95,7 @@ class LlmPuncRestorer:
                     if _punc_content_matches(text, restored):
                         return [restored]
                     logger.warning(
-                        "LLM punc changed word content (attempt %d/%d), "
-                        "retrying: %r → %r",
+                        "LLM punc changed word content (attempt %d/%d), retrying: %r → %r",
                         attempt,
                         self._max_retries,
                         text[:80],

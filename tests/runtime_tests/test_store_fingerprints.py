@@ -170,9 +170,7 @@ class TestInvalidateFromStep:
         assert data["meta"]["_fingerprints"] == {}
 
     @pytest.mark.asyncio
-    async def test_preprocess_punc_clears_punc_and_records(
-        self, store: JsonFileStore
-    ) -> None:
+    async def test_preprocess_punc_clears_punc_and_records(self, store: JsonFileStore) -> None:
         await store.save_video("v1", _seeded_video_data())
         await store.invalidate_from_step("v1", "preprocess.punc")
         data = await store.load_video("v1")
@@ -183,9 +181,7 @@ class TestInvalidateFromStep:
         assert data["meta"]["_fingerprints"] == {"raw": "r"}
 
     @pytest.mark.asyncio
-    async def test_preprocess_chunk_keeps_records_but_clears_caches(
-        self, store: JsonFileStore
-    ) -> None:
+    async def test_preprocess_chunk_keeps_records_but_clears_caches(self, store: JsonFileStore) -> None:
         await store.save_video("v1", _seeded_video_data())
         await store.invalidate_from_step("v1", "preprocess.chunk")
         data = await store.load_video("v1")

@@ -114,14 +114,8 @@ class SummaryProcessor:
         fp = self.fingerprint()
 
         existing = await store.load_video(video_key.video)
-        existing_meta = (
-            existing.get("meta", {}) if isinstance(existing, dict) else {}
-        )
-        existing_fps = (
-            existing_meta.get("_fingerprints", {})
-            if isinstance(existing_meta, dict)
-            else {}
-        )
+        existing_meta = existing.get("meta", {}) if isinstance(existing, dict) else {}
+        existing_fps = existing_meta.get("_fingerprints", {}) if isinstance(existing_meta, dict) else {}
         fp_matches = existing_fps.get(self.name) == fp
 
         if fp_matches and isinstance(existing, dict):
@@ -142,9 +136,7 @@ class SummaryProcessor:
                 state = await self._agent.feed(state, rec.src_text)
                 new_version = state.current.version if state.current else 0
                 if new_version != prev_version:
-                    await store.patch_video(
-                        video_key.video, summary=state.to_dict()
-                    )
+                    await store.patch_video(video_key.video, summary=state.to_dict())
                 yield rec
         finally:
             if skip_work:
@@ -157,12 +149,8 @@ class SummaryProcessor:
                     state = await self._agent.flush(state)
                 except Exception:  # noqa: BLE001
                     logger.exception("SummaryProcessor: final flush failed")
-                await store.patch_video(
-                    video_key.video, summary=state.to_dict()
-                )
-                await store.set_fingerprints(
-                    video_key.video, {self.name: fp}
-                )
+                await store.patch_video(video_key.video, summary=state.to_dict())
+                await store.set_fingerprints(video_key.video, {self.name: fp})
 
             await asyncio.shield(_final())
             await asyncio.shield(self.aclose())

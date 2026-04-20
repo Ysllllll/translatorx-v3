@@ -90,9 +90,7 @@ def _make_wrapper(
     ) -> AsyncIterator[SentenceRecord]:
         seen: set[int] = set()
         try:
-            async for rec in proc.process(
-                upstream, ctx=ctx, store=store, video_key=video_key
-            ):
+            async for rec in proc.process(upstream, ctx=ctx, store=store, video_key=video_key):
                 errs = rec.extra.get("errors") if rec.extra else None
                 if isinstance(errs, list):
                     for info in errs:
@@ -159,9 +157,7 @@ class VideoOrchestrator:
     async def run(self) -> VideoResult:
         start = time.monotonic()
         failed: list[ErrorInfo] = []
-        wrap = _make_wrapper(
-            self._ctx, self._store, self._video_key, failed, self._error_reporter
-        )
+        wrap = _make_wrapper(self._ctx, self._store, self._video_key, failed, self._error_reporter)
 
         stream: AsyncIterator[SentenceRecord] = self._source.read()
         for proc in self._processors:
@@ -249,9 +245,7 @@ class StreamingOrchestrator:
         self._video_key = video_key
         self._error_reporter = error_reporter
 
-        self._source = PushQueueSource(
-            language, split_by_speaker=split_by_speaker, id_start=id_start
-        )
+        self._source = PushQueueSource(language, split_by_speaker=split_by_speaker, id_start=id_start)
         self._pq: asyncio.PriorityQueue = asyncio.PriorityQueue()
         self._seq = 0
         self._closed = False
@@ -261,9 +255,7 @@ class StreamingOrchestrator:
 
     # ---- public API --------------------------------------------------
 
-    async def feed(
-        self, segment: Segment, *, priority: Priority = Priority.NORMAL
-    ) -> None:
+    async def feed(self, segment: Segment, *, priority: Priority = Priority.NORMAL) -> None:
         """Push a segment onto the priority queue."""
         if self._closed:
             raise RuntimeError("StreamingOrchestrator is closed")
@@ -321,9 +313,7 @@ class StreamingOrchestrator:
         self._started = True
 
         self._pump_task = asyncio.create_task(self._pump(), name="streamorch-pump")
-        wrap = _make_wrapper(
-            self._ctx, self._store, self._video_key, self._failed, self._error_reporter
-        )
+        wrap = _make_wrapper(self._ctx, self._store, self._video_key, self._failed, self._error_reporter)
 
         try:
             stream: AsyncIterator[SentenceRecord] = self._source.read()
@@ -371,4 +361,3 @@ __all__ = [
     "VideoOrchestrator",
     "VideoResult",
 ]
-

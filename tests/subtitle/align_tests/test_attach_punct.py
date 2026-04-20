@@ -6,7 +6,6 @@ from subtitle import Word, attach_punct_words
 
 
 class TestAttachPunctWords:
-
     def test_trailing_punct_attaches_to_prev(self):
         words = [Word("Hello", 0.0, 0.5), Word(",", 0.5, 0.55), Word("world", 0.6, 1.0)]
         result = attach_punct_words(words)
@@ -51,15 +50,20 @@ class TestAttachPunctWords:
 # ---------------------------------------------------------------------------
 
 ATTACH_PUNCT_CASES = {
-    "cjk_sentence_end": ([Word("你好", 0.0, 0.5), Word("。", 0.5, 0.55), Word("再见", 0.6, 1.0)],
-                         ["你好。", "再见"]),
-    "zh_closing":       ([Word("你好", 0, .4), Word("。", .4, .5)],
-                         ["你好。"]),
-    "zh_opening":       ([Word("「", 0, .1), Word("你好", .1, .5), Word("」", .5, .6)],
-                         ["「你好」"]),
-    "zh_mixed":         ([Word("他", 0, .2), Word("说", .2, .4), Word("：", .4, .5),
-                          Word("「", .5, .6), Word("你好", .6, 1.0), Word("」", 1.0, 1.1)],
-                         ["他", "说：", "「你好」"]),
+    "cjk_sentence_end": ([Word("你好", 0.0, 0.5), Word("。", 0.5, 0.55), Word("再见", 0.6, 1.0)], ["你好。", "再见"]),
+    "zh_closing": ([Word("你好", 0, 0.4), Word("。", 0.4, 0.5)], ["你好。"]),
+    "zh_opening": ([Word("「", 0, 0.1), Word("你好", 0.1, 0.5), Word("」", 0.5, 0.6)], ["「你好」"]),
+    "zh_mixed": (
+        [
+            Word("他", 0, 0.2),
+            Word("说", 0.2, 0.4),
+            Word("：", 0.4, 0.5),
+            Word("「", 0.5, 0.6),
+            Word("你好", 0.6, 1.0),
+            Word("」", 1.0, 1.1),
+        ],
+        ["他", "说：", "「你好」"],
+    ),
 }
 
 

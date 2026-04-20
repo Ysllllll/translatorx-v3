@@ -6,6 +6,7 @@ from __future__ import annotations
 
 # ----------------- language character -----------------
 
+
 def is_cjk_ideograph(ch: str) -> bool:
     """Check if the character is a CJK Unified Ideograph.
     判断字符是否为中日韩统一表意文字（汉字）。
@@ -13,14 +14,14 @@ def is_cjk_ideograph(ch: str) -> bool:
     """
     cp = ord(ch)
     return (
-        0x4E00 <= cp <= 0x9FFF      # CJK Unified Ideographs (基本汉字)
-        or 0x3400 <= cp <= 0x4DBF   # CJK Unified Ideographs Extension A (扩展A)
-        or 0x20000 <= cp <= 0x2A6DF # CJK Unified Ideographs Extension B, C, D, E, F (扩展B-F)
-        or 0x2A700 <= cp <= 0x2B73F # CJK Unified Ideographs Extension G (扩展G)
-        or 0x2B740 <= cp <= 0x2B81F # CJK Unified Ideographs Extension H (扩展H)
-        or 0x2B820 <= cp <= 0x2CEAF # CJK Unified Ideographs Extension I (扩展I)
-        or 0xF900 <= cp <= 0xFAFF   # CJK Compatibility Ideographs (兼容汉字)
-        or 0x2F800 <= cp <= 0x2FA1F # CJK Compatibility Ideographs Supplement (兼容汉字补充)
+        0x4E00 <= cp <= 0x9FFF  # CJK Unified Ideographs (基本汉字)
+        or 0x3400 <= cp <= 0x4DBF  # CJK Unified Ideographs Extension A (扩展A)
+        or 0x20000 <= cp <= 0x2A6DF  # CJK Unified Ideographs Extension B, C, D, E, F (扩展B-F)
+        or 0x2A700 <= cp <= 0x2B73F  # CJK Unified Ideographs Extension G (扩展G)
+        or 0x2B740 <= cp <= 0x2B81F  # CJK Unified Ideographs Extension H (扩展H)
+        or 0x2B820 <= cp <= 0x2CEAF  # CJK Unified Ideographs Extension I (扩展I)
+        or 0xF900 <= cp <= 0xFAFF  # CJK Compatibility Ideographs (兼容汉字)
+        or 0x2F800 <= cp <= 0x2FA1F  # CJK Compatibility Ideographs Supplement (兼容汉字补充)
     )
 
 
@@ -31,11 +32,11 @@ def is_hangul(ch: str) -> bool:
     """
     cp = ord(ch)
     return (
-        0xAC00 <= cp <= 0xD7AF      # Hangul Syllables (韩文音节)
-        or 0x1100 <= cp <= 0x11FF   # Hangul Jamo (韩文字母)
-        or 0x3130 <= cp <= 0x318F   # Hangul Compatibility Jamo (兼容字母)
-        or 0xA960 <= cp <= 0xA97F   # Hangul Jamo Extended-A (扩展A)
-        or 0xD7B0 <= cp <= 0xD7FF   # Hangul Jamo Extended-B (扩展B)
+        0xAC00 <= cp <= 0xD7AF  # Hangul Syllables (韩文音节)
+        or 0x1100 <= cp <= 0x11FF  # Hangul Jamo (韩文字母)
+        or 0x3130 <= cp <= 0x318F  # Hangul Compatibility Jamo (兼容字母)
+        or 0xA960 <= cp <= 0xA97F  # Hangul Jamo Extended-A (扩展A)
+        or 0xD7B0 <= cp <= 0xD7FF  # Hangul Jamo Extended-B (扩展B)
     )
 
 
@@ -44,7 +45,7 @@ def is_hiragana(ch: str) -> bool:
     判断字符是否为日文平假名。
     """
     cp = ord(ch)
-    return 0x3040 <= cp <= 0x309F   # Hiragana (平假名)
+    return 0x3040 <= cp <= 0x309F  # Hiragana (平假名)
 
 
 def is_katakana(ch: str) -> bool:
@@ -110,7 +111,7 @@ def decompose_token(token: str) -> tuple[str, str, str]:
     """Decompose a token into (leading_punct, content, trailing_punct).
     将一个 Token 拆分为三部分：前导标点、核心内容、尾部标点。
     主要用于在分词后准确提取出词汇的核心内容。
-    
+
     Uses STRIP_PUNCT to identify punctuation characters.
     """
     i = 0

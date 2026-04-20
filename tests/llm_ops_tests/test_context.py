@@ -16,6 +16,7 @@ from llm_ops.context import (
 # StaticTerms
 # ---------------------------------------------------------------------------
 
+
 class TestStaticTerms:
     def test_always_ready(self):
         t = StaticTerms({"hello": "你好"})
@@ -57,6 +58,7 @@ class TestStaticTerms:
 # ---------------------------------------------------------------------------
 # ContextWindow
 # ---------------------------------------------------------------------------
+
 
 class TestContextWindow:
     def test_empty_window(self):
@@ -173,6 +175,7 @@ class TestContextWindow:
 # ---------------------------------------------------------------------------
 # TranslationContext
 # ---------------------------------------------------------------------------
+
 
 class TestTranslationContext:
     def test_basic_construction(self):

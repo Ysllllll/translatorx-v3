@@ -6,7 +6,6 @@ from subtitle import Word, find_words
 
 
 class TestFindWords:
-
     def test_exact_match(self):
         words = [
             Word("Hello", 0, 0.5),

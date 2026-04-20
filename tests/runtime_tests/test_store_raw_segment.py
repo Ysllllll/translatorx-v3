@@ -105,9 +105,7 @@ class TestRef:
         assert ref["speakers"] == []
 
     @pytest.mark.asyncio
-    async def test_sha256_matches_file_bytes(
-        self, store: JsonFileStore, ws: Workspace
-    ) -> None:
+    async def test_sha256_matches_file_bytes(self, store: JsonFileStore, ws: Workspace) -> None:
         ref = await store.write_raw_segment("v1", _sample_words(), "whisperx")
         path = ws.root / "c" / "zzz_subtitle_jsonl" / "v1.words.jsonl"
         disk_sha = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -121,9 +119,7 @@ class TestVerify:
         assert await store.verify_raw_segment("v1", "whisperx", ref["sha256"])
 
     @pytest.mark.asyncio
-    async def test_verify_false_on_tamper(
-        self, store: JsonFileStore, ws: Workspace
-    ) -> None:
+    async def test_verify_false_on_tamper(self, store: JsonFileStore, ws: Workspace) -> None:
         ref = await store.write_raw_segment("v1", _sample_words(), "whisperx")
         # Corrupt the sidecar file.
         path = ws.root / "c" / "zzz_subtitle_jsonl" / "v1.words.jsonl"
@@ -132,9 +128,7 @@ class TestVerify:
 
     @pytest.mark.asyncio
     async def test_verify_false_on_missing(self, store: JsonFileStore) -> None:
-        assert not await store.verify_raw_segment(
-            "v1", "whisperx", "0" * 64
-        )
+        assert not await store.verify_raw_segment("v1", "whisperx", "0" * 64)
 
 
 class TestAppendStreaming:
@@ -181,9 +175,7 @@ class TestLoadMissing:
 
 class TestFileShape:
     @pytest.mark.asyncio
-    async def test_row_per_line(
-        self, store: JsonFileStore, ws: Workspace
-    ) -> None:
+    async def test_row_per_line(self, store: JsonFileStore, ws: Workspace) -> None:
         await store.write_raw_segment("v1", _sample_words(), "whisperx")
         path = ws.root / "c" / "zzz_subtitle_jsonl" / "v1.words.jsonl"
         lines = path.read_text(encoding="utf-8").splitlines()

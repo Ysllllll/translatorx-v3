@@ -90,7 +90,7 @@ def _protect_latin_fragments(text: str) -> tuple[str, dict[str, str]]:
     last = 0
 
     for index, match in enumerate(_PROTECTED_LATIN_FRAGMENT_RE.finditer(text)):
-        parts.append(text[last:match.start()])
+        parts.append(text[last : match.start()])
         placeholder = _make_protected_placeholder(index)
         mapping[placeholder] = match.group(0)
         parts.append(placeholder)

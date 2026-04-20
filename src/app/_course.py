@@ -48,10 +48,7 @@ def _detect_source_kind(path: Path) -> str:
         return "srt"
     if suffix == ".json":
         return "whisperx"
-    raise ValueError(
-        f"cannot auto-detect source kind for {path!r} (suffix={suffix!r}); "
-        "pass kind= explicitly"
-    )
+    raise ValueError(f"cannot auto-detect source kind for {path!r} (suffix={suffix!r}); pass kind= explicitly")
 
 
 def _detect_language_from_file(path: Path, kind: str) -> str:
@@ -60,10 +57,12 @@ def _detect_language_from_file(path: Path, kind: str) -> str:
 
     if kind == "srt":
         from subtitle.io import read_srt
+
         segments = read_srt(path)
         sample = " ".join(s.text for s in segments[:20])
     elif kind == "whisperx":
         from subtitle.io import read_whisperx
+
         words = read_whisperx(path)
         sample = " ".join(w.word for w in words[:100])
     else:
@@ -136,11 +135,12 @@ class CourseBuilder:
         """
         resolved_tgt = (tgt,) if isinstance(tgt, str) else tuple(tgt)
         return replace(
-            self, _translate=_TranslateStage(
+            self,
+            _translate=_TranslateStage(
                 src=src or "",  # resolved at run()
                 tgt=resolved_tgt,
                 engine_name=engine,
-            )
+            ),
         )
 
     def summary(
@@ -228,12 +228,18 @@ class CourseBuilder:
                 )
                 if v.kind == "srt":
                     src_obj: Source = SrtSource(
-                        v.path, language=vid_lang, store=store, video_key=vk,
+                        v.path,
+                        language=vid_lang,
+                        store=store,
+                        video_key=vk,
                         **preprocess_kw,
                     )
                 elif v.kind == "whisperx":
                     src_obj = WhisperXSource(
-                        v.path, language=vid_lang, store=store, video_key=vk,
+                        v.path,
+                        language=vid_lang,
+                        store=store,
+                        video_key=vk,
                         **preprocess_kw,
                     )
                 else:

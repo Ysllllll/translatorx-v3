@@ -17,7 +17,6 @@ def _word_view(words):
 
 
 class TestFillWords:
-
     def test_already_has_words(self):
         w = [Word("Hi", 0.0, 1.0)]
         seg = Segment(start=0.0, end=1.0, text="Hi", words=w)

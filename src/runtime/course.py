@@ -77,15 +77,11 @@ class CourseResult:
 
     @property
     def succeeded(self) -> tuple[tuple[str, VideoResult], ...]:
-        return tuple(
-            (k, v) for k, v in self.videos if isinstance(v, VideoResult)
-        )
+        return tuple((k, v) for k, v in self.videos if isinstance(v, VideoResult))
 
     @property
     def failed_videos(self) -> tuple[tuple[str, BaseException], ...]:
-        return tuple(
-            (k, v) for k, v in self.videos if isinstance(v, BaseException)
-        )
+        return tuple((k, v) for k, v in self.videos if isinstance(v, BaseException))
 
     @property
     def all_errors(self) -> tuple[ErrorInfo, ...]:
@@ -153,9 +149,7 @@ class CourseOrchestrator:
 
                 procs = self._factory()
                 if not procs:
-                    return spec.video, ValueError(
-                        "processors_factory() returned no processors"
-                    )
+                    return spec.video, ValueError("processors_factory() returned no processors")
                 orch = VideoOrchestrator(
                     source=spec.source,
                     processors=procs,
@@ -169,9 +163,7 @@ class CourseOrchestrator:
                 except asyncio.CancelledError:
                     raise
                 except BaseException as e:  # noqa: BLE001
-                    logger.exception(
-                        "CourseOrchestrator: video %s failed", spec.video
-                    )
+                    logger.exception("CourseOrchestrator: video %s failed", spec.video)
                     return spec.video, e
                 return spec.video, result
 
