@@ -17,7 +17,7 @@ With external text transforms (e.g. punctuation restoration)::
     punc_cache = {}
     chunk_cache = {}
     records = (sub
-        .transform(restore_fn, cache=punc_cache, scope="pipeline")
+        .transform(restore_fn, cache=punc_cache, scope="joined")
         .sentences()
         .transform(chunker, cache=chunk_cache)
         .records())
@@ -262,7 +262,7 @@ class Subtitle:
         fn: ApplyFn,
         *,
         cache: dict[str, list[str]] | None = None,
-        scope: Literal["chunk", "pipeline"] = "chunk",
+        scope: Literal["chunk", "joined"] = "chunk",
         batch_size: int = 1,
         workers: int = 1,
         skip_if: Callable[[str], bool] | None = None,
@@ -283,7 +283,7 @@ class Subtitle:
                 The cache is mutated in-place.
             scope: Granularity of text sent to *fn*.
                 ``"chunk"`` (default): each chunk text is sent individually.
-                ``"pipeline"``: all chunks within a pipeline are joined
+                ``"joined"``: all chunks within a pipeline are joined
                 into one text before sending to *fn*.  Use this for
                 operations like punctuation restoration that need full
                 sentence context.
@@ -301,7 +301,7 @@ class Subtitle:
         """
         from lang_ops.chunk._pipeline import TextPipeline
 
-        if scope == "pipeline":
+        if scope == "joined":
             return self._transform_pipeline(fn, cache=cache, batch_size=batch_size, workers=workers, skip_if=skip_if)
 
         # scope == "chunk" — each chunk text sent to fn individually

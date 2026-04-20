@@ -84,7 +84,7 @@ class WhisperXSource:
         try:
             # ① Global punc — before sentences()
             if self._restore_punc is not None and self._punc_position in ("global", "both"):
-                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="pipeline")
+                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="joined")
 
             # ② Sentence splitting
             sub = sub.sentences()
@@ -94,7 +94,7 @@ class WhisperXSource:
                 "sentence",
                 "both",
             ):
-                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="pipeline")
+                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="joined")
 
             # ④ Clause splitting
             if self._merge_under is not None:

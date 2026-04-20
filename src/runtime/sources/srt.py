@@ -6,8 +6,8 @@ Full design (D-073 / D-074):
   ``zzz_subtitle_jsonl/<video>.segments.jsonl`` sidecar and ``raw_segment_ref``
   is patched into the main video JSON via :meth:`Store.patch_video`.
 - Optional preprocessing hooks follow the locked pipeline:
-  ``transform(restore_punc, scope="pipeline") → sentences →
-  transform(restore_punc, scope="pipeline") → clauses →
+  ``transform(restore_punc, scope="joined") → sentences →
+  transform(restore_punc, scope="joined") → clauses →
   transform(chunk, scope="chunk") → split``.
   Each hook is only executed when the caller supplies a callable.
 - ``punc_position`` controls where punctuation restoration runs:
@@ -127,7 +127,7 @@ class SrtSource:
         try:
             # ① Global punc — before sentences()
             if self._restore_punc is not None and self._punc_position in ("global", "both"):
-                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="pipeline")
+                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="joined")
 
             # ② Sentence splitting
             sub = sub.sentences()
@@ -137,7 +137,7 @@ class SrtSource:
                 "sentence",
                 "both",
             ):
-                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="pipeline")
+                sub = sub.transform(self._restore_punc, cache=punc_cache, scope="joined")
 
             # ④ Clause splitting
             if self._merge_under is not None:

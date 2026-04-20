@@ -312,7 +312,7 @@ After `sentences()`, each operation is implicitly per-sentence — it never cros
 
 `transform()` scope parameter:
 - **`scope="chunk"`** (default): applies `fn` to each chunk individually.
-- **`scope="pipeline"`**: joins all chunks within a pipeline before sending to `fn`, then rebuilds the pipeline from the result. Use for punc restoration where the fn needs full context.
+- **`scope="joined"`**: joins all chunks within a pipeline before sending to `fn`, then rebuilds the pipeline from the result. Use for punc restoration where the fn needs full context.
 
 ### Subtitle word timing
 

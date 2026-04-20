@@ -76,12 +76,12 @@ def test_transform_chunk_scope_with_cache() -> None:
 
 
 # ---------------------------------------------------------------------------
-# transform — scope="pipeline"
+# transform — scope="joined"
 # ---------------------------------------------------------------------------
 
 
-def test_transform_pipeline_scope_pre_sentence() -> None:
-    """scope='pipeline' joins all chunks before sending to fn."""
+def test_transform_joined_scope_pre_sentence() -> None:
+    """scope='joined' joins all chunks before sending to fn."""
     segs = [_mk_seg(0.0, 1.0, "hello world how are you")]
 
     cache: dict[str, list[str]] = {}
@@ -90,14 +90,14 @@ def test_transform_pipeline_scope_pre_sentence() -> None:
         # Each text should be the full joined pipeline text
         return [[t + "!"] for t in batch]
 
-    sub = Subtitle(segs, language="en").transform(punc, cache=cache, scope="pipeline")
+    sub = Subtitle(segs, language="en").transform(punc, cache=cache, scope="joined")
     records = sub.sentences().records()
     # The exclamation mark should be present
     assert any("!" in r.src_text for r in records)
 
 
-def test_transform_pipeline_scope_post_sentence() -> None:
-    """scope='pipeline' after sentences() — per-sentence joined text sent to fn."""
+def test_transform_joined_scope_post_sentence() -> None:
+    """scope='joined' after sentences() — per-sentence joined text sent to fn."""
     segs = [_mk_seg(0.0, 2.0, "hello world. foo bar.")]
 
     received_texts: list[str] = []
@@ -107,8 +107,8 @@ def test_transform_pipeline_scope_post_sentence() -> None:
         return [[t + "!"] for t in batch]
 
     sub = Subtitle(segs, language="en").sentences()
-    # Each pipeline has one sentence; scope="pipeline" joins its chunks
-    sub = sub.transform(punc, scope="pipeline")
+    # Each pipeline has one sentence; scope="joined" joins its chunks
+    sub = sub.transform(punc, scope="joined")
     records = sub.records()
 
     # fn received full sentence texts, not individual chunks
@@ -117,8 +117,8 @@ def test_transform_pipeline_scope_post_sentence() -> None:
         assert t  # non-empty
 
 
-def test_transform_pipeline_scope_with_cache() -> None:
-    """Cache works correctly with scope='pipeline' — keyed by joined text."""
+def test_transform_joined_scope_with_cache() -> None:
+    """Cache works correctly with scope='joined' — keyed by joined text."""
     segs = [_mk_seg(0.0, 2.0, "hello world. foo bar.")]
     cache: dict[str, list[str]] = {}
     call_count = {"n": 0}
@@ -128,11 +128,11 @@ def test_transform_pipeline_scope_with_cache() -> None:
         return [[t] for t in batch]
 
     # First call
-    Subtitle(segs, language="en").sentences().transform(counting_fn, cache=cache, scope="pipeline")
+    Subtitle(segs, language="en").sentences().transform(counting_fn, cache=cache, scope="joined")
     first_calls = call_count["n"]
     assert first_calls > 0
 
     # Second call — all cache hits
     call_count["n"] = 0
-    Subtitle(segs, language="en").sentences().transform(counting_fn, cache=cache, scope="pipeline")
+    Subtitle(segs, language="en").sentences().transform(counting_fn, cache=cache, scope="joined")
     assert call_count["n"] == 0

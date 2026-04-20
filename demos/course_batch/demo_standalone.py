@@ -215,8 +215,8 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
         print(f"    ... +{len(sent_records) - 6} more sentences")
 
     # Step 3: per-sentence punc
-    print(f"\n    ── Step 3: transform(punc, scope='pipeline') — 句级标点恢复 ──")
-    sub_after_sent_punc = sub_after_sent.transform(punc_fn, scope="pipeline")
+    print(f"\n    ── Step 3: transform(punc, scope='joined') — 句级标点恢复 ──")
+    sub_after_sent_punc = sub_after_sent.transform(punc_fn, scope="joined")
     sent_punc_records = sub_after_sent_punc.records()
     print(f"    {ts()} {len(sent_records)} sentences → {len(sent_punc_records)} sentences")
 

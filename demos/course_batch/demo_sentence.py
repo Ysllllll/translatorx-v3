@@ -6,7 +6,7 @@
   Pipeline A: raw → punc_global → sentences() → records
   Pipeline B: raw → sentences() → punc_per_sent → sentences() → records
   Pipeline C: raw → punc_global → sentences() → punc_per_sent → sentences() → records
-  Pipeline D: Pipeline A + chunk
+  Pipeline D: Pipeline A + chunk (spaCy 预分 + LLM 精分)
 
 Segment 设计:
   - Seg 0-19: 有标点，部分句点在 text 中间 (模拟跨 segment 的句子边界)
@@ -15,11 +15,14 @@ Segment 设计:
   - 有标点和无标点部分均包含跨 segment 的句子流
 
 运行:
-    python demos/course_batch/demo_sentence.py
+    python demos/course_batch/demo_sentence.py             # 默认 LLM 标点恢复
+    python demos/course_batch/demo_sentence.py --punc ner  # NER 模型标点恢复
+    python demos/course_batch/demo_sentence.py --punc llm  # LLM 标点恢复 (同默认)
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import time
 
@@ -127,12 +130,32 @@ def _print_comparison(before: list[str], after: list[str], label: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def demo_sentence_pipeline(segments: list[Segment]) -> None:
-    from subtitle import Subtitle
-    from preprocess import LlmPuncRestorer, LlmChunker
-    from llm_ops import EngineConfig, OpenAICompatEngine
+def _build_punc_fn(mode: str):
+    """Build a punc restorer based on --punc mode."""
+    if mode == "ner":
+        from preprocess import NerPuncRestorer
 
-    t_total = time.perf_counter()
+        return NerPuncRestorer.get_instance()
+    else:
+        from preprocess import LlmPuncRestorer
+        from llm_ops import EngineConfig, OpenAICompatEngine
+
+        engine = OpenAICompatEngine(
+            EngineConfig(
+                model=LLM_MODEL,
+                base_url=LLM_BASE_URL,
+                api_key="EMPTY",
+                temperature=0.3,
+                max_tokens=2048,
+            )
+        )
+        return LlmPuncRestorer(engine, threshold=0)
+
+
+def _build_chunk_fn():
+    """Build a SpacyLlmChunker (spaCy 预分 + LLM 精分)."""
+    from preprocess import LlmChunker, SpacySplitter, SpacyLlmChunker
+    from llm_ops import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
         EngineConfig(
@@ -143,8 +166,19 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
             max_tokens=2048,
         )
     )
-    punc_fn = LlmPuncRestorer(engine, threshold=0)
-    chunk_fn = LlmChunker(engine, chunk_len=90, max_depth=4)
+    splitter = SpacySplitter.get_instance("en_core_web_md")
+    llm_chunker = LlmChunker(engine, chunk_len=90, max_depth=4)
+    return SpacyLlmChunker(splitter, llm_chunker, chunk_len=90)
+
+
+async def demo_sentence_pipeline(segments: list[Segment], *, punc_mode: str) -> None:
+    from subtitle import Subtitle
+
+    t_total = time.perf_counter()
+
+    punc_fn = _build_punc_fn(punc_mode)
+    chunk_fn = _build_chunk_fn()
+    punc_label = "NER" if punc_mode == "ner" else "LLM"
 
     sub_obj = Subtitle(segments, language="en")
 
@@ -167,17 +201,17 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
 
     # ── Pipeline A: punc_global → sentences() ────────────────────────────
     print(f"\n{'━' * 72}")
-    print(f"  Pipeline A: punc_global → sentences()")
+    print(f"  Pipeline A: punc_global ({punc_label}) → sentences()")
     print(f"{'━' * 72}")
 
     orig_texts: list[str] = []
     for p in sub_obj._pipelines:
         orig_texts.extend(p.result())
 
-    print(f"  {ts()} 开始 LLM 标点恢复...")
+    print(f"  {ts()} 开始 {punc_label} 标点恢复...")
     t0 = time.perf_counter()
     punc_cache_a: dict[str, list[str]] = {}
-    sub_a_punc = sub_obj.transform(punc_fn, cache=punc_cache_a)
+    sub_a_punc = sub_obj.transform(punc_fn, cache=punc_cache_a, scope="joined")
     print(f"  {ts()} punc 完成, 耗时 {_elapsed(t0)}, cache={len(punc_cache_a)} 条")
 
     punc_texts_a: list[str] = []
@@ -194,16 +228,16 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
 
     # ── Pipeline B: sentences() → punc_per_sent → sentences() ─────────
     print(f"\n{'━' * 72}")
-    print(f"  Pipeline B: sentences() → punc_per_sent → sentences()")
+    print(f"  Pipeline B: sentences() → punc_per_sent ({punc_label}) → sentences()")
     print(f"{'━' * 72}")
 
     sub_b_sent = sub_obj.sentences()
     b_before = [r.src_text for r in sub_b_sent.records()]
     print(f"  {ts()} sentences() → {len(b_before)} 段")
 
-    print(f"  {ts()} 开始逐句 LLM 标点恢复...")
+    print(f"  {ts()} 开始逐句 {punc_label} 标点恢复...")
     t0 = time.perf_counter()
-    sub_b_punc = sub_b_sent.transform(punc_fn, scope="pipeline", workers=20)
+    sub_b_punc = sub_b_sent.transform(punc_fn, scope="joined", workers=20)
     print(f"  {ts()} punc 完成, 耗时 {_elapsed(t0)}")
 
     b_punc_texts = [r.src_text for r in sub_b_punc.records()]
@@ -217,13 +251,13 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
 
     # ── Pipeline C: punc_global → sentences() → punc_per_sent → sentences()
     print(f"\n{'━' * 72}")
-    print(f"  Pipeline C: punc_global → sentences() → punc_per_sent → sentences()")
+    print(f"  Pipeline C: punc_global → sentences() → punc_per_sent ({punc_label}) → sentences()")
     print(f"{'━' * 72}")
 
     c_before = [r.src_text for r in a_records]
-    print(f"  {ts()} 开始逐句 LLM 标点恢复 (基于 Pipeline A)...")
+    print(f"  {ts()} 开始逐句 {punc_label} 标点恢复 (基于 Pipeline A)...")
     t0 = time.perf_counter()
-    sub_c_punc = sub_a_sent.transform(punc_fn, scope="pipeline", workers=20)
+    sub_c_punc = sub_a_sent.transform(punc_fn, scope="joined", workers=20)
     print(f"  {ts()} punc 完成, 耗时 {_elapsed(t0)}")
 
     c_punc_texts = [r.src_text for r in sub_c_punc.records()]
@@ -235,16 +269,16 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
     print(f"  {ts()} 二次 sentences() 完成, 耗时 {_elapsed(t0)}, {len(c_punc_texts)} → {len(c_records)} records")
     _print_records(c_records, "Pipeline C records")
 
-    # ── Pipeline D: Pipeline A + chunk ───────────────────────────────────
+    # ── Pipeline D: Pipeline A + chunk (spaCy + LLM) ────────────────────
     print(f"\n{'━' * 72}")
-    print(f"  Pipeline D: Pipeline A + chunk")
+    print(f"  Pipeline D: Pipeline A + chunk (SpacyLlmChunker)")
     print(f"{'━' * 72}")
 
     d_before = [r.src_text for r in a_records]
     over_90 = sum(1 for t in d_before if len(t) > 90)
     print(f"  {ts()} chunk 输入: {len(d_before)} 段, {over_90} 超过 90c")
 
-    print(f"  {ts()} 开始 LLM chunk...")
+    print(f"  {ts()} 开始 spaCy+LLM chunk...")
     t0 = time.perf_counter()
     chunk_cache_d: dict[str, list[str]] = {}
     sub_d = sub_a_sent.transform(chunk_fn, cache=chunk_cache_d, workers=20)
@@ -265,7 +299,7 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
     # ── 汇总 ─────────────────────────────────────────────────────────────
     dt_total = time.perf_counter() - t_total
     print(f"\n{'━' * 72}")
-    print(f"  汇总对比  (总耗时: {dt_total:.2f}s)")
+    print(f"  汇总对比  (总耗时: {dt_total:.2f}s, punc={punc_label})")
     print(f"{'━' * 72}")
 
     def _summary(recs: list) -> str:
@@ -287,17 +321,43 @@ async def demo_sentence_pipeline(segments: list[Segment]) -> None:
 # ---------------------------------------------------------------------------
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="demo_sentence — sentence 级预处理对比")
+    parser.add_argument(
+        "--punc",
+        choices=["ner", "llm"],
+        default="llm",
+        help="标点恢复方式: ner (deepmultilingualpunctuation) 或 llm (默认)",
+    )
+    return parser.parse_args()
+
+
 async def main() -> None:
+    args = parse_args()
+
     header("demo_sentence — sentence 级预处理对比 (自构造 segments)")
 
-    if not llm_up():
+    if args.punc == "llm" and not llm_up():
         print(f"  {ts()} LLM @ {LLM_BASE_URL} 不可达, 跳过")
+        return
+
+    if args.punc == "ner":
+        from preprocess import punc_model_is_available
+
+        if not punc_model_is_available():
+            print(f"  {ts()} deepmultilingualpunctuation 不可用, 跳过")
+            return
+
+    # chunk 始终需要 LLM
+    if not llm_up():
+        print(f"  {ts()} LLM @ {LLM_BASE_URL} 不可达 (chunk 需要 LLM), 跳过")
         return
 
     segments = _build_demo_segments()
     print(f"  {ts()} 构造了 {len(segments)} 个 segments (20 有标点 + 10 无标点)")
+    print(f"  {ts()} 标点恢复方式: {args.punc.upper()}")
 
-    await demo_sentence_pipeline(segments)
+    await demo_sentence_pipeline(segments, punc_mode=args.punc)
 
     print(f"\n{ts()} DONE")
 
