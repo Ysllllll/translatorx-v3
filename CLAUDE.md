@@ -33,7 +33,7 @@ src/
 ├── model/                           # Shared data types (L0 — no cross-package deps except lang_ops)
 │   └── __init__.py                  # Word, Segment, SentenceRecord (frozen dataclasses)
 ├── lang_ops/                        # Language-adapted text operations (L1)
-│   ├── __init__.py                  # Public API: LangOps, ChunkPipeline, normalize_language
+│   ├── __init__.py                  # Public API: LangOps, TextPipeline, normalize_language
 │   ├── en_type.py                   # EnTypeOps (shared by 7 space-delimited languages)
 │   ├── chinese.py / japanese.py / korean.py  # CJK language ops
 │   ├── _core/
@@ -45,7 +45,7 @@ src/
 │   │   ├── _normalize.py            # Language code normalization
 │   │   └── _availability.py         # Optional dependency guards (jieba/mecab/kiwi)
 │   └── chunk/
-│       ├── _pipeline.py             # ChunkPipeline (immutable, chainable)
+│       ├── _pipeline.py             # TextPipeline (immutable, chainable — pure text structuring)
 │       ├── _boundary.py             # Token-based boundary detection (sentences + clauses)
 │       ├── _length.py               # Length-based splitting (uses Protocol for decoupling)
 │       └── _merge.py                # Length-based merging (inverse of splitting)
@@ -57,7 +57,7 @@ src/
 │   ├── __init__.py                  # Re-exports model types + Subtitle/Stream + alignment utilities
 │   ├── model.py                     # Backward-compat shim → re-exports from model package
 │   ├── align.py                     # Word timing: fill_words, find_words, distribute_words, align_segments
-│   ├── core.py                      # Subtitle — chainable segment restructuring (per-sentence pipelines)
+│   ├── core.py                      # Subtitle — chainable segment restructuring + transform dispatch
 │   └── io/
 │       ├── srt.py                   # SRT file parser + sanitize_srt
 │       └── whisperx.py              # WhisperX JSON parser + word-level sanitizer
@@ -103,13 +103,13 @@ src/
 
 **strip_spaces property:** `_BaseOps.strip_spaces` controls whether `split_sentences`/`split_clauses` strip leading spaces from chunks. Defaults to `self.is_cjk` (True for Chinese/Japanese, since CJK doesn't use inter-sentence spaces). Korean overrides to `False` because it uses spaces between eojeols.
 
-**Immutability:** `ChunkPipeline` and `Subtitle` return new instances per step. All `subtitle` dataclasses use `frozen=True`. `align.py` uses `dataclasses.replace()` instead of mutation.
+**Immutability:** `TextPipeline` and `Subtitle` return new instances per step. All `subtitle` dataclasses use `frozen=True`. `align.py` uses `dataclasses.replace()` instead of mutation.
 
 **Protocol decoupling:** `_length.py` and `_merge.py` define Protocol types instead of importing `_BaseOps`, keeping the chunk package independent from the ops layer.
 
 **Token-based boundary detection:** `_boundary.py` unifies sentence and clause splitting via `find_boundaries()` / `split_tokens_by_boundaries()`. Sentence splitting uses token-level boundary markers (terminators, abbreviations, ellipsis guards). Clause splitting (`split_clauses`) is sentence-aware — it splits at clause separators and sentence boundaries in one pass.
 
-**Per-sentence pipelines:** After `Subtitle.sentences()`, the instance holds one `ChunkPipeline` per sentence with its corresponding words. Subsequent operations (`clauses`, `split`, `merge`, `apply`) are applied per-sentence — they never cross sentence boundaries. This structural isolation replaces the previous `_parent_ids` mechanism.
+**Per-sentence pipelines:** After `Subtitle.sentences()`, the instance holds one `TextPipeline` per sentence with its corresponding words. Subsequent operations (`clauses`, `split`, `merge`, `transform`) are applied per-sentence — they never cross sentence boundaries. This structural isolation replaces the previous `_parent_ids` mechanism.
 
 ### Layer relationship
 
@@ -127,7 +127,7 @@ Dependencies flow downward only. `model` depends on `lang_ops._core._punctuation
 `runtime` owns all orchestration state (Store, Workspace, Orchestrator, App/Builder).
 The legacy `pipeline/` package was removed in Stage 5 — use `runtime.TranslateProcessor` + `VideoOrchestrator` (or the higher-level `App`/`Builder`) instead.
 
-`subtitle` depends on `lang_ops` via `ChunkPipeline.segments()` (deferred import of `subtitle.align.align_segments`) and `Subtitle` which takes an `ops` or `language` parameter.
+`subtitle` depends on `lang_ops` via `TextPipeline` for text structuring and `Subtitle` which takes an `ops` or `language` parameter. Transform dispatch (`_call_apply_fn`) lives in `subtitle/core.py` (L2), not in `lang_ops` (L1).
 
 ### Test structure
 
@@ -247,17 +247,17 @@ ops.split(text, mode="word")         # "word" | "character" ("w" | "c")
 ops.join(tokens)
 ops.length(text, cjk_width=1)
 ops.normalize(text)
-ops.restore_punc(text_a, text_b)
+ops.transfer_punc(text_a, text_b)
 
 # Segment-level shortcuts
 ops.split_sentences(text) → list[str]
 ops.split_clauses(text)   → list[str]   # sentence-aware (splits at sentence boundaries too)
 ops.split_by_length(text, max_len) → list[str]
 ops.merge_by_length(chunks, max_len) → list[str]  # greedy merge (inverse of split)
-ops.chunk(text) → ChunkPipeline
+ops.chunk(text) → TextPipeline
 ```
 
-### ChunkPipeline (chainable, immutable)
+### TextPipeline (chainable, immutable — pure text structuring)
 
 ```
 ops.chunk(text)
@@ -265,12 +265,10 @@ ops.chunk(text)
   .clauses(merge_under=60)  # sentence-aware; merge_under merges back short clauses
   .split(max_len=50)        # split by length
   .merge(max_len=80)        # greedy merge all adjacent chunks
-  .apply(fn, skip_if=None)  # external fn: list[str] → list[list[str]]; skip_if skips chunks
   .result()                 → list[str]
-  .segments(words)          → list[Segment]   # deferred import from subtitle.align
 
 # Alternative construction
-ChunkPipeline.from_chunks(chunks, ops)  # from pre-split chunk list
+TextPipeline.from_chunks(chunks, ops)  # from pre-split chunk list
 ```
 
 ### Subtitle (chainable, immutable — per-sentence pipelines)
@@ -284,7 +282,7 @@ sub.sentences()                        → Subtitle  # splits into per-sentence 
 sub.clauses(merge_under=60)            → Subtitle  # per-sentence clause splitting
 sub.split(max_len=40)                  → Subtitle  # per-sentence length splitting
 sub.merge(max_len=60)                  → Subtitle  # per-sentence greedy merge
-sub.apply(fn, cache, batch_size, workers, skip_if)  → Subtitle  # batched across all pipelines
+sub.transform(fn, *, cache=None, name=None, batch_size=1, workers=1, skip_if=None)  → Subtitle  # unified transform
 sub.build()                            → list[Segment]
 sub.records()                          → list[SentenceRecord]
 
@@ -294,7 +292,11 @@ done = stream.feed(segment)            → list[Segment]  # completed sentences
 remaining = stream.flush()             → list[Segment]
 ```
 
-After `sentences()`, each operation is implicitly per-sentence — it never crosses sentence boundaries. This replaces the old `_parent_ids` mechanism with structural isolation (separate pipeline instances per sentence).
+After `sentences()`, each operation is implicitly per-sentence — it never crosses sentence boundaries.
+
+`transform()` auto-detects scope:
+- **Pre-sentence** (before `sentences()`): applies `fn` globally across all text; `name` is ignored, `cache` is the video-level punc cache.
+- **Post-sentence** (after `sentences()`): applies `fn` per-sentence; if `name` is given, results are stamped into each record's `chunk_cache[name]`.
 
 ### Subtitle word timing
 
