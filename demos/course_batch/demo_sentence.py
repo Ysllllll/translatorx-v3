@@ -166,7 +166,7 @@ def _build_chunk_fn():
             max_tokens=2048,
         )
     )
-    splitter = SpacySplitter.get_instance("en_core_web_md")
+    splitter = SpacySplitter.get_instance()
     llm_chunker = LlmChunker(engine, chunk_len=90, max_depth=4)
     return SpacyLlmChunker(splitter, llm_chunker, chunk_len=90)
 

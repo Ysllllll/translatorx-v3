@@ -36,11 +36,11 @@ pytest tests/subtitle/build_tests/test_english.py -v
 /home/ysl/workspace/.venv/bin/pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
-`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops`, `subtitle`, `model`, `checker`, `llm_ops`, `media`, `runtime`, and `trx` from `src/`.
+`pyproject.toml` sets `pythonpath = ["src"]` so tests resolve `lang_ops`, `subtitle`, `model`, `checker`, `llm_ops`, `media`, `runtime`, `trx`, and `preprocess` from `src/`.
 
 ## Architecture
 
-A subtitle translation platform with eight top-level packages under `src/`.
+A subtitle translation platform with nine top-level packages under `src/`.
 
 ### Package overview
 
@@ -107,6 +107,16 @@ src/
 │   └── processors/                  # TranslateProcessor + prefix + more
 ├── trx/                             # Unified API facade (L3)
 │   └── __init__.py                  # create_engine, create_context, translate_srt + App/Builders re-exports
+├── preprocess/                      # Preprocessing — punc restoration, sentence splitting, chunking (L2)
+│   ├── __init__.py                  # Conditional re-exports (NerPuncRestorer, SpacySplitter, etc.)
+│   ├── _protocol.py                 # ApplyFn Protocol: list[str] → list[list[str]]
+│   ├── _availability.py             # Optional dep guards (deepmultilingualpunctuation, spacy, langdetect)
+│   ├── _ner_punc.py                 # NerPuncRestorer — NER-based punc restoration (singleton, thread-safe)
+│   ├── _llm_punc.py                 # LlmPuncRestorer — LLM-based punc restoration
+│   ├── _remote_punc.py              # RemotePuncRestorer — remote API punc restoration
+│   ├── _spacy.py                    # SpacySplitter — spaCy sentence splitting (singleton, dotted-word protection)
+│   ├── _chunk.py                    # LlmChunker — LLM-based recursive binary splitting
+│   └── _spacy_llm_chunk.py          # SpacyLlmChunker — two-stage: spaCy coarse + LLM fine split
 ```
 
 ### Key design decisions
@@ -132,7 +142,7 @@ src/
 ```
 L0: model (Word, Segment, SentenceRecord)
 L1: lang_ops, media
-L2: subtitle, llm_ops, checker
+L2: subtitle, llm_ops, checker, preprocess
 L3: runtime, trx (facade)
 ```
 
@@ -190,6 +200,10 @@ tests/
 │   ├── test_ffmpeg.py           # ffprobe + extract_audio
 │   ├── test_protocol.py         # MediaSource Protocol conformance
 │   └── test_ytdlp.py            # yt-dlp source tests
+├── preprocess_tests/            # Preprocessing tests
+│   ├── test_ner_punc.py         # NerPuncRestorer + dotted-word + trailing-punc protection
+│   ├── test_spacy.py            # SpacySplitter + dotted-word sentence splitting
+│   └── ...                      # LlmChunker, SpacyLlmChunker, etc.
 └── runtime_tests/               # Runtime orchestration tests
     ├── test_app.py              # App + VideoBuilder + CourseBuilder
     ├── test_config.py           # AppConfig (YAML + dict + env overrides)
@@ -212,7 +226,10 @@ Test directory is `lang_ops_tests` (not `lang_ops`) to prevent Python from impor
 - **Pillow** — pixel length via `plength()`
 - **jieba** / **MeCab** / **kiwipiepy** — CJK tokenizers (conditional, tests skip if missing)
 
-Check availability at runtime: `jieba_is_available()`, `mecab_is_available()`, `kiwi_is_available()` (exported from `lang_ops`).
+- **deepmultilingualpunctuation** — NER punctuation restoration (conditional, tests skip if missing)
+- **spacy** — sentence splitting via `SpacySplitter` (conditional, tests skip if missing)
+
+Check availability at runtime: `jieba_is_available()`, `mecab_is_available()`, `kiwi_is_available()` (exported from `lang_ops`); `punc_model_is_available()`, `spacy_is_available()` (exported from `preprocess`).
 
 ## API quick reference
 
@@ -349,6 +366,26 @@ from subtitle.io import sanitize_whisperx, parse_whisperx, read_whisperx
 sanitize_whisperx(word_segments) → list[Word]  # sanitize raw word dicts (dedup, interpolate, attach punct, collapse repeats)
 parse_whisperx(data)             → list[Word]  # parse JSON dict (expects 'word_segments' key)
 read_whisperx(path)              → list[Word]  # read JSON file
+```
+
+### Preprocessing (ApplyFn-based — all conform to `list[str] → list[list[str]]`)
+
+```
+from preprocess import NerPuncRestorer, SpacySplitter, SpacyLlmChunker, LlmChunker
+
+# NER punctuation restoration (singleton, thread-safe)
+restorer = NerPuncRestorer.get_instance()
+results = restorer(["hello world this is a test"])  # → [["Hello world, this is a test."]]
+# Protects dotted words (Node.js) from corruption, preserves trailing punc (...)
+
+# spaCy sentence splitting (singleton per model)
+splitter = SpacySplitter.get_instance()             # default model from DEFAULT_SPACY_MODEL
+results = splitter(["Hello world. This is Node.js."])  # → [["Hello world.", "This is Node.js."]]
+# Protects dotted compound words (Node.js, Vue.js) from false sentence splits
+
+# Two-stage chunker: spaCy coarse split → LLM fine split for oversized chunks
+chunker = SpacyLlmChunker(splitter, llm_chunker, chunk_len=90)
+results = chunker(["long text..."])                 # → [["chunk1", "chunk2"]]
 ```
 
 ### Runtime orchestration (async, immutable)

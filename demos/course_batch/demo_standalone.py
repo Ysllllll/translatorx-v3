@@ -120,7 +120,7 @@ def demo_spacy_splitter() -> None:
         print(f"    {ts()} ⚠ spacy 不可用, 跳过")
         return
 
-    splitter = SpacySplitter.get_instance("en_core_web_md")
+    splitter = SpacySplitter.get_instance()
     print(f"    {ts()} type:  {type(splitter).__name__} (singleton)")
     print(f"    {ts()} input: 1 long text ({len(LONG_TEXT)} chars)")
 
