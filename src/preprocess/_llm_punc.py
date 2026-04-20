@@ -27,6 +27,7 @@ def _punc_content_matches(before: str, after: str) -> bool:
     b = "".join(ch for ch in after.lower() if ch.isalnum())
     return a == b
 
+
 _SYSTEM_PROMPT = (
     "You are a punctuation restoration expert. "
     "Add appropriate punctuation to the following text. "
@@ -49,11 +50,17 @@ class LlmPuncRestorer:
     """
 
     def __init__(
-        self, engine: "LLMEngine", *, threshold: int = 0, max_concurrent: int = 8,
+        self,
+        engine: "LLMEngine",
+        *,
+        threshold: int = 0,
+        max_concurrent: int = 8,
+        max_retries: int = 3,
     ) -> None:
         self._engine = engine
         self._threshold = threshold
         self._max_concurrent = max_concurrent
+        self._max_retries = max_retries
 
     def __call__(self, texts: list[str]) -> list[list[str]]:
         """Synchronous ApplyFn interface — runs async internally."""
@@ -79,21 +86,30 @@ class LlmPuncRestorer:
         async def _restore(text: str) -> list[str]:
             if not text.strip() or len(text) < self._threshold:
                 return [text]
-            async with sem:
-                messages = [
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": text},
-                ]
-                completion = await self._engine.complete(messages)
-                restored = completion.text.strip()
-                if not _punc_content_matches(text, restored):
+            for attempt in range(1, self._max_retries + 1):
+                async with sem:
+                    messages = [
+                        {"role": "system", "content": _SYSTEM_PROMPT},
+                        {"role": "user", "content": text},
+                    ]
+                    completion = await self._engine.complete(messages)
+                    restored = completion.text.strip()
+                    if _punc_content_matches(text, restored):
+                        return [restored]
                     logger.warning(
-                        "LLM punc changed word content, "
-                        "discarding result: %r → %r",
-                        text[:80], restored[:80],
+                        "LLM punc changed word content (attempt %d/%d), "
+                        "retrying: %r → %r",
+                        attempt,
+                        self._max_retries,
+                        text[:80],
+                        restored[:80],
                     )
-                    return [text]
-                return [restored]
+            logger.warning(
+                "LLM punc failed all %d attempts, keeping original: %r",
+                self._max_retries,
+                text[:80],
+            )
+            return [text]
 
         return list(await asyncio.gather(*(_restore(t) for t in texts)))
 
