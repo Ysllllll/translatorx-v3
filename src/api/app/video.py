@@ -88,8 +88,8 @@ class VideoBuilder:
         store = self.app.store(self.course)
         video_key = VideoKey(course=self.course, video=self.video)
         cfg = self.app.config.preprocess
-        restore_punc = self.app.punc_restorer()
-        chunk_fn = self.app.chunker()
+        restore_punc = self.app.punc_restorer(detected_lang)
+        chunk_fn = self.app.chunker(detected_lang)
         preprocess_kw = dict(
             restore_punc=restore_punc,
             punc_position=cfg.punc_position,

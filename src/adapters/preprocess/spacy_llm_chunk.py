@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from adapters.preprocess.llm_chunk import LlmChunker
     from adapters.preprocess.spacy_split import SpacySplitter
+    from domain.lang._core._base_ops import _BaseOps
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,11 @@ class SpacyLlmChunker:
     chunk_len:
         Maximum character length per chunk.  Chunks from the spaCy pass that
         exceed this length are forwarded to the LLM chunker.
+    ops:
+        Optional language ops — when given, ``ops.length`` is used as the
+        default length metric (correct for CJK / mixed-script text).
+    length_fn:
+        Optional custom length callable — overrides ``ops.length`` / ``len``.
     """
 
     def __init__(
@@ -39,10 +45,19 @@ class SpacyLlmChunker:
         llm_chunker: "LlmChunker",
         *,
         chunk_len: int = 90,
+        ops: "_BaseOps | None" = None,
+        length_fn: Callable[[str], int] | None = None,
     ) -> None:
         self._splitter = splitter
         self._llm_chunker = llm_chunker
         self._chunk_len = chunk_len
+
+        if length_fn is not None:
+            self._length: Callable[[str], int] = length_fn
+        elif ops is not None:
+            self._length = ops.length
+        else:
+            self._length = len
 
     # -- ApplyFn interface ------------------------------------------------
 
@@ -74,7 +89,7 @@ class SpacyLlmChunker:
 
     async def _refine_chunks(self, chunks: list[str]) -> list[str]:
         """LLM-split oversized chunks, pass through short ones."""
-        oversized = [c for c in chunks if len(c) > self._chunk_len]
+        oversized = [c for c in chunks if self._length(c) > self._chunk_len]
         if not oversized:
             return chunks
 

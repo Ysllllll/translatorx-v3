@@ -96,49 +96,67 @@ class App:
 
     # -- preprocess factories --------------------------------------------
 
-    def punc_restorer(self) -> ApplyFn | None:
-        """Build a punctuation restorer from ``config.preprocess``."""
+    def punc_restorer(self, language: str) -> ApplyFn | None:
+        """Build a punctuation restorer :data:`ApplyFn` for *language*.
+
+        Wires ``config.preprocess`` into a :class:`PuncRestorer` with a
+        single-language backends map (``{language: {...}}``) and returns
+        the language-bound :data:`ApplyFn`. Returns ``None`` when
+        ``punc_mode == "none"``.
+        """
         cfg = self._config.preprocess
         if cfg.punc_mode == "none":
             return None
+
+        from adapters.preprocess import PuncRestorer
+
         if cfg.punc_mode == "ner":
-            from adapters.preprocess import NerPuncRestorer
-
-            return NerPuncRestorer.get_instance()
-        if cfg.punc_mode == "llm":
-            from adapters.preprocess import LlmPuncRestorer
-
-            engine = self.engine(cfg.punc_engine)
-            return LlmPuncRestorer(
-                engine,
-                threshold=cfg.punc_threshold,
-                max_concurrent=cfg.max_concurrent,
-                max_retries=cfg.punc_max_retries,
-                on_failure=cfg.punc_on_failure,
-            )
-        if cfg.punc_mode == "remote":
-            from adapters.preprocess import RemotePuncRestorer
-
+            spec: dict[str, object] = {"library": "deepmultilingualpunctuation"}
+        elif cfg.punc_mode == "llm":
+            spec = {
+                "library": "llm",
+                "engine": self.engine(cfg.punc_engine),
+                "max_retries": cfg.punc_max_retries,
+                "max_concurrent": cfg.max_concurrent,
+            }
+        elif cfg.punc_mode == "remote":
             if cfg.punc_endpoint is None:
                 raise ValueError("preprocess.punc_endpoint required for punc_mode='remote'")
-            return RemotePuncRestorer(cfg.punc_endpoint, threshold=cfg.punc_threshold)
-        raise ValueError(f"unknown punc_mode: {cfg.punc_mode!r}")
+            spec = {"library": "remote", "endpoint": cfg.punc_endpoint, "language": language}
+        else:
+            raise ValueError(f"unknown punc_mode: {cfg.punc_mode!r}")
 
-    def chunker(self) -> ApplyFn | None:
-        """Build a chunker from ``config.preprocess``.
+        restorer = PuncRestorer(
+            backends={language: spec},
+            threshold=cfg.punc_threshold,
+            on_failure=cfg.punc_on_failure,
+        )
+        return restorer.for_language(language)
 
-        - ``"spacy"`` → :class:`SpacySplitter` (NLP-based sentence splitting).
-        - ``"llm"`` → :class:`LlmChunker` (recursive binary LLM splitting).
+    def chunker(self, language: str) -> ApplyFn | None:
+        """Build a chunker :data:`ApplyFn` for *language* from config.
+
+        - ``"spacy"`` → :class:`SpacySplitter` (NLP-based sentence splitting,
+          language-specific model resolved via
+          :meth:`SpacySplitter.for_language`).
+        - ``"llm"`` → :class:`LlmChunker` (recursive binary LLM splitting,
+          uses :meth:`LangOps.length` / :meth:`LangOps.split_by_length`).
         - ``"spacy_llm"`` → spaCy coarse split, then LLM fine split for
           chunks exceeding ``chunk_len``.
         """
+        from domain.lang import LangOps, normalize_language
+
         cfg = self._config.preprocess
         if cfg.chunk_mode == "none":
             return None
+
+        lang = normalize_language(language)
+        ops = LangOps.for_language(lang)
+
         if cfg.chunk_mode == "spacy":
             from adapters.preprocess import SpacySplitter
 
-            return SpacySplitter.get_instance(cfg.spacy_model)
+            return SpacySplitter.for_language(lang, model=cfg.spacy_model or None)
         if cfg.chunk_mode == "llm":
             from adapters.preprocess import LlmChunker
 
@@ -151,12 +169,13 @@ class App:
                 on_failure=cfg.chunk_on_failure,
                 split_parts=cfg.chunk_split_parts,
                 max_concurrent=cfg.max_concurrent,
+                ops=ops,
             )
         if cfg.chunk_mode == "spacy_llm":
             from adapters.preprocess import LlmChunker, SpacySplitter
             from adapters.preprocess.spacy_llm_chunk import SpacyLlmChunker
 
-            splitter = SpacySplitter.get_instance(cfg.spacy_model)
+            splitter = SpacySplitter.for_language(lang, model=cfg.spacy_model or None)
             engine = self.engine(cfg.chunk_engine)
             llm = LlmChunker(
                 engine,
@@ -166,8 +185,9 @@ class App:
                 on_failure=cfg.chunk_on_failure,
                 split_parts=cfg.chunk_split_parts,
                 max_concurrent=cfg.max_concurrent,
+                ops=ops,
             )
-            return SpacyLlmChunker(splitter, llm, chunk_len=cfg.chunk_len)
+            return SpacyLlmChunker(splitter, llm, chunk_len=cfg.chunk_len, ops=ops)
         raise ValueError(f"unknown chunk_mode: {cfg.chunk_mode!r}")
 
     # -- builders --------------------------------------------------------

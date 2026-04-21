@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 
 from ._chars import STRIP_PUNCT, decompose_token
@@ -10,6 +11,10 @@ from ._chars import STRIP_PUNCT, decompose_token
 # Mode shorthand: "c" = "character", "w" = "word"
 _MODE_SHORTHAND = {"c": "character", "w": "word"}
 _VALID_MODES = {"character", "word"}
+
+
+# Words with internal dots that should be treated as atoms (e.g. "Node.js").
+_DOTTED_WORD_RE = re.compile(r"\b(\w+(?:\.\w+)+)\b")
 
 
 def normalize_mode(mode: str) -> str:
@@ -96,7 +101,7 @@ class _BaseOps(ABC):
         found in *text_b*.
 
         Not to be confused with LLM-based punctuation *restoration*
-        (see :class:`~preprocess.LlmPuncRestorer`).
+        (see :class:`~adapters.preprocess.PuncRestorer`).
         """
         tokens_a = self.split(text_a)
         tokens_b = self.split(text_b)
@@ -108,6 +113,61 @@ class _BaseOps(ABC):
             lead_b, _, trail_b = decompose_token(tb)
             result.append(lead_b + content_a + trail_b)
         return self.join(result)
+
+    # -- Punc-restoration post-processing hooks ----------------------------
+
+    @property
+    def _trailing_punct_chars(self) -> str:
+        """Characters that can appear as trailing punctuation in this language.
+
+        Default covers ASCII + CJK full-width terminators and clause separators
+        so subclasses rarely need to override.
+        """
+        return ".!?,;:…。！？，；：、"
+
+    def protect_dotted_words(self, source: str, restored: str) -> str:
+        """Restore internal-dot words corrupted by a punc-restoration model.
+
+        For example, the NER model may turn ``Node.js`` into ``Node. Js`` or
+        ``e.g.`` into ``e. G.`` — this method detects such corruption and
+        restores the original form. Language-agnostic: operates on the
+        Latin-script substrings of *source* regardless of the surrounding
+        script, so CJK callers get the same protection for embedded terms.
+        """
+        dotted_words = _DOTTED_WORD_RE.findall(source)
+        if not dotted_words:
+            return restored
+
+        for original in dotted_words:
+            parts = original.split(".")
+            escaped = [re.escape(p) for p in parts]
+            corrupted_pattern = r"[.\s,;:!?]*\s*".join(escaped)
+            corrupted_re = re.compile(corrupted_pattern, re.IGNORECASE)
+            restored = corrupted_re.sub(original, restored)
+
+        return restored
+
+    def preserve_trailing_punc(self, source: str, restored: str) -> str:
+        """Preserve *source*'s trailing punctuation on *restored*.
+
+        Punc-restoration models may drop or change trailing punctuation
+        (including ``...``). If *source* ends with punctuation, ensure the
+        restored text ends with the same sequence. The character set used is
+        :attr:`_trailing_punct_chars`, which subclasses may override to add
+        locale-specific marks.
+        """
+        chars = re.escape(self._trailing_punct_chars)
+        trailing_re = re.compile(f"[{chars}]+$")
+
+        src_trail = trailing_re.search(source.rstrip())
+        if src_trail is None:
+            return restored
+
+        src_punc = src_trail.group()
+        restored_stripped = trailing_re.sub("", restored.rstrip())
+        if not restored_stripped:
+            return restored
+        return restored_stripped + src_punc
 
     # -- Segment-level shortcuts --------------------------------------------
 

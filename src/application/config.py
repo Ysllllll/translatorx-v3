@@ -124,7 +124,7 @@ class PreprocessConfig(BaseModel):
     punc_max_retries: int = 2
     punc_on_failure: Literal["keep", "raise"] = "keep"
 
-    spacy_model: str = "en_core_web_md"
+    spacy_model: str = ""
 
     chunk_mode: Literal["none", "spacy", "llm", "spacy_llm"] = "none"
     chunk_engine: str = "default"

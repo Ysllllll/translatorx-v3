@@ -52,26 +52,27 @@ LONG_TEXT = (
 
 
 def demo_ner_punc() -> None:
-    """Section 8a: NerPuncRestorer standalone."""
-    sub("8a  NerPuncRestorer — 本地 NER 模型标点恢复")
+    """Section 8a: PuncRestorer with deepmultilingualpunctuation backend."""
+    sub("8a  PuncRestorer + deepmultilingualpunctuation — 本地 NER 模型标点恢复")
     try:
-        from adapters.preprocess import NerPuncRestorer
+        from adapters.preprocess import PuncRestorer
     except ImportError:
         print(f"    {ts()} ⚠ deepmultilingualpunctuation 不可用, 跳过")
         return
 
-    restorer = NerPuncRestorer.get_instance()
-    print(f"    {ts()} type:  {type(restorer).__name__} (singleton)")
+    restorer = PuncRestorer(backends={"en": {"library": "deepmultilingualpunctuation"}})
+    apply_en = restorer.for_language("en")
+    print(f"    {ts()} type:  {type(restorer).__name__} (deepmultilingualpunctuation)")
     print(f"    {ts()} input: {len(SAMPLE_TEXTS)} texts (无标点)")
 
-    results = restorer(SAMPLE_TEXTS)
+    results = apply_en(SAMPLE_TEXTS)
     print_punc_comparison(SAMPLE_TEXTS, results, "NER Punc")
 
 
 async def demo_llm_punc() -> None:
-    """Section 8b: LlmPuncRestorer standalone."""
-    sub("8b  LlmPuncRestorer — LLM 标点恢复")
-    from adapters.preprocess import LlmPuncRestorer
+    """Section 8b: PuncRestorer with LLM backend."""
+    sub("8b  PuncRestorer + llm — LLM 标点恢复")
+    from adapters.preprocess import PuncRestorer
     from application.translate import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
@@ -83,30 +84,33 @@ async def demo_llm_punc() -> None:
             max_tokens=2048,
         )
     )
-    restorer = LlmPuncRestorer(engine, threshold=0)
-    print(f"    {ts()} type:      {type(restorer).__name__}")
+    restorer = PuncRestorer(backends={"en": {"library": "llm", "engine": engine}})
+    apply_en = restorer.for_language("en")
+    print(f"    {ts()} type:      {type(restorer).__name__} (llm)")
     print(f"    {ts()} engine:    {LLM_MODEL} @ {LLM_BASE_URL}")
     print(f"    {ts()} input:     {len(SAMPLE_TEXTS)} texts (无标点)")
 
-    results = restorer(SAMPLE_TEXTS)
+    results = apply_en(SAMPLE_TEXTS)
     print_punc_comparison(SAMPLE_TEXTS, results, "LLM Punc")
 
 
 def demo_remote_punc() -> None:
-    """Section 8c: RemotePuncRestorer standalone."""
-    sub("8c  RemotePuncRestorer — HTTP 服务标点恢复 (说明用法)")
-    print(f"    {ts()} RemotePuncRestorer 通过 HTTP 调用远程标点恢复服务。")
+    """Section 8c: PuncRestorer with remote backend."""
+    sub("8c  PuncRestorer + remote — HTTP 服务标点恢复 (说明用法)")
+    print(f"    {ts()} remote backend 通过 HTTP 调用远程标点恢复服务。")
     print()
     print("    接口约定:")
-    print("      POST /restore")
-    print('      Request:  {"texts": ["hello world", "another text"]}')
-    print('      Response: {"results": [["Hello world."], ["Another text."]]}')
+    print("      POST <endpoint>")
+    print('      Request:  {"text": "hello world", "language": "en"}')
+    print('      Response: {"result": "Hello world."}')
     print()
     print("    用法:")
-    print("      from adapters.preprocess import RemotePuncRestorer")
-    print('      restorer = RemotePuncRestorer("http://host:port/restore", threshold=180)')
-    print('      results = restorer(["hello world"])')
-    print('      # → [["Hello world."]]  (1:1 替换)')
+    print("      from adapters.preprocess import PuncRestorer")
+    print("      restorer = PuncRestorer(backends={")
+    print('          "en": {"library": "remote", "endpoint": "http://host:port/restore"}')
+    print("      })")
+    print('      results = restorer.for_language("en")(["hello world"])')
+    print('      # → [["Hello world."]]')
     print()
     print(f"    {ts()} ⚠ 无可用端点, 跳过实际调用。")
 
@@ -156,7 +160,7 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
     """Section 8f: Full pipeline step-by-step."""
     from domain.subtitle import Subtitle
     from adapters.parsers import read_srt
-    from adapters.preprocess import LlmPuncRestorer, LlmChunker
+    from adapters.preprocess import LlmChunker, PuncRestorer
     from application.translate import EngineConfig, OpenAICompatEngine
 
     sub("8f  完整预处理流水线 — 逐步可视化 (1 视频)")
@@ -179,7 +183,7 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
             max_tokens=2048,
         )
     )
-    punc_fn = LlmPuncRestorer(engine, threshold=0)
+    punc_fn = PuncRestorer(backends={"en": {"library": "llm", "engine": engine}}).for_language("en")
     chunk_fn = LlmChunker(engine, chunk_len=90, max_depth=4)
 
     sub_obj = Subtitle(segments, language="en")

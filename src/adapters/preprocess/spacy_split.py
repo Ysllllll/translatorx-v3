@@ -24,6 +24,27 @@ _PH_PREFIX = "\x00DW"
 
 DEFAULT_SPACY_MODEL = "en_core_web_md"
 
+#: Default spaCy pipeline per language code. Falls back to the multilingual
+#: sentence-only model when a user-requested language isn't listed.
+#:
+#: Users can override by passing ``model=`` to :meth:`get_instance` or by
+#: editing this mapping before first instantiation.
+DEFAULT_MODELS_BY_LANG: dict[str, str] = {
+    "en": "en_core_web_md",
+    "zh": "zh_core_web_md",
+    "ja": "ja_core_news_md",
+    "ko": "ko_core_news_md",
+    "de": "de_core_news_md",
+    "fr": "fr_core_news_md",
+    "es": "es_core_news_md",
+    "pt": "pt_core_news_md",
+    "ru": "ru_core_news_md",
+    "vi": "xx_sent_ud_sm",
+}
+
+#: Multilingual sentence-only fallback when a language has no dedicated model.
+FALLBACK_MODEL = "xx_sent_ud_sm"
+
 
 class SpacySplitter:
     """Sentence splitting via spaCy NLP model.
@@ -61,6 +82,20 @@ class SpacySplitter:
                 if model not in cls._instances:
                     cls._instances[model] = cls(model)
         return cls._instances[model]
+
+    @classmethod
+    def for_language(cls, language: str, *, model: str | None = None) -> SpacySplitter:
+        """Return a singleton splitter for *language*.
+
+        Looks up :data:`DEFAULT_MODELS_BY_LANG` for the best model per
+        language, falling back to :data:`FALLBACK_MODEL`. Pass ``model=``
+        to force a specific pipeline regardless of language.
+        """
+        from domain.lang import normalize_language
+
+        lang = normalize_language(language)
+        chosen = model or DEFAULT_MODELS_BY_LANG.get(lang, FALLBACK_MODEL)
+        return cls.get_instance(chosen)
 
     # -- ApplyFn interface ------------------------------------------------
 
@@ -110,4 +145,4 @@ class SpacySplitter:
         return text
 
 
-__all__ = ["SpacySplitter", "DEFAULT_SPACY_MODEL"]
+__all__ = ["SpacySplitter", "DEFAULT_SPACY_MODEL", "DEFAULT_MODELS_BY_LANG", "FALLBACK_MODEL"]

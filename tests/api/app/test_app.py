@@ -391,55 +391,53 @@ class TestPreprocessIntegration:
     """Verify preprocess factory methods and Builder wiring."""
 
     def test_punc_restorer_none_by_default(self, app: App):
-        assert app.punc_restorer() is None
+        assert app.punc_restorer("en") is None
 
     def test_chunker_none_by_default(self, app: App):
-        assert app.chunker() is None
+        assert app.chunker("en") is None
 
-    def test_punc_restorer_llm(self, tmp_path: Path, monkeypatch):
+    def test_punc_restorer_llm_returns_callable(self, tmp_path: Path, monkeypatch):
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm"}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
-        restorer = app.punc_restorer()
-        from adapters.preprocess import LlmPuncRestorer
-
-        assert type(restorer) is LlmPuncRestorer
+        restorer = app.punc_restorer("en")
+        assert callable(restorer)
 
     def test_punc_restorer_remote_requires_endpoint(self, tmp_path: Path):
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "remote"}})
         with pytest.raises(ValueError, match="punc_endpoint"):
-            app.punc_restorer()
+            app.punc_restorer("en")
 
     def test_punc_restorer_remote_with_endpoint(self, tmp_path: Path):
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "remote", "punc_endpoint": "http://localhost:8080/restore"}})
-        restorer = app.punc_restorer()
-        from adapters.preprocess import RemotePuncRestorer
-
-        assert type(restorer) is RemotePuncRestorer
+        restorer = app.punc_restorer("en")
+        assert callable(restorer)
 
     def test_chunker_llm(self, tmp_path: Path, monkeypatch):
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "llm"}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
-        chunker = app.chunker()
+        chunker = app.chunker("en")
         from adapters.preprocess import LlmChunker
 
         assert type(chunker) is LlmChunker
 
-    def test_punc_threshold_propagated(self, tmp_path: Path, monkeypatch):
-        """punc_threshold in config reaches the LlmPuncRestorer instance."""
+    def test_punc_threshold_propagates(self, tmp_path: Path, monkeypatch):
+        """punc_threshold in config causes short texts to skip the backend."""
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm", "punc_threshold": 200}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
-        restorer = app.punc_restorer()
-        assert restorer._threshold == 200
+        restorer = app.punc_restorer("en")
+        assert restorer is not None
+        # Text well under threshold → returned unchanged, engine never called.
+        assert restorer(["short text"]) == [["short text"]]
 
     def test_chunk_len_propagated(self, tmp_path: Path, monkeypatch):
         """chunk_len in config reaches the LlmChunker instance."""
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "llm", "chunk_len": 120}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
-        chunker = app.chunker()
+        chunker = app.chunker("en")
         assert chunker._chunk_len == 120
 
     def test_chunk_advanced_options_propagated(self, tmp_path: Path, monkeypatch):
@@ -447,7 +445,7 @@ class TestPreprocessIntegration:
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "llm", "chunk_len": 60, "chunk_max_depth": 6, "chunk_max_retries": 5, "chunk_on_failure": "keep", "chunk_split_parts": 3}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
-        chunker = app.chunker()
+        chunker = app.chunker("en")
         assert chunker._max_depth == 6
         assert chunker._max_retries == 5
         assert chunker._on_failure == "keep"
@@ -502,7 +500,7 @@ class TestPreprocessIntegration:
     def test_chunker_spacy(self, tmp_path: Path):
         """chunk_mode='spacy' returns a SpacySplitter instance."""
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "spacy"}})
-        chunker = app.chunker()
+        chunker = app.chunker("en")
         from adapters.preprocess import SpacySplitter
 
         assert type(chunker) is SpacySplitter

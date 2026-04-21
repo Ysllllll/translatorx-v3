@@ -89,3 +89,28 @@ class TestSpacySplitter:
         sentences = result[0]
         assert len(sentences) == 1
         assert "e.g." in sentences[0]
+
+
+class TestSpacySplitterForLanguage:
+    def test_for_language_english(self) -> None:
+        from adapters.preprocess import SpacySplitter
+
+        splitter = SpacySplitter.for_language("en")
+        assert splitter is SpacySplitter.get_instance("en_core_web_md")
+
+    def test_explicit_model_overrides_language(self) -> None:
+        from adapters.preprocess import SpacySplitter
+
+        # Force English model even when asking for zh.
+        splitter = SpacySplitter.for_language("zh", model="en_core_web_md")
+        assert splitter is SpacySplitter.get_instance("en_core_web_md")
+
+    def test_unknown_language_falls_back_to_multilingual(self) -> None:
+        """Unknown language code resolves to the FALLBACK_MODEL name.
+
+        We verify the mapping logic without loading the model.
+        """
+        from adapters.preprocess.spacy_split import DEFAULT_MODELS_BY_LANG, FALLBACK_MODEL
+
+        # "sv" (Swedish) is absent from the model map but a valid lang.
+        assert DEFAULT_MODELS_BY_LANG.get("sv", FALLBACK_MODEL) == FALLBACK_MODEL

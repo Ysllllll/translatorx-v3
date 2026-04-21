@@ -130,26 +130,27 @@ def _print_comparison(before: list[str], after: list[str], label: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _build_punc_fn(mode: str):
-    """Build a punc restorer based on --punc mode."""
+def _build_punc_fn(mode: str, language: str = "en"):
+    """Build a punc-restorer ApplyFn based on --punc mode."""
+    from adapters.preprocess import PuncRestorer
+
     if mode == "ner":
-        from adapters.preprocess import NerPuncRestorer
+        backends = {language: {"library": "deepmultilingualpunctuation"}}
+        return PuncRestorer(backends=backends).for_language(language)
 
-        return NerPuncRestorer.get_instance()
-    else:
-        from adapters.preprocess import LlmPuncRestorer
-        from application.translate import EngineConfig, OpenAICompatEngine
+    from application.translate import EngineConfig, OpenAICompatEngine
 
-        engine = OpenAICompatEngine(
-            EngineConfig(
-                model=LLM_MODEL,
-                base_url=LLM_BASE_URL,
-                api_key="EMPTY",
-                temperature=0.3,
-                max_tokens=2048,
-            )
+    engine = OpenAICompatEngine(
+        EngineConfig(
+            model=LLM_MODEL,
+            base_url=LLM_BASE_URL,
+            api_key="EMPTY",
+            temperature=0.3,
+            max_tokens=2048,
         )
-        return LlmPuncRestorer(engine, threshold=0)
+    )
+    backends = {language: {"library": "llm", "engine": engine}}
+    return PuncRestorer(backends=backends).for_language(language)
 
 
 def _build_chunk_fn():

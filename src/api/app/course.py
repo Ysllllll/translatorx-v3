@@ -178,8 +178,6 @@ class CourseBuilder:
 
         # Preprocess config (shared across all target languages)
         pcfg = self.app.config.preprocess
-        restore_punc = self.app.punc_restorer()
-        chunk_llm = self.app.chunker()
 
         result: CourseResult | None = None
 
@@ -220,9 +218,9 @@ class CourseBuilder:
                 vk = VideoKey(course=self.course, video=v.video)
                 vid_lang = v.language or src_lang
                 preprocess_kw = dict(
-                    restore_punc=restore_punc,
+                    restore_punc=self.app.punc_restorer(vid_lang),
                     punc_position=pcfg.punc_position,
-                    chunk_llm=chunk_llm,
+                    chunk_llm=self.app.chunker(vid_lang),
                     merge_under=pcfg.merge_under,
                     max_len=pcfg.max_len,
                 )

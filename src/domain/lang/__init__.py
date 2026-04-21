@@ -3,6 +3,7 @@
 from ._core._mechanism import LangOps
 from ._core._normalize import normalize_language
 from ._core._detect import detect_language
+from ._core._punctuation import punc_content_matches
 from ._core._availability import (
     jieba_is_available,
     mecab_is_available,
@@ -14,6 +15,7 @@ __all__ = [
     "LangOps",
     "normalize_language",
     "detect_language",
+    "punc_content_matches",
     "TextPipeline",
     "jieba_is_available",
     "mecab_is_available",

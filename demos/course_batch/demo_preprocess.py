@@ -58,8 +58,8 @@ def verify_preprocess_factories() -> None:
             "store": {"root": tmp_root},
         }
     )
-    assert app0.punc_restorer() is None
-    assert app0.chunker() is None
+    assert app0.punc_restorer("en") is None
+    assert app0.chunker("en") is None
     print(f"    {ts()} ✓ punc_mode=none → punc_restorer()=None")
     print(f"    {ts()} ✓ chunk_mode=none → chunker()=None")
 
@@ -71,9 +71,9 @@ def verify_preprocess_factories() -> None:
             "preprocess": {"punc_mode": "llm", "punc_threshold": 180},
         }
     )
-    restorer = app1.punc_restorer()
+    restorer = app1.punc_restorer("en")
     assert restorer is not None
-    print(f"    {ts()} ✓ punc_mode=llm → LlmPuncRestorer (threshold={restorer._threshold})")
+    print(f"    {ts()} ✓ punc_mode=llm → PuncRestorer (for_language='en')")
 
     # LLM chunk
     app2 = App.from_dict(
@@ -83,7 +83,7 @@ def verify_preprocess_factories() -> None:
             "preprocess": {"chunk_mode": "llm", "chunk_len": 90},
         }
     )
-    chunker = app2.chunker()
+    chunker = app2.chunker("en")
     assert chunker is not None
     print(f"    {ts()} ✓ chunk_mode=llm → LlmChunker (chunk_len={chunker._chunk_len})")
 
@@ -96,7 +96,7 @@ def verify_preprocess_factories() -> None:
                 "preprocess": {"punc_mode": "remote"},
             }
         )
-        app3.punc_restorer()
+        app3.punc_restorer("en")
         print(f"    {ts()} ✗ remote without endpoint should have raised")
     except ValueError as e:
         print(f"    {ts()} ✓ punc_mode=remote without endpoint → ValueError: {e}")
@@ -113,9 +113,9 @@ def verify_preprocess_factories() -> None:
             },
         }
     )
-    r4 = app4.punc_restorer()
-    c4 = app4.chunker()
-    assert r4._max_concurrent == 16
+    r4 = app4.punc_restorer("en")
+    c4 = app4.chunker("en")
+    assert r4 is not None
     assert c4._max_concurrent == 16
     print(f"    {ts()} ✓ max_concurrent=16 correctly wired to punc + chunk")
 

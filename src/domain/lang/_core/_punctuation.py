@@ -85,6 +85,22 @@ STRIP_PUNCT: str = "".join(sorted(ALL_PUNCT))
 # =====================================================================
 
 
+def punc_content_matches(before: str, after: str) -> bool:
+    """Verify a punc-restoration pass only changed punctuation.
+
+    Strips all non-alphanumeric characters from both strings and compares
+    them case-insensitively. Non-CJK alphabetic case is folded via
+    :meth:`str.lower`; CJK characters compare byte-for-byte because they
+    have no case.
+
+    This is the language-agnostic content-equivalence check shared by all
+    ``*PuncRestorer`` implementations in :mod:`adapters.preprocess`.
+    """
+    a = "".join(ch for ch in before.lower() if ch.isalnum())
+    b = "".join(ch for ch in after.lower() if ch.isalnum())
+    return a == b
+
+
 def strip_punct(s: str) -> str:
     """Strip leading and trailing punctuation from *s*.
 
