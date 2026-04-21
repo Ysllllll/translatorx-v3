@@ -12,7 +12,7 @@ from application.processors.translate import TranslateProcessor
 from ports.source import Priority, VideoKey
 
 if TYPE_CHECKING:
-    from api.app._app import App
+    from api.app.app import App
     from ports.errors import ErrorReporter
 
 

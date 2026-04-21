@@ -17,7 +17,7 @@ from adapters.sources.srt import SrtSource
 from adapters.sources.whisperx import WhisperXSource
 
 if TYPE_CHECKING:
-    from api.app._app import App
+    from api.app.app import App
     from ports.errors import ErrorReporter
 
 

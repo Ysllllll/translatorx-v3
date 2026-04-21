@@ -154,7 +154,7 @@ class App:
             )
         if cfg.chunk_mode == "spacy_llm":
             from adapters.preprocess import LlmChunker, SpacySplitter
-            from adapters.preprocess._spacy_llm_chunk import SpacyLlmChunker
+            from adapters.preprocess.spacy_llm_chunk import SpacyLlmChunker
 
             splitter = SpacySplitter.get_instance(cfg.spacy_model)
             engine = self.engine(cfg.chunk_engine)
@@ -173,18 +173,18 @@ class App:
     # -- builders --------------------------------------------------------
 
     def video(self, *, course: str, video: str) -> "VideoBuilder":
-        from api.app._video import VideoBuilder
+        from api.app.video import VideoBuilder
 
         return VideoBuilder(app=self, course=course, video=video)
 
     def course(self, *, course: str) -> "CourseBuilder":
-        from api.app._course import CourseBuilder
+        from api.app.course import CourseBuilder
 
         return CourseBuilder(app=self, course=course)
 
     def stream(self, *, course: str, video: str, language: str) -> "StreamBuilder":
         """Builder for live-streaming translation (browser-plugin scenario)."""
-        from api.app._stream import StreamBuilder
+        from api.app.stream import StreamBuilder
 
         return StreamBuilder(app=self, course=course, video=video, language=language)
 

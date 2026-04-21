@@ -1,6 +1,6 @@
 from domain.lang import LangOps
 
-from tests.lang_ops_tests._base import LangOpsTestCase
+from tests.domain.lang._base import LangOpsTestCase
 
 
 class RussianTextTest(LangOpsTestCase):

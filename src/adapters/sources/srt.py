@@ -32,7 +32,7 @@ from domain.subtitle import Subtitle
 from adapters.parsers import read_srt
 
 from ports.source import VideoKey
-from adapters.sources._common import assign_ids
+from adapters.sources.common import assign_ids
 from adapters.storage.store import Store
 
 ApplyFn = Callable[[list[str]], list[list[str]]]

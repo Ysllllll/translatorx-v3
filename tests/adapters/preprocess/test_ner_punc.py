@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from adapters.preprocess._availability import punc_model_is_available
+from adapters.preprocess.availability import punc_model_is_available
 
 pytestmark = pytest.mark.skipif(
     not punc_model_is_available(),
@@ -50,7 +50,7 @@ class TestNerPuncRestorer:
 
     def test_omit_punct_stripping(self) -> None:
         """The _OMIT_PUNCT_RE should strip unusual punctuation."""
-        from adapters.preprocess._ner_punc import _OMIT_PUNCT_RE
+        from adapters.preprocess.ner_punc import _OMIT_PUNCT_RE
 
         assert _OMIT_PUNCT_RE.sub("", "hello@world") == "helloworld"
         assert _OMIT_PUNCT_RE.sub("", "test{value}") == "testvalue"
@@ -74,7 +74,7 @@ class TestProtectDottedWords:
     """Unit tests for _protect_dotted_words (no model needed)."""
 
     def test_node_js_preserved(self) -> None:
-        from adapters.preprocess._ner_punc import _protect_dotted_words
+        from adapters.preprocess.ner_punc import _protect_dotted_words
 
         result = _protect_dotted_words(
             "you have Node.js version eighteen",
@@ -83,7 +83,7 @@ class TestProtectDottedWords:
         assert "Node.js" in result
 
     def test_eg_preserved(self) -> None:
-        from adapters.preprocess._ner_punc import _protect_dotted_words
+        from adapters.preprocess.ner_punc import _protect_dotted_words
 
         result = _protect_dotted_words(
             "use e.g. something here",
@@ -92,13 +92,13 @@ class TestProtectDottedWords:
         assert "e.g." in result
 
     def test_no_dotted_words_passthrough(self) -> None:
-        from adapters.preprocess._ner_punc import _protect_dotted_words
+        from adapters.preprocess.ner_punc import _protect_dotted_words
 
         text = "Hello, world."
         assert _protect_dotted_words("Hello world", text) == text
 
     def test_multiple_dotted_words(self) -> None:
-        from adapters.preprocess._ner_punc import _protect_dotted_words
+        from adapters.preprocess.ner_punc import _protect_dotted_words
 
         result = _protect_dotted_words(
             "use Node.js and Vue.js here",
@@ -112,7 +112,7 @@ class TestPreserveTrailingPunc:
     """Unit tests for _preserve_trailing_punc (no model needed)."""
 
     def test_period_preserved(self) -> None:
-        from adapters.preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "hello world.",
@@ -121,7 +121,7 @@ class TestPreserveTrailingPunc:
         assert result.endswith(".")
 
     def test_ellipsis_preserved(self) -> None:
-        from adapters.preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "hello world...",
@@ -130,7 +130,7 @@ class TestPreserveTrailingPunc:
         assert result.endswith("...")
 
     def test_exclamation_preserved(self) -> None:
-        from adapters.preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "hello world!",
@@ -139,7 +139,7 @@ class TestPreserveTrailingPunc:
         assert result.endswith("!")
 
     def test_no_trailing_punc_passthrough(self) -> None:
-        from adapters.preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "hello world",
@@ -149,7 +149,7 @@ class TestPreserveTrailingPunc:
         assert result == "Hello, world."
 
     def test_question_mark_preserved(self) -> None:
-        from adapters.preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "how are you?",

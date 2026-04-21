@@ -1,7 +1,7 @@
 from domain.lang import LangOps, kiwi_is_available
 
 from .conftest import TEST_FONT_PATH, expected_pixel_length
-from tests.lang_ops_tests._base import LangOpsTestCase
+from tests.domain.lang._base import LangOpsTestCase
 
 
 class KoreanTextTest(LangOpsTestCase):

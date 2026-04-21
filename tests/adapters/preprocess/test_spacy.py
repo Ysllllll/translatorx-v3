@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from adapters.preprocess._availability import spacy_is_available
+from adapters.preprocess.availability import spacy_is_available
 
 pytestmark = pytest.mark.skipif(
     not spacy_is_available(),

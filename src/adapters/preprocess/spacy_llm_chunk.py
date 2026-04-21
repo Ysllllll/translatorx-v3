@@ -13,8 +13,8 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from adapters.preprocess._chunk import LlmChunker
-    from adapters.preprocess._spacy import SpacySplitter
+    from adapters.preprocess.llm_chunk import LlmChunker
+    from adapters.preprocess.spacy_split import SpacySplitter
 
 logger = logging.getLogger(__name__)
 
