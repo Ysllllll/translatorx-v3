@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from lang_ops._core._detect import detect_language, _detect_via_unicode
+from domain.lang._core._detect import detect_language, _detect_via_unicode
 
 
 class TestDetectViaUnicode:

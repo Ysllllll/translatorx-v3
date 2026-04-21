@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from model import Word
-from subtitle.io.whisperx import (
+from domain.model import Word
+from adapters.parsers.whisperx import (
     sanitize_whisperx,
     parse_whisperx,
     _dedup_untimed,

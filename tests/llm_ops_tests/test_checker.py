@@ -2,7 +2,7 @@
 
 import pytest
 
-from checker import (
+from application.checker import (
     Severity,
     Issue,
     CheckReport,

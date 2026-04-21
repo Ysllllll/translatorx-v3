@@ -6,8 +6,8 @@ from typing import AsyncIterator
 
 import pytest
 
-from llm_ops.protocol import LLMEngine
-from model.usage import CompletionResult
+from ports.engine import LLMEngine
+from domain.model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------

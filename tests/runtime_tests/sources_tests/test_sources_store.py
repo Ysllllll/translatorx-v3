@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from runtime.protocol import VideoKey
-from runtime.sources import SrtSource, WhisperXSource
-from runtime.store import JsonFileStore
-from runtime.workspace import Workspace
+from ports.source import VideoKey
+from adapters.sources import SrtSource, WhisperXSource
+from adapters.storage.store import JsonFileStore
+from adapters.storage.workspace import Workspace
 
 
 SAMPLE_SRT = """1

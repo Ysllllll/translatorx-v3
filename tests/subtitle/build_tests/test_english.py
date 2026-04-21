@@ -7,8 +7,8 @@ attached to tokens, sentences split across segment boundaries, etc.
 from __future__ import annotations
 
 import pytest
-from subtitle import Segment, Word, SentenceRecord, Subtitle
-from lang_ops import LangOps
+from domain.subtitle import Segment, Word, SentenceRecord, Subtitle
+from domain.lang import LangOps
 from ._base import BuilderTestBase, W, S
 
 
@@ -128,9 +128,7 @@ def _single_long_segment() -> list[Segment]:
     """One segment with multiple sentences, clauses, and varied punctuation."""
     return [
         S(
-            "The quick brown fox jumped over the lazy dog. Meanwhile, "
-            "the cat sat on the mat; it was very comfortable. "
-            "What a day!",
+            "The quick brown fox jumped over the lazy dog. Meanwhile, the cat sat on the mat; it was very comfortable. What a day!",
             0.0,
             12.0,
             words=[

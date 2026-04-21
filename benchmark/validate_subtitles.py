@@ -30,14 +30,15 @@ from pathlib import Path
 # Ensure src/ is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from subtitle.model import Segment, Word
-from subtitle.io.srt import parse_srt
-from subtitle.core import Subtitle
-from lang_ops import LangOps
+from domain.model import Segment, Word
+from adapters.parsers.srt import parse_srt
+from domain.subtitle.core import Subtitle
+from domain.lang import LangOps
 
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class FileResult:
@@ -59,15 +60,13 @@ class FileResult:
 
     @property
     def ok(self) -> bool:
-        return (self.parse_ok
-                and not self.step_errors
-                and not self.e2e_errors
-                and not self.timing_errors)
+        return self.parse_ok and not self.step_errors and not self.e2e_errors and not self.timing_errors
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _collect_text(sub: Subtitle) -> str:
     """Build concatenated text from a Subtitle's pipelines."""
@@ -99,36 +98,31 @@ def _check_text_preserved(before_text: str, after_text: str, step_name: str) -> 
         for i, (a, b) in enumerate(zip(norm_before, norm_after)):
             if a != b:
                 ctx = 20
-                return (f"{step_name}: text mismatch at pos {i}: "
-                        f"...{norm_before[max(0,i-ctx):i+ctx]!r}... vs "
-                        f"...{norm_after[max(0,i-ctx):i+ctx]!r}...")
+                return (
+                    f"{step_name}: text mismatch at pos {i}: "
+                    f"...{norm_before[max(0, i - ctx) : i + ctx]!r}... vs "
+                    f"...{norm_after[max(0, i - ctx) : i + ctx]!r}..."
+                )
         if len(norm_before) != len(norm_after):
-            return (f"{step_name}: text length mismatch: "
-                    f"{len(norm_before)} vs {len(norm_after)}")
+            return f"{step_name}: text length mismatch: {len(norm_before)} vs {len(norm_after)}"
     return None
 
 
-def _check_word_count(before_words: list[Word], after_words: list[Word],
-                      step_name: str) -> str | None:
+def _check_word_count(before_words: list[Word], after_words: list[Word], step_name: str) -> str | None:
     """Check that total word count is preserved."""
     if len(before_words) != len(after_words):
-        return (f"{step_name}: word count mismatch: "
-                f"{len(before_words)} vs {len(after_words)}")
+        return f"{step_name}: word count mismatch: {len(before_words)} vs {len(after_words)}"
     return None
 
 
-def _check_word_timestamps(before_words: list[Word], after_words: list[Word],
-                           step_name: str) -> list[str]:
+def _check_word_timestamps(before_words: list[Word], after_words: list[Word], step_name: str) -> list[str]:
     """Check that word timestamps are identical after operation."""
     errors = []
     n = min(len(before_words), len(after_words))
     for i in range(n):
         bw, aw = before_words[i], after_words[i]
         if abs(bw.start - aw.start) > 1e-6 or abs(bw.end - aw.end) > 1e-6:
-            errors.append(
-                f"{step_name}: word[{i}] timestamp changed: "
-                f"({bw.start:.3f}-{bw.end:.3f}) → ({aw.start:.3f}-{aw.end:.3f})"
-            )
+            errors.append(f"{step_name}: word[{i}] timestamp changed: ({bw.start:.3f}-{bw.end:.3f}) → ({aw.start:.3f}-{aw.end:.3f})")
             if len(errors) >= 5:
                 errors.append(f"{step_name}: ... (truncated)")
                 break
@@ -141,16 +135,12 @@ def _check_segments_ordered(segments: list[Segment], step_name: str) -> list[str
     for i, seg in enumerate(segments):
         if seg.start > seg.end + 1e-6:
             errors.append(f"{step_name}: seg[{i}] start > end: {seg.start:.3f} > {seg.end:.3f}")
-        if i > 0 and segments[i-1].end > seg.start + 1e-6:
-            errors.append(
-                f"{step_name}: seg[{i-1}].end > seg[{i}].start: "
-                f"{segments[i-1].end:.3f} > {seg.start:.3f}"
-            )
+        if i > 0 and segments[i - 1].end > seg.start + 1e-6:
+            errors.append(f"{step_name}: seg[{i - 1}].end > seg[{i}].start: {segments[i - 1].end:.3f} > {seg.start:.3f}")
     return errors
 
 
-def _check_length_constraint(segments: list[Segment], ops, max_len: int,
-                             step_name: str) -> list[str]:
+def _check_length_constraint(segments: list[Segment], ops, max_len: int, step_name: str) -> list[str]:
     """Check that each segment respects the length constraint."""
     errors = []
     for i, seg in enumerate(segments):
@@ -158,15 +148,11 @@ def _check_length_constraint(segments: list[Segment], ops, max_len: int,
         length = ops.length(text)
         tokens = ops.split(text)
         if length > max_len and len(tokens) > 1:
-            errors.append(
-                f"{step_name}: seg[{i}] length {length} > {max_len}: {text[:40]!r}"
-            )
+            errors.append(f"{step_name}: seg[{i}] length {length} > {max_len}: {text[:40]!r}")
     return errors
 
 
-def _check_boundary_timestamps(original_segments: list[Segment],
-                               final_segments: list[Segment],
-                               step_name: str) -> list[str]:
+def _check_boundary_timestamps(original_segments: list[Segment], final_segments: list[Segment], step_name: str) -> list[str]:
     """Check that first.start and last.end match original boundaries."""
     errors = []
     if not original_segments or not final_segments:
@@ -176,19 +162,16 @@ def _check_boundary_timestamps(original_segments: list[Segment],
     final_start = final_segments[0].start
     final_end = final_segments[-1].end
     if abs(orig_start - final_start) > 1e-6:
-        errors.append(
-            f"{step_name}: boundary start changed: {orig_start:.3f} → {final_start:.3f}"
-        )
+        errors.append(f"{step_name}: boundary start changed: {orig_start:.3f} → {final_start:.3f}")
     if abs(orig_end - final_end) > 1e-6:
-        errors.append(
-            f"{step_name}: boundary end changed: {orig_end:.3f} → {final_end:.3f}"
-        )
+        errors.append(f"{step_name}: boundary end changed: {orig_end:.3f} → {final_end:.3f}")
     return errors
 
 
 # ---------------------------------------------------------------------------
 # SRT issue detection
 # ---------------------------------------------------------------------------
+
 
 def _detect_srt_issues(segments: list[Segment]) -> list[str]:
     """Detect common SRT quality issues."""
@@ -197,11 +180,8 @@ def _detect_srt_issues(segments: list[Segment]) -> list[str]:
 
     for i, seg in enumerate(segments):
         # Overlapping timestamps
-        if i > 0 and segments[i-1].end > seg.start + 0.01:
-            issues.append(
-                f"overlap: seg[{i-1}].end={segments[i-1].end:.3f} > "
-                f"seg[{i}].start={seg.start:.3f}"
-            )
+        if i > 0 and segments[i - 1].end > seg.start + 0.01:
+            issues.append(f"overlap: seg[{i - 1}].end={segments[i - 1].end:.3f} > seg[{i}].start={seg.start:.3f}")
         # Leading punctuation
         stripped = seg.text.strip()
         if stripped and stripped[0] in punct_chars:
@@ -216,6 +196,7 @@ def _detect_srt_issues(segments: list[Segment]) -> list[str]:
 # ---------------------------------------------------------------------------
 # Parse files
 # ---------------------------------------------------------------------------
+
 
 def _parse_json_file(path: str) -> tuple[list[Segment], str]:
     """Parse a WhisperX JSON file → (segments, language)."""
@@ -233,17 +214,21 @@ def _parse_json_file(path: str) -> tuple[list[Segment], str]:
         words = []
         for rw in raw.get("words", []):
             if "start" in rw and "end" in rw:
-                words.append(Word(
-                    word=rw["word"],
-                    start=rw["start"],
-                    end=rw["end"],
-                ))
-        segments.append(Segment(
-            start=raw["start"],
-            end=raw["end"],
-            text=text,
-            words=words,
-        ))
+                words.append(
+                    Word(
+                        word=rw["word"],
+                        start=rw["start"],
+                        end=rw["end"],
+                    )
+                )
+        segments.append(
+            Segment(
+                start=raw["start"],
+                end=raw["end"],
+                text=text,
+                words=words,
+            )
+        )
 
     return segments, language
 
@@ -271,6 +256,7 @@ def _parse_srt_file(path: str) -> tuple[list[Segment], str]:
 # ---------------------------------------------------------------------------
 # Step-by-step validation
 # ---------------------------------------------------------------------------
+
 
 def _validate_steps(segments: list[Segment], ops, has_words: bool) -> list[str]:
     """Validate each pipeline step individually, checking invariants."""
@@ -381,6 +367,7 @@ def _validate_steps(segments: list[Segment], ops, has_words: bool) -> list[str]:
 # End-to-end chain validation
 # ---------------------------------------------------------------------------
 
+
 def _validate_e2e(segments: list[Segment], ops, has_words: bool) -> list[str]:
     """Validate end-to-end chains (no intermediate snapshots)."""
     errors: list[str] = []
@@ -420,9 +407,7 @@ def _validate_e2e(segments: list[Segment], ops, has_words: bool) -> list[str]:
                 err = _check_word_count(words0, words_result, f"e2e:{name}")
                 if err:
                     errors.append(err)
-                errors.extend(
-                    _check_boundary_timestamps(segments, segs_result, f"e2e:{name}")
-                )
+                errors.extend(_check_boundary_timestamps(segments, segs_result, f"e2e:{name}"))
 
         except Exception as e:
             errors.append(f"e2e:{name} raised {type(e).__name__}: {e}")
@@ -433,6 +418,7 @@ def _validate_e2e(segments: list[Segment], ops, has_words: bool) -> list[str]:
 # ---------------------------------------------------------------------------
 # Word timing stability validation (JSON only)
 # ---------------------------------------------------------------------------
+
 
 def _validate_timing_stability(segments: list[Segment], ops) -> list[str]:
     """Verify word timestamps survive multiple round-trips."""
@@ -471,6 +457,7 @@ def _validate_timing_stability(segments: list[Segment], ops) -> list[str]:
 # ---------------------------------------------------------------------------
 # Process one file
 # ---------------------------------------------------------------------------
+
 
 def _process_file(args: tuple[str, str]) -> FileResult:
     """Process a single file — parse + validate."""
@@ -534,6 +521,7 @@ def _process_file(args: tuple[str, str]) -> FileResult:
 # Discover files
 # ---------------------------------------------------------------------------
 
+
 def discover_files(root: str) -> list[tuple[str, str]]:
     """Find all JSON and SRT files under zzz_subtitle directories."""
     files = []
@@ -553,6 +541,7 @@ def discover_files(root: str) -> list[tuple[str, str]]:
 # Report
 # ---------------------------------------------------------------------------
 
+
 def print_report(results: list[FileResult], elapsed: float) -> None:
     """Print a summary report."""
     total = len(results)
@@ -571,14 +560,14 @@ def print_report(results: list[FileResult], elapsed: float) -> None:
     print("=" * 70)
     print(f"Files scanned:    {total:>6}  (JSON: {json_count}, SRT: {srt_count})")
     print(f"Time elapsed:     {elapsed:>6.1f}s")
-    print(f"Throughput:       {total/elapsed:>6.1f} files/s")
+    print(f"Throughput:       {total / elapsed:>6.1f} files/s")
     print()
-    print(f"Parse OK:         {parse_ok:>6}  ({parse_ok/total*100:.1f}%)")
+    print(f"Parse OK:         {parse_ok:>6}  ({parse_ok / total * 100:.1f}%)")
     print(f"Parse FAIL:       {parse_fail:>6}")
     print(f"Step errors:      {step_fail:>6}")
     print(f"E2E errors:       {e2e_fail:>6}")
     print(f"Timing errors:    {timing_fail:>6}")
-    print(f"ALL OK:           {all_ok:>6}  ({all_ok/total*100:.1f}%)")
+    print(f"ALL OK:           {all_ok:>6}  ({all_ok / total * 100:.1f}%)")
 
     # --- SRT issues ---
     srt_results = [r for r in results if r.file_type == "srt" and r.parse_ok]
@@ -638,23 +627,21 @@ def print_report(results: list[FileResult], elapsed: float) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate subtitle pipeline on real files")
     parser.add_argument("root", help="Root directory to scan (e.g. /path/to/all_course2)")
-    parser.add_argument("--workers", type=int, default=0,
-                        help="Number of worker processes (0=auto, default=auto)")
-    parser.add_argument("--limit", type=int, default=0,
-                        help="Process only first N files (0=all)")
+    parser.add_argument("--workers", type=int, default=0, help="Number of worker processes (0=auto, default=auto)")
+    parser.add_argument("--limit", type=int, default=0, help="Process only first N files (0=all)")
     args = parser.parse_args()
 
     # Discover
     print(f"Scanning {args.root} ...")
     files = discover_files(args.root)
-    print(f"Found {len(files)} files ({sum(1 for _,t in files if t=='json')} JSON, "
-          f"{sum(1 for _,t in files if t=='srt')} SRT)")
+    print(f"Found {len(files)} files ({sum(1 for _, t in files if t == 'json')} JSON, {sum(1 for _, t in files if t == 'srt')} SRT)")
 
     if args.limit > 0:
-        files = files[:args.limit]
+        files = files[: args.limit]
         print(f"Limited to {len(files)} files")
 
     if not files:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from subtitle import Word, Segment, fill_words, align_segments
+from domain.subtitle import Word, Segment, fill_words, align_segments
 
 
 def _seg_view(segs):

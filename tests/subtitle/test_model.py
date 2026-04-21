@@ -1,6 +1,6 @@
 """Tests for subtitle.model display helpers."""
 
-from subtitle import Segment, SentenceRecord, Word
+from domain.subtitle import Segment, SentenceRecord, Word
 
 
 class TestWordDisplay:

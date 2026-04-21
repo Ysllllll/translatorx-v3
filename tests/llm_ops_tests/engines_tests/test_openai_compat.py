@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from llm_ops.protocol import LLMEngine
-from llm_ops.engines.openai_compat import (
+from ports.engine import LLMEngine
+from adapters.engines.openai_compat import (
     EngineConfig,
     OpenAICompatEngine,
     _clean_response,

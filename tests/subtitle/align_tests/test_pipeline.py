@@ -2,9 +2,9 @@
 
 import pytest
 
-from subtitle import Word
-from subtitle.align import align_segments
-from lang_ops import LangOps
+from domain.subtitle import Word
+from domain.subtitle.align import align_segments
+from domain.lang import LangOps
 
 
 # ---------------------------------------------------------------------------

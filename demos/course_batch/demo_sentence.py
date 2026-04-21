@@ -34,7 +34,7 @@ from _shared import (  # noqa: E402 — must import first to bootstrap sys.path
     LLM_MODEL,
 )
 
-from model import Segment
+from domain.model import Segment
 
 
 # ---------------------------------------------------------------------------
@@ -133,12 +133,12 @@ def _print_comparison(before: list[str], after: list[str], label: str) -> None:
 def _build_punc_fn(mode: str):
     """Build a punc restorer based on --punc mode."""
     if mode == "ner":
-        from preprocess import NerPuncRestorer
+        from adapters.preprocess import NerPuncRestorer
 
         return NerPuncRestorer.get_instance()
     else:
-        from preprocess import LlmPuncRestorer
-        from llm_ops import EngineConfig, OpenAICompatEngine
+        from adapters.preprocess import LlmPuncRestorer
+        from application.translate import EngineConfig, OpenAICompatEngine
 
         engine = OpenAICompatEngine(
             EngineConfig(
@@ -154,8 +154,8 @@ def _build_punc_fn(mode: str):
 
 def _build_chunk_fn():
     """Build a SpacyLlmChunker (spaCy 预分 + LLM 精分)."""
-    from preprocess import LlmChunker, SpacySplitter, SpacyLlmChunker
-    from llm_ops import EngineConfig, OpenAICompatEngine
+    from adapters.preprocess import LlmChunker, SpacySplitter, SpacyLlmChunker
+    from application.translate import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
         EngineConfig(
@@ -172,7 +172,7 @@ def _build_chunk_fn():
 
 
 async def demo_sentence_pipeline(segments: list[Segment], *, punc_mode: str) -> None:
-    from subtitle import Subtitle
+    from domain.subtitle import Subtitle
 
     t_total = time.perf_counter()
 
@@ -342,7 +342,7 @@ async def main() -> None:
         return
 
     if args.punc == "ner":
-        from preprocess import punc_model_is_available
+        from adapters.preprocess import punc_model_is_available
 
         if not punc_model_is_available():
             print(f"  {ts()} deepmultilingualpunctuation 不可用, 跳过")

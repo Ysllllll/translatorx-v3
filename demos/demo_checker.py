@@ -8,7 +8,7 @@
 
 import _bootstrap  # noqa: F401
 
-from checker import (
+from application.checker import (
     default_checker,
     Checker,
     Severity,

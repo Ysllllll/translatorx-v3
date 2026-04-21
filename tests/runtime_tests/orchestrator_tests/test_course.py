@@ -7,23 +7,25 @@ from pathlib import Path
 
 import pytest
 
-from checker import CheckReport
-from llm_ops import Checker, StaticTerms, TranslationContext
-from model import SentenceRecord
-from model.usage import CompletionResult
+from application.checker import CheckReport
+from application.translate import Checker, StaticTerms, TranslationContext
+from domain.model import SentenceRecord
+from domain.model.usage import CompletionResult
 
-from runtime import (
+from adapters.processors import TranslateProcessor
+from adapters.storage.store import JsonFileStore
+from adapters.storage.workspace import Workspace
+from application.orchestrator.course import (
     CourseOrchestrator,
     CourseResult,
-    JsonFileStore,
-    Priority,
-    TranslateProcessor,
+    VideoSpec,
+)
+from application.orchestrator.video import (
     VideoOrchestrator,
     VideoResult,
-    VideoSpec,
-    Workspace,
 )
-from runtime.sources.srt import SrtSource
+from ports.source import Priority
+from adapters.sources.srt import SrtSource
 
 
 class _Engine:

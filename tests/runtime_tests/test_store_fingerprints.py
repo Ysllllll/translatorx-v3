@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from runtime.store import (
+from adapters.storage.store import (
     FINGERPRINT_CHAIN,
     JsonFileStore,
     get_stale_steps,
 )
-from runtime.workspace import Workspace
+from adapters.storage.workspace import Workspace
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ class TestGetStaleSteps:
     def test_middle_mismatch_cascades_downstream(self) -> None:
         stored = dict.fromkeys(FINGERPRINT_CHAIN, "x")
         current = {**stored, "preprocess.chunk": "y"}
-        # Everything from preprocess.chunk downward is stale.
+        # Everything from adapters.preprocess.chunk downward is stale.
         idx = FINGERPRINT_CHAIN.index("preprocess.chunk")
         assert get_stale_steps(stored, current) == list(FINGERPRINT_CHAIN[idx:])
 

@@ -8,7 +8,7 @@
 
 import _bootstrap  # noqa: F401
 
-from lang_ops import LangOps, TextPipeline
+from domain.lang import LangOps, TextPipeline
 
 # ── 1. 工厂模式 ──────────────────────────────────────────────────────
 

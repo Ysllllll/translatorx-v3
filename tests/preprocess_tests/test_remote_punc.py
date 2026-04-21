@@ -7,7 +7,7 @@ import json
 import httpx
 import pytest
 
-from preprocess import RemotePuncRestorer
+from adapters.preprocess import RemotePuncRestorer
 
 
 class TestRemotePuncRestorer:

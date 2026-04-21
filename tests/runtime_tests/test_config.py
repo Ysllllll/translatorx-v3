@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from runtime.config import AppConfig
+from application.config import AppConfig
 
 
 YAML_BASIC = """

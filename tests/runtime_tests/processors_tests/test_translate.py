@@ -23,17 +23,17 @@ from typing import AsyncIterator
 
 import pytest
 
-from checker import CheckReport
-from llm_ops import Checker, ContextWindow, StaticTerms, TranslationContext
-from model import SentenceRecord
-from model.usage import CompletionResult
+from application.checker import CheckReport
+from application.translate import Checker, ContextWindow, StaticTerms, TranslationContext
+from domain.model import SentenceRecord
+from domain.model.usage import CompletionResult
 
-from runtime.processors import TranslateProcessor
-from runtime.protocol import VideoKey
-from runtime.store import JsonFileStore
-from runtime.workspace import Workspace
+from adapters.processors import TranslateProcessor
+from ports.source import VideoKey
+from adapters.storage.store import JsonFileStore
+from adapters.storage.workspace import Workspace
 
-from runtime.processors.prefix import EN_ZH_PREFIX_RULES, TranslateNodeConfig
+from adapters.processors.prefix import EN_ZH_PREFIX_RULES, TranslateNodeConfig
 
 
 # ---------------------------------------------------------------------------

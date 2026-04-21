@@ -6,8 +6,8 @@ punctuation as separate tokens, sentences split across segment boundaries.
 
 from __future__ import annotations
 
-from subtitle import Segment, Subtitle
-from lang_ops import LangOps
+from domain.subtitle import Segment, Subtitle
+from domain.lang import LangOps
 from ._base import BuilderTestBase, S, W
 
 

@@ -20,12 +20,12 @@ from typing import AsyncIterator
 
 import pytest
 
-from checker import CheckReport
-from llm_ops import Checker
-from model import Segment
-from model.usage import CompletionResult
+from application.checker import CheckReport
+from application.translate import Checker
+from domain.model import Segment
+from domain.model.usage import CompletionResult
 
-from runtime import App
+from api.app import App
 
 
 # ---------------------------------------------------------------------------

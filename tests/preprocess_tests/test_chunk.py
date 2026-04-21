@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from model.usage import CompletionResult
+from domain.model.usage import CompletionResult
 
 
 class _FakeChunkEngine:
@@ -110,14 +110,14 @@ class _CountingFailingEngine(_FailingChunkEngine):
 
 class TestLlmChunker:
     def test_short_text_no_split(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=100)
         result = chunker(["Short text."])
         assert result == [["Short text."]]
 
     def test_long_text_splits(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=30)
         text = "This is a sentence that is definitely longer than thirty characters"
@@ -134,14 +134,14 @@ class TestLlmChunker:
         ]
 
     def test_batch_processing(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=100)
         result = chunker(["short", "also short"])
         assert result == [["short"], ["also short"]]
 
     def test_max_depth_limits_recursion(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=5, max_depth=1)
         text = "This is a longer text that needs splitting"
@@ -156,7 +156,7 @@ class TestLlmChunker:
         ]
 
     def test_llm_failure_falls_back_to_rule(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FailingChunkEngine(), chunk_len=20)
         text = "This is a sentence that needs to be split somehow"
@@ -174,8 +174,8 @@ class TestLlmChunker:
         ]
 
     def test_rule_split_with_ops(self) -> None:
-        from preprocess import LlmChunker
-        from lang_ops import LangOps
+        from adapters.preprocess import LlmChunker
+        from domain.lang import LangOps
 
         ops = LangOps.for_language("en")
         chunker = LlmChunker(_FailingChunkEngine(), chunk_len=20, ops=ops)
@@ -192,7 +192,7 @@ class TestLlmChunker:
 
     def test_rejects_content_changing_split(self) -> None:
         """Chunk must fall back when LLM changes word content."""
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_WordChangingChunkEngine(), chunk_len=20)
         text = "This is a sentence that needs to be split somehow"
@@ -210,7 +210,7 @@ class TestLlmChunker:
         ]
 
     def test_applyfn_conformance(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=100)
         result = chunker(["test text"])
@@ -220,7 +220,7 @@ class TestLlmChunker:
 class TestLlmChunkerRetry:
     def test_retry_then_succeed(self) -> None:
         """max_retries=2 → up to 3 attempts; succeeds on attempt 3."""
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         engine = _FlakyChunkEngine(fail_first=2)
         chunker = LlmChunker(engine, chunk_len=30, max_retries=2)
@@ -239,7 +239,7 @@ class TestLlmChunkerRetry:
 
     def test_retry_exhausted_then_rule(self) -> None:
         """All retries fail → on_failure='rule' falls back to rule_split."""
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         engine = _CountingFailingEngine()
         chunker = LlmChunker(engine, chunk_len=30, max_retries=2, on_failure="rule")
@@ -252,7 +252,7 @@ class TestLlmChunkerRetry:
         assert engine.calls >= 3
 
     def test_max_retries_zero_means_single_attempt(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         engine = _FlakyChunkEngine(fail_first=1)
         chunker = LlmChunker(engine, chunk_len=30, max_retries=0, on_failure="keep")
@@ -265,21 +265,21 @@ class TestLlmChunkerRetry:
 
 class TestLlmChunkerOnFailure:
     def test_keep_returns_text_unchanged(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FailingChunkEngine(), chunk_len=30, on_failure="keep")
         text = "This is a sentence that is definitely longer than thirty characters"
         assert chunker([text]) == [[text]]
 
     def test_raise_throws(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FailingChunkEngine(), chunk_len=30, on_failure="raise")
         with pytest.raises(RuntimeError, match="LLM chunk failed"):
             chunker(["This is a sentence that is definitely longer than thirty characters"])
 
     def test_invalid_on_failure_rejected(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         with pytest.raises(ValueError, match="invalid on_failure"):
             LlmChunker(_FakeChunkEngine(), on_failure="bogus")  # type: ignore[arg-type]
@@ -287,7 +287,7 @@ class TestLlmChunkerOnFailure:
 
 class TestLlmChunkerSplitParts:
     def test_three_way_split(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_NPartEngine(3), chunk_len=30, split_parts=3)
         text = "This is a sentence that is definitely longer than thirty characters"
@@ -307,7 +307,7 @@ class TestLlmChunkerSplitParts:
         ]
 
     def test_split_parts_below_two_rejected(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         with pytest.raises(ValueError, match="split_parts"):
             LlmChunker(_FakeChunkEngine(), split_parts=1)
@@ -316,8 +316,8 @@ class TestLlmChunkerSplitParts:
 class TestLlmChunkerLengthMetric:
     def test_custom_length_fn_drives_budget(self) -> None:
         """length_fn overrides the default len/ops.length measurement."""
-        from preprocess import LlmChunker
-        from lang_ops import LangOps
+        from adapters.preprocess import LlmChunker
+        from domain.lang import LangOps
 
         ops = LangOps.for_language("zh")
         # 8 latin + 2 CJK characters:
@@ -344,8 +344,8 @@ class TestLlmChunkerLengthMetric:
 
     def test_defaults_to_ops_length_when_ops_given(self) -> None:
         """No length_fn + ops → ops.length is used."""
-        from preprocess import LlmChunker
-        from lang_ops import LangOps
+        from adapters.preprocess import LlmChunker
+        from domain.lang import LangOps
 
         ops = LangOps.for_language("en")
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=100, ops=ops)
@@ -354,7 +354,7 @@ class TestLlmChunkerLengthMetric:
 
     def test_falls_back_to_len_without_ops(self) -> None:
         """No ops + no length_fn → builtin len() is used."""
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=100)
         assert chunker._length is len
@@ -365,7 +365,7 @@ class TestLlmChunkerLengthMetric:
 class TestLlmChunkerAsync:
     @pytest.mark.asyncio
     async def test_chunk_recursive(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=30)
         text = "This is a sentence that is definitely longer than thirty characters"
@@ -378,7 +378,7 @@ class TestLlmChunkerAsync:
 
     @pytest.mark.asyncio
     async def test_llm_split_valid(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=30)
         text = "Hello world this is a test"
@@ -387,7 +387,7 @@ class TestLlmChunkerAsync:
 
     @pytest.mark.asyncio
     async def test_llm_split_invalid_returns_none(self) -> None:
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         chunker = LlmChunker(_FailingChunkEngine(), chunk_len=30)
         result = await chunker._llm_split("test text")

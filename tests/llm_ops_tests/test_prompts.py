@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llm_ops import (
+from application.translate import (
     StaticTerms,
     TranslationContext,
     get_default_system_prompt,
@@ -80,7 +80,7 @@ class TestRegister:
             assert after.startswith("日译中专家。")
         finally:
             # Clean up to avoid cross-test pollution.
-            from llm_ops.prompts import _REGISTRY  # type: ignore[attr-defined]
+            from application.translate.prompts import _REGISTRY  # type: ignore[attr-defined]
 
             _REGISTRY.pop(("ja", "zh"), None)
 

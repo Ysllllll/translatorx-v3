@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from preprocess._availability import spacy_is_available
+from adapters.preprocess._availability import spacy_is_available
 
 pytestmark = pytest.mark.skipif(
     not spacy_is_available(),
@@ -14,14 +14,14 @@ pytestmark = pytest.mark.skipif(
 
 class TestSpacySplitter:
     def test_singleton_per_model(self) -> None:
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         a = SpacySplitter.get_instance()
         b = SpacySplitter.get_instance()
         assert a is b
 
     def test_basic_split(self) -> None:
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
         result = splitter(["Hello world. This is a test. How are you?"])
@@ -30,14 +30,14 @@ class TestSpacySplitter:
         assert len(sentences) >= 2  # At least 2 sentences
 
     def test_empty_input(self) -> None:
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
         result = splitter([""])
         assert result == [[""]]
 
     def test_single_sentence(self) -> None:
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
         result = splitter(["Hello world."])
@@ -45,7 +45,7 @@ class TestSpacySplitter:
         assert len(result[0]) == 1
 
     def test_batch_processing(self) -> None:
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
         texts = [
@@ -58,7 +58,7 @@ class TestSpacySplitter:
         assert len(result[1]) == 1
 
     def test_applyfn_conformance(self) -> None:
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
         result = splitter(["Test sentence."])
@@ -68,7 +68,7 @@ class TestSpacySplitter:
 
     def test_dotted_word_not_split(self) -> None:
         """Node.js should be one token and not cause a sentence split."""
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
         result = splitter(["You need Node.js version eighteen installed on your machine."])
@@ -79,7 +79,7 @@ class TestSpacySplitter:
 
     def test_multiple_dotted_words(self) -> None:
         """Multiple dotted words should be preserved as single tokens."""
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
         result = splitter(["Use Node.js and Vue.js for your project. They work well."])
@@ -90,7 +90,7 @@ class TestSpacySplitter:
 
     def test_eg_not_split(self) -> None:
         """e.g. should not cause a sentence break."""
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
         result = splitter(["Use a framework e.g. React or Vue for this project."])

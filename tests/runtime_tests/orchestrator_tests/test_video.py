@@ -9,19 +9,17 @@ from typing import AsyncIterator
 import asyncio
 import pytest
 
-from checker import CheckReport
-from llm_ops import Checker, StaticTerms, TranslationContext
-from model import SentenceRecord
-from model.usage import CompletionResult
+from application.checker import CheckReport
+from application.translate import Checker, StaticTerms, TranslationContext
+from domain.model import SentenceRecord
+from domain.model.usage import CompletionResult
 
-from runtime import (
-    JsonFileStore,
-    TranslateProcessor,
-    VideoKey,
-    VideoOrchestrator,
-    Workspace,
-)
-from runtime.errors import ErrorInfo
+from adapters.processors import TranslateProcessor
+from adapters.storage.store import JsonFileStore
+from adapters.storage.workspace import Workspace
+from application.orchestrator.video import VideoOrchestrator
+from ports.source import VideoKey
+from application.observability.errors import ErrorInfo
 
 
 # ---------------------------------------------------------------------------

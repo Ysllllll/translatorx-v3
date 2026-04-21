@@ -24,7 +24,7 @@ from pathlib import Path
 
 import httpx
 
-from runtime import App
+from api.app import App
 
 
 # ---------------------------------------------------------------------------
@@ -108,8 +108,8 @@ def llm_up() -> bool:
 
 def count_sentence_records(p: Path, language: str = "en") -> int:
     """Count actual SentenceRecords after sentence splitting."""
-    from subtitle.io import read_srt
-    from subtitle import Subtitle
+    from adapters.parsers import read_srt
+    from domain.subtitle import Subtitle
 
     segments = read_srt(p)
     records = Subtitle(segments, language=language).sentences().records()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from runtime import Usage
+from domain.model import Usage
 
 
 def test_add_basic_counters() -> None:

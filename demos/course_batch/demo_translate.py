@@ -183,11 +183,7 @@ async def run_cache_pass(
     dt2 = time.perf_counter() - t0
     speedup = dt_first / dt2 if dt2 > 0 else float("inf")
     delta_calls = progress_engine.calls - pre_calls
-    print(
-        f"    {ts()} ⏱ 用时 {dt2:.2f}s  "
-        f"succeeded={len(result2.succeeded)}/{len(result2.videos)}  "
-        f"(LLM calls 增量: {delta_calls})"
-    )
+    print(f"    {ts()} ⏱ 用时 {dt2:.2f}s  succeeded={len(result2.succeeded)}/{len(result2.videos)}  (LLM calls 增量: {delta_calls})")
     print(f"    ⚡ 第二次比第一次快 {speedup:.1f}x  (fingerprint cache hit)")
 
 

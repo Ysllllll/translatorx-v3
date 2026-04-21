@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from model import Segment, Word
-from subtitle import Subtitle
+from domain.model import Segment, Word
+from domain.subtitle import Subtitle
 
 
 def _mk_seg(start: float, end: float, text: str) -> Segment:

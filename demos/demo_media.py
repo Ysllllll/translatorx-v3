@@ -15,7 +15,7 @@ import _bootstrap  # noqa: F401
 
 import asyncio
 
-from media import (
+from adapters.media import (
     MediaInfo,
     PlaylistInfo,
     DownloadResult,

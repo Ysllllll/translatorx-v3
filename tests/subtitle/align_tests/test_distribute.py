@@ -2,7 +2,7 @@
 
 import pytest
 
-from subtitle import Word, Segment, fill_words, distribute_words
+from domain.subtitle import Word, Segment, fill_words, distribute_words
 
 
 class TestDistributeWords:

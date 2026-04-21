@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from preprocess._availability import punc_model_is_available
+from adapters.preprocess._availability import punc_model_is_available
 
 pytestmark = pytest.mark.skipif(
     not punc_model_is_available(),
@@ -14,14 +14,14 @@ pytestmark = pytest.mark.skipif(
 
 class TestNerPuncRestorer:
     def test_singleton(self) -> None:
-        from preprocess import NerPuncRestorer
+        from adapters.preprocess import NerPuncRestorer
 
         a = NerPuncRestorer.get_instance()
         b = NerPuncRestorer.get_instance()
         assert a is b
 
     def test_basic_restore(self) -> None:
-        from preprocess import NerPuncRestorer
+        from adapters.preprocess import NerPuncRestorer
 
         restorer = NerPuncRestorer.get_instance()
         result = restorer(["hello world this is a test"])
@@ -32,14 +32,14 @@ class TestNerPuncRestorer:
         assert any(c in restored for c in ".,!?;:")
 
     def test_empty_input(self) -> None:
-        from preprocess import NerPuncRestorer
+        from adapters.preprocess import NerPuncRestorer
 
         restorer = NerPuncRestorer.get_instance()
         result = restorer([""])
         assert result == [[""]]
 
     def test_batch_processing(self) -> None:
-        from preprocess import NerPuncRestorer
+        from adapters.preprocess import NerPuncRestorer
 
         restorer = NerPuncRestorer.get_instance()
         texts = ["hello world", "this is great", "how are you"]
@@ -50,7 +50,7 @@ class TestNerPuncRestorer:
 
     def test_omit_punct_stripping(self) -> None:
         """The _OMIT_PUNCT_RE should strip unusual punctuation."""
-        from preprocess._ner_punc import _OMIT_PUNCT_RE
+        from adapters.preprocess._ner_punc import _OMIT_PUNCT_RE
 
         assert _OMIT_PUNCT_RE.sub("", "hello@world") == "helloworld"
         assert _OMIT_PUNCT_RE.sub("", "test{value}") == "testvalue"
@@ -59,8 +59,8 @@ class TestNerPuncRestorer:
 
     def test_applyfn_conformance(self) -> None:
         """NerPuncRestorer should conform to the ApplyFn protocol."""
-        from preprocess import NerPuncRestorer
-        from preprocess._protocol import ApplyFn
+        from adapters.preprocess import NerPuncRestorer
+        from adapters.preprocess._protocol import ApplyFn
 
         restorer = NerPuncRestorer.get_instance()
         # Structural check: callable with correct signature
@@ -74,7 +74,7 @@ class TestProtectDottedWords:
     """Unit tests for _protect_dotted_words (no model needed)."""
 
     def test_node_js_preserved(self) -> None:
-        from preprocess._ner_punc import _protect_dotted_words
+        from adapters.preprocess._ner_punc import _protect_dotted_words
 
         result = _protect_dotted_words(
             "you have Node.js version eighteen",
@@ -83,7 +83,7 @@ class TestProtectDottedWords:
         assert "Node.js" in result
 
     def test_eg_preserved(self) -> None:
-        from preprocess._ner_punc import _protect_dotted_words
+        from adapters.preprocess._ner_punc import _protect_dotted_words
 
         result = _protect_dotted_words(
             "use e.g. something here",
@@ -92,13 +92,13 @@ class TestProtectDottedWords:
         assert "e.g." in result
 
     def test_no_dotted_words_passthrough(self) -> None:
-        from preprocess._ner_punc import _protect_dotted_words
+        from adapters.preprocess._ner_punc import _protect_dotted_words
 
         text = "Hello, world."
         assert _protect_dotted_words("Hello world", text) == text
 
     def test_multiple_dotted_words(self) -> None:
-        from preprocess._ner_punc import _protect_dotted_words
+        from adapters.preprocess._ner_punc import _protect_dotted_words
 
         result = _protect_dotted_words(
             "use Node.js and Vue.js here",
@@ -112,7 +112,7 @@ class TestPreserveTrailingPunc:
     """Unit tests for _preserve_trailing_punc (no model needed)."""
 
     def test_period_preserved(self) -> None:
-        from preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess._ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "hello world.",
@@ -121,7 +121,7 @@ class TestPreserveTrailingPunc:
         assert result.endswith(".")
 
     def test_ellipsis_preserved(self) -> None:
-        from preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess._ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "hello world...",
@@ -130,7 +130,7 @@ class TestPreserveTrailingPunc:
         assert result.endswith("...")
 
     def test_exclamation_preserved(self) -> None:
-        from preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess._ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "hello world!",
@@ -139,7 +139,7 @@ class TestPreserveTrailingPunc:
         assert result.endswith("!")
 
     def test_no_trailing_punc_passthrough(self) -> None:
-        from preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess._ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "hello world",
@@ -149,7 +149,7 @@ class TestPreserveTrailingPunc:
         assert result == "Hello, world."
 
     def test_question_mark_preserved(self) -> None:
-        from preprocess._ner_punc import _preserve_trailing_punc
+        from adapters.preprocess._ner_punc import _preserve_trailing_punc
 
         result = _preserve_trailing_punc(
             "how are you?",
@@ -162,7 +162,7 @@ class TestRestoreOneIntegration:
     """Integration tests that exercise _restore_one with the actual model."""
 
     def test_dotted_word_not_corrupted(self) -> None:
-        from preprocess import NerPuncRestorer
+        from adapters.preprocess import NerPuncRestorer
 
         restorer = NerPuncRestorer.get_instance()
         result = restorer(["you have Node.js version eighteen or above installed on your machine"])
@@ -170,7 +170,7 @@ class TestRestoreOneIntegration:
         assert "Node.js" in restored
 
     def test_trailing_ellipsis_preserved(self) -> None:
-        from preprocess import NerPuncRestorer
+        from adapters.preprocess import NerPuncRestorer
 
         restorer = NerPuncRestorer.get_instance()
         result = restorer(["and that is how we do it..."])

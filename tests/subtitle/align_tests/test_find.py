@@ -2,7 +2,7 @@
 
 import pytest
 
-from subtitle import Word, find_words
+from domain.subtitle import Word, find_words
 
 
 class TestFindWords:

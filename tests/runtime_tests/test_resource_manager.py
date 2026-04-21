@@ -6,14 +6,12 @@ import asyncio
 
 import pytest
 
-from runtime import (
+from application.resources import (
     DEFAULT_TIERS,
     InMemoryResourceManager,
-    Usage,
     UserTier,
 )
-
-
+from domain.model import Usage
 # ---------------------------------------------------------------------------
 # UserTier / DEFAULT_TIERS
 # ---------------------------------------------------------------------------

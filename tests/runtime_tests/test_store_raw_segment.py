@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from model import Segment, Word
-from runtime.store import JsonFileStore
-from runtime.workspace import Workspace
+from domain.model import Segment, Word
+from adapters.storage.store import JsonFileStore
+from adapters.storage.workspace import Workspace
 
 
 @pytest.fixture
@@ -149,9 +149,7 @@ class TestAppendStreaming:
         assert not await store.raw_segment_exists("v1", "whisperx")
 
     @pytest.mark.asyncio
-    async def test_cold_and_streaming_produce_same_bytes(
-        self, store: JsonFileStore, ws: Workspace, tmp_path: Path
-    ) -> None:
+    async def test_cold_and_streaming_produce_same_bytes(self, store: JsonFileStore, ws: Workspace, tmp_path: Path) -> None:
         words = _sample_words()
         cold = await store.write_raw_segment("cold", words, "whisperx")
         # Separate video via a fresh store to avoid filesystem collision.

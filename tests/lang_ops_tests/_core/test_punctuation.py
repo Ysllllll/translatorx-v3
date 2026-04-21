@@ -1,6 +1,6 @@
 """Tests for strip_punct — strip leading/trailing punctuation from text."""
 
-from lang_ops._core._punctuation import strip_punct
+from domain.lang._core._punctuation import strip_punct
 
 
 class TestStripPunct:

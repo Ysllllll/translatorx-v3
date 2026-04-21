@@ -9,7 +9,7 @@ pytest does *not* try to collect it directly.
 
 from __future__ import annotations
 
-from lang_ops import LangOps, TextPipeline
+from domain.lang import LangOps, TextPipeline
 
 
 class SplitterTestBase:

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from model import Segment, Word
-from runtime.sources import PushQueueSource, SrtSource, WhisperXSource
+from domain.model import Segment, Word
+from adapters.sources import PushQueueSource, SrtSource, WhisperXSource
 
 
 SAMPLE_SRT = """1

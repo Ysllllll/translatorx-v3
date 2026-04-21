@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from runtime.workspace import (
+from adapters.storage.workspace import (
     SubDirSpec,
     Workspace,
     canonical_key,
@@ -88,7 +88,7 @@ class TestRegistry:
             assert required in calls
 
     def test_register_is_idempotent_on_call(self) -> None:
-        from runtime.workspace import _REGISTRY  # type: ignore[attr-defined]
+        from adapters.storage.workspace import _REGISTRY  # type: ignore[attr-defined]
 
         original = next(s for s in _REGISTRY if s.call == "home")
         original_idx = _REGISTRY.index(original)

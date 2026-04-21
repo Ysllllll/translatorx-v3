@@ -1,4 +1,4 @@
-from lang_ops import LangOps
+from domain.lang import LangOps
 
 from tests.lang_ops_tests._base import LangOpsTestCase
 
@@ -29,9 +29,7 @@ class RussianTextTest(LangOpsTestCase):
             "большого",
             "проекта.",
         ]
-        expect_join_text1 = (
-            "Сегодня система синхронизирует русские, английские и японские субтитры для большого проекта."
-        )
+        expect_join_text1 = "Сегодня система синхронизирует русские, английские и японские субтитры для большого проекта."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Сохраните I'm deeplearning.ai и https://www.com целиком."

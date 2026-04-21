@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from llm_ops.context import (
+from application.translate.context import (
     ContextWindow,
     StaticTerms,
     TermsProvider,

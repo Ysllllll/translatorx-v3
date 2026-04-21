@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from runtime.store import (
+from adapters.storage.store import (
     IncompatibleStoreError,
     JsonFileStore,
     SCHEMA_VERSION,
@@ -17,7 +17,7 @@ from runtime.store import (
     empty_video_data,
     set_nested,
 )
-from runtime.workspace import Workspace
+from adapters.storage.workspace import Workspace
 
 
 @pytest.fixture

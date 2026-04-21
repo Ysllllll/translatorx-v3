@@ -6,16 +6,16 @@ from typing import AsyncIterator
 
 import pytest
 
-from llm_ops.context import ContextWindow, StaticTerms, TranslationContext
-from llm_ops.translate import (
+from application.translate.context import ContextWindow, StaticTerms, TranslationContext
+from application.translate.translate import (
     TranslateResult,
     _build_messages_compressed,
     _build_messages_full,
     _build_messages_minimal,
     translate_with_verify,
 )
-from checker import CheckReport, Checker, Issue, Severity
-from model.usage import CompletionResult
+from application.checker import CheckReport, Checker, Issue, Severity
+from domain.model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------

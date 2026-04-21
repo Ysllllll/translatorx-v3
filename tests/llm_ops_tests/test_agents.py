@@ -6,8 +6,8 @@ from typing import AsyncIterator
 
 import pytest
 
-from llm_ops.agents import TermsAgent, TermsAgentResult, parse_terms_response
-from model.usage import CompletionResult
+from application.translate.agents import TermsAgent, TermsAgentResult, parse_terms_response
+from domain.model.usage import CompletionResult
 
 
 # ---------------------------------------------------------------------------

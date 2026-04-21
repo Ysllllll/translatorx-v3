@@ -157,9 +157,7 @@ async def run_preprocess_punc(
     app._engines["default"] = prog
 
     t0 = time.perf_counter()
-    result = await (
-        app.course(course="prep_punc").add_video(first_srt.stem, first_srt, language="en").translate(tgt="zh").run()
-    )
+    result = await app.course(course="prep_punc").add_video(first_srt.stem, first_srt, language="en").translate(tgt="zh").run()
     dt = time.perf_counter() - t0
 
     n = len(result.succeeded)
@@ -212,9 +210,7 @@ async def run_preprocess_full(
     app._engines["default"] = prog
 
     t0 = time.perf_counter()
-    result = await (
-        app.course(course="prep_full").add_video(first_srt.stem, first_srt, language="en").translate(tgt="zh").run()
-    )
+    result = await app.course(course="prep_full").add_video(first_srt.stem, first_srt, language="en").translate(tgt="zh").run()
     dt = time.perf_counter() - t0
 
     n = len(result.succeeded)

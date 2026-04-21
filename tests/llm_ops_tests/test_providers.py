@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-from llm_ops.agents import TermsAgent, TermsAgentResult
-from llm_ops.context import TermsProvider
-from llm_ops.providers import OneShotTerms, PreloadableTerms
+from application.translate.agents import TermsAgent, TermsAgentResult
+from application.translate.context import TermsProvider
+from application.translate.providers import OneShotTerms, PreloadableTerms
 
 
 # ---------------------------------------------------------------------------

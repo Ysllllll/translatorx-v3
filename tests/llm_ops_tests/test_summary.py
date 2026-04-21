@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from llm_ops import (
+from application.translate import (
     CompletionResult,
     IncrementalSummaryAgent,
     IncrementalSummaryState,

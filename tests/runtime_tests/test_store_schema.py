@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from model import Segment, Word
-from runtime.store import JsonFileStore
-from runtime.workspace import Workspace
+from domain.model import Segment, Word
+from adapters.storage.store import JsonFileStore
+from adapters.storage.workspace import Workspace
 
 
 @pytest.fixture

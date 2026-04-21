@@ -2,7 +2,7 @@
 
 import pytest
 
-from subtitle import Word, Segment, fill_words
+from domain.subtitle import Word, Segment, fill_words
 
 
 def _word_view(words):

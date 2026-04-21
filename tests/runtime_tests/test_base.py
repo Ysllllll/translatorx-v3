@@ -6,8 +6,8 @@ from typing import AsyncIterator
 
 import pytest
 
-from model import SentenceRecord
-from runtime import ProcessorBase
+from domain.model import SentenceRecord
+from ports.processor import ProcessorBase
 
 
 class _Concrete(ProcessorBase[SentenceRecord, SentenceRecord]):

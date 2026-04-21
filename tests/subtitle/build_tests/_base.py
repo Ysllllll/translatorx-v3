@@ -9,8 +9,8 @@ pytest does *not* try to collect it directly.
 
 from __future__ import annotations
 
-from subtitle import Segment, Word, SentenceRecord, Subtitle
-from lang_ops import LangOps
+from domain.subtitle import Segment, Word, SentenceRecord, Subtitle
+from domain.lang import LangOps
 
 
 # ---------------------------------------------------------------------------

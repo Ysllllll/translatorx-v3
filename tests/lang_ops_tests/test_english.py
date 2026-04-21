@@ -1,4 +1,4 @@
-from lang_ops import LangOps
+from domain.lang import LangOps
 
 from tests.lang_ops_tests._base import LangOpsTestCase
 
@@ -37,9 +37,7 @@ class EnglishTextTest(LangOpsTestCase):
             "one",
             "pass.",
         ]
-        expect_join_text2 = (
-            "In 2026, the translation engine processed English, Russian, and Japanese subtitles in one pass."
-        )
+        expect_join_text2 = "In 2026, the translation engine processed English, Russian, and Japanese subtitles in one pass."
         self._assert_entype_text_case(text2, expect_split_text, expect_join_text2)
 
         text3 = "He said, \"It's AI.\" (Really?) [Yes.] {'OK.'} \"orphan 'solo tail) [loose {brace ,"
@@ -94,9 +92,7 @@ class EnglishTextTest(LangOpsTestCase):
         self.assertEqual(o.split("Hello    , world      !"), ["Hello,", "world!"])
         self.assertEqual(o.split("Hello    ,            world      !"), ["Hello,", "world!"])
         self.assertEqual(o.split("Hello, world !", attach_punctuation=False), ["Hello,", "world", "!"])
-        self.assertEqual(
-            o.split("Hello    ,            world      !", attach_punctuation=False), ["Hello", ",", "world", "!"]
-        )
+        self.assertEqual(o.split("Hello    ,            world      !", attach_punctuation=False), ["Hello", ",", "world", "!"])
 
         # length()
         self.assertEqual(o.length("Hello"), 5)

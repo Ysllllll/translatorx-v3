@@ -6,11 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from model.usage import CompletionResult
-from checker import CheckReport
-from llm_ops import Checker
+from domain.model.usage import CompletionResult
+from application.checker import CheckReport
+from application.translate import Checker
 
-from runtime import App, AppConfig
+from api.app import App
+from application.config import AppConfig
 
 
 def _write_srt(path: Path, lines: list[str]) -> None:
@@ -202,7 +203,7 @@ class TestStreamBuilder:
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
 
-        from model import Segment
+        from domain.model import Segment
 
         handle = app.stream(course="c1", video="live01", language="en").translate(src="en", tgt="zh").start()
         # Feed two segments, close, drain.
@@ -222,7 +223,7 @@ class TestStreamBuilder:
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
 
-        from model import Segment
+        from domain.model import Segment
 
         async with app.stream(course="c1", video="live02", language="en").translate(src="en", tgt="zh").start() as handle:
             await handle.feed(Segment(start=0.0, end=1.0, text="Ping."))
@@ -427,7 +428,7 @@ class TestPreprocessIntegration:
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         restorer = app.punc_restorer()
         assert restorer is not None
-        from preprocess import LlmPuncRestorer
+        from adapters.preprocess import LlmPuncRestorer
 
         assert isinstance(restorer, LlmPuncRestorer)
 
@@ -452,7 +453,7 @@ class TestPreprocessIntegration:
         )
         restorer = app.punc_restorer()
         assert restorer is not None
-        from preprocess import RemotePuncRestorer
+        from adapters.preprocess import RemotePuncRestorer
 
         assert isinstance(restorer, RemotePuncRestorer)
 
@@ -468,7 +469,7 @@ class TestPreprocessIntegration:
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         chunker = app.chunker()
         assert chunker is not None
-        from preprocess import LlmChunker
+        from adapters.preprocess import LlmChunker
 
         assert isinstance(chunker, LlmChunker)
 
@@ -592,7 +593,7 @@ class TestPreprocessIntegration:
         )
         chunker = app.chunker()
         assert chunker is not None
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
 
         assert isinstance(chunker, SpacySplitter)
 

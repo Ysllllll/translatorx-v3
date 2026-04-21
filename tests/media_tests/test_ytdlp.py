@@ -6,8 +6,8 @@ Unit tests for parsing helpers run without network.
 
 import pytest
 
-from media import MediaInfo, PlaylistInfo
-from media.ytdlp import (
+from adapters.media import MediaInfo, PlaylistInfo
+from adapters.media.ytdlp import (
     _detect_platform,
     _extract_subtitle_languages,
     _parse_info,

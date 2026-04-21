@@ -34,14 +34,14 @@ from dataclasses import dataclass
 
 import httpx
 
-from checker import CheckReport, Checker, Severity, default_checker
-from checker.rules import (
+from application.checker import CheckReport, Checker, Severity, default_checker
+from application.checker.rules import (
     FormatRule,
     KeywordRule,
     LengthRatioRule,
 )
-from checker.types import Issue
-from llm_ops import (
+from application.checker.types import Issue
+from application.translate import (
     ContextWindow,
     OneShotTerms,
     PreloadableTerms,
@@ -51,9 +51,9 @@ from llm_ops import (
     get_default_system_prompt,
     translate_with_verify,
 )
-from llm_ops.protocol import Message
-from model.usage import CompletionResult, Usage
-import trx
+from ports.engine import Message
+from domain.model.usage import CompletionResult, Usage
+from api import trx
 
 
 LLM_BASE_URL = "http://localhost:26592/v1"
@@ -253,12 +253,12 @@ async def section_2_bypasses() -> None:
     from tempfile import TemporaryDirectory
     from dataclasses import replace as _replace
 
-    from model import SentenceRecord
-    from runtime.processors import TranslateProcessor
-    from runtime.processors.prefix import TranslateNodeConfig
-    from runtime.protocol import VideoKey
-    from runtime.store import JsonFileStore
-    from runtime.workspace import Workspace
+    from domain.model import SentenceRecord
+    from adapters.processors import TranslateProcessor
+    from adapters.processors.prefix import TranslateNodeConfig
+    from ports.source import VideoKey
+    from adapters.storage.store import JsonFileStore
+    from adapters.storage.workspace import Workspace
 
     class _FakeTranslator:
         """Fake engine that returns a deterministic translation per call.
@@ -328,9 +328,7 @@ async def section_2_bypasses() -> None:
 
         # ─── 2a direct_translate 混合 LLM 兜底 ────────────────────────────
         sub("2a  direct_translate 字典命中 + LLM 兜底（混合场景）")
-        print(
-            "    6 条句子：4 条命中字典 → 0 LLM call；\n    2 条未命中 → 正常走 LLM。验证字典只是短路逻辑，不是全封顶。"
-        )
+        print("    6 条句子：4 条命中字典 → 0 LLM call；\n    2 条未命中 → 正常走 LLM。验证字典只是短路逻辑，不是全封顶。")
         vkey_a = VideoKey(course="ml_101", video="lec01_intro")
         eng_a = _FakeTranslator("fake-a")
         cfg_a = TranslateNodeConfig(
@@ -354,9 +352,7 @@ async def section_2_bypasses() -> None:
         out_a = await _run(proc_a, inputs_a, store, vkey_a)
         for r in out_a:
             kind = _classify(r)
-            print(
-                f"    [{kind}] id={r.extra['id']}  {_truncate(r.src_text, 48)!r:52s} → {_truncate(r.translations.get('zh', '∅'), 30)!r}"
-            )
+            print(f"    [{kind}] id={r.extra['id']}  {_truncate(r.src_text, 48)!r:52s} → {_truncate(r.translations.get('zh', '∅'), 30)!r}")
         direct_hits = sum(1 for r in out_a if _classify(r) == "DIRECT")
         llm_hits = sum(1 for r in out_a if _classify(r) == "LLM ")
         print(f"    ⇒ direct={direct_hits}  llm={llm_hits}  engine.calls={eng_a.calls}")
@@ -409,8 +405,7 @@ async def section_2_bypasses() -> None:
         # ─── 2c max_source_len skip + direct + LLM 三者混合 ────────────────
         sub("2c  max_source_len skip + direct_translate + LLM（三路混合）")
         print(
-            "    5 条字幕：1 direct 命中、2 普通长度走 LLM、2 超长被 skip。\n"
-            "    skip 的 translation 字段应保留原文或空，方便后续人工修正。"
+            "    5 条字幕：1 direct 命中、2 普通长度走 LLM、2 超长被 skip。\n    skip 的 translation 字段应保留原文或空，方便后续人工修正。"
         )
         vkey_c = VideoKey(course="ml_101", video="lec03_messy_asr")
         eng_c = _FakeTranslator("fake-c")
@@ -487,10 +482,7 @@ async def section_2_bypasses() -> None:
 
 async def section_3_single_sentence() -> None:
     header("Section 3 — 单句真实翻译（空 window、无 terms）")
-    print(
-        "  这是最小的真实调用：系统提示默认模板 + 单条 user message。\n"
-        "  用来确认 prompt 模板、engine 配置、checker 都 wired 正确。"
-    )
+    print("  这是最小的真实调用：系统提示默认模板 + 单条 user message。\n  用来确认 prompt 模板、engine 配置、checker 都 wired 正确。")
 
     inner = _make_engine()
     engine = LoggingEngine(inner=inner)
@@ -791,11 +783,7 @@ async def section_6a_oneshot_terms() -> None:
             snap = await terms.get_terms()
             if snap:
                 pair_preview = list(snap.items())[:3]
-                print(
-                    f"    terms so far ({len(snap)}): "
-                    + ", ".join(f"{k}→{v}" for k, v in pair_preview)
-                    + ("…" if len(snap) > 3 else "")
-                )
+                print(f"    terms so far ({len(snap)}): " + ", ".join(f"{k}→{v}" for k, v in pair_preview) + ("…" if len(snap) > 3 else ""))
 
     await terms.wait_until_ready()
     sub("final state")

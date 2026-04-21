@@ -2,7 +2,7 @@
 
 import pytest
 
-from subtitle.io.srt import sanitize_srt, parse_srt
+from adapters.parsers.srt import sanitize_srt, parse_srt
 
 
 class TestBOM:

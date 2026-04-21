@@ -1,4 +1,4 @@
-from lang_ops import LangOps
+from domain.lang import LangOps
 
 from tests.lang_ops_tests._base import LangOpsTestCase
 

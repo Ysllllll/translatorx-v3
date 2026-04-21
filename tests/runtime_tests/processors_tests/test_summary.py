@@ -19,16 +19,16 @@ from typing import AsyncIterator, List
 
 import pytest
 
-from llm_ops.agents import IncrementalSummaryState
-from llm_ops.context import TranslationContext
-from llm_ops import StaticTerms
-from model import SentenceRecord
-from model.usage import CompletionResult
+from application.translate.agents import IncrementalSummaryState
+from application.translate.context import TranslationContext
+from application.translate import StaticTerms
+from domain.model import SentenceRecord
+from domain.model.usage import CompletionResult
 
-from runtime.processors import SummaryProcessor
-from runtime.protocol import VideoKey
-from runtime.store import JsonFileStore
-from runtime.workspace import Workspace
+from adapters.processors import SummaryProcessor
+from ports.source import VideoKey
+from adapters.storage.store import JsonFileStore
+from adapters.storage.workspace import Workspace
 
 
 # ---------------------------------------------------------------------------

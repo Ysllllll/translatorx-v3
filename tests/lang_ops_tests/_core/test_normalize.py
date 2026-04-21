@@ -1,6 +1,6 @@
 import unittest
 
-from lang_ops import normalize_language
+from domain.lang import normalize_language
 
 from .._base import LangOpsTestCase
 

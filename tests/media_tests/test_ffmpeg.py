@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from media import extract_audio, probe
+from adapters.media import extract_audio, probe
 
 ffmpeg_available = shutil.which("ffmpeg") is not None
 requires_ffmpeg = pytest.mark.skipif(not ffmpeg_available, reason="ffmpeg not installed")

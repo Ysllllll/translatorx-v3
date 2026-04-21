@@ -1,4 +1,4 @@
-from lang_ops import LangOps, kiwi_is_available
+from domain.lang import LangOps, kiwi_is_available
 
 from .conftest import TEST_FONT_PATH, expected_pixel_length
 from tests.lang_ops_tests._base import LangOpsTestCase
@@ -248,9 +248,7 @@ class KoreanTextTest(LangOpsTestCase):
         self.assert_actual_vs_expect(actual_vs_expect)
 
         self.assertEqual(o.join(o.split(text0, mode="character")), expected_join_text0)
-        self.assertEqual(
-            o.join(o.split(o.join(o.split(text0, mode="character")), mode="character")), expected_join_text0
-        )
+        self.assertEqual(o.join(o.split(o.join(o.split(text0, mode="character")), mode="character")), expected_join_text0)
         self.assertEqual(o.join(o.split(text0, mode="character", attach_punctuation=False)), expected_join_text0)
         self.assertEqual(o.join(o.split(text0, mode="character")), expected_join_text0)
         self.assertEqual(o.join(o.split(text0, mode="character", attach_punctuation=False)), expected_join_text0)

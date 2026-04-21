@@ -31,9 +31,10 @@ from pathlib import Path
 
 import httpx
 
-from model import Segment
-from runtime import App, Priority
-from runtime.errors import ErrorInfo
+from domain.model import Segment
+from api.app import App
+from ports.source import Priority
+from application.observability.errors import ErrorInfo
 
 
 LLM_BASE_URL = os.environ.get("TRX_LLM_BASE_URL", "http://localhost:26592/v1")
@@ -140,9 +141,7 @@ async def scenario_stream_builder(app: App) -> None:
         Segment(start=14.0, end=16.0, text="Stay focused."),
     ]
 
-    async with (
-        app.stream(course="demo-course", video="live-clip", language="en").translate(src="en", tgt="zh").start()
-    ) as stream:
+    async with app.stream(course="demo-course", video="live-clip", language="en").translate(src="en", tgt="zh").start() as stream:
 
         async def producer():
             # Push all 6 at NORMAL priority.
@@ -228,10 +227,7 @@ async def scenario_multi_speaker_stream(app: App) -> None:
     ]
 
     async with (
-        app.stream(course="demo-course", video="dialog", language="en")
-        .translate(src="en", tgt="zh")
-        .split_by_speaker(True)
-        .start()
+        app.stream(course="demo-course", video="dialog", language="en").translate(src="en", tgt="zh").split_by_speaker(True).start()
     ) as stream:
 
         async def producer():

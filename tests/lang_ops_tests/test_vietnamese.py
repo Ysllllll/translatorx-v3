@@ -1,4 +1,4 @@
-from lang_ops import LangOps
+from domain.lang import LangOps
 
 from tests.lang_ops_tests._base import LangOpsTestCase
 
@@ -16,9 +16,7 @@ class VietnameseTextTest(LangOpsTestCase):
         expect_join_text0 = "Xin chào thế giới!"
         self._assert_entype_text_case(text0, expect_split_text, expect_join_text0)
 
-        text1 = (
-            "Hệ thống phụ đề đa ngôn ngữ của chúng tôi xử lý tiếng Việt, tiếng Anh và tiếng Nhật trong một lần chạy."
-        )
+        text1 = "Hệ thống phụ đề đa ngôn ngữ của chúng tôi xử lý tiếng Việt, tiếng Anh và tiếng Nhật trong một lần chạy."
         expect_split_text = [
             "Hệ",
             "thống",
@@ -44,9 +42,7 @@ class VietnameseTextTest(LangOpsTestCase):
             "lần",
             "chạy.",
         ]
-        expect_join_text1 = (
-            "Hệ thống phụ đề đa ngôn ngữ của chúng tôi xử lý tiếng Việt, tiếng Anh và tiếng Nhật trong một lần chạy."
-        )
+        expect_join_text1 = "Hệ thống phụ đề đa ngôn ngữ của chúng tôi xử lý tiếng Việt, tiếng Anh và tiếng Nhật trong một lần chạy."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Giữ I'm deeplearning.ai và https://www.com nguyên vẹn."

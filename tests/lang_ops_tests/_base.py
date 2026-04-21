@@ -27,11 +27,7 @@ class LangOpsTestCase(unittest.TestCase):
             [self.ops.join(self.ops.split(text, attach_punctuation=False)), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)))), resolved],
             [
-                self.ops.join(
-                    self.ops.split(
-                        self.ops.join(self.ops.split(text, attach_punctuation=False)), attach_punctuation=False
-                    )
-                ),
+                self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)), attach_punctuation=False)),
                 resolved,
             ],
             [
@@ -48,26 +44,16 @@ class LangOpsTestCase(unittest.TestCase):
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")))), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")), mode="word")), resolved],
             [
-                self.ops.join(
-                    self.ops.split(
-                        self.ops.join(self.ops.split(text, mode="word")), mode="word", attach_punctuation=False
-                    )
-                ),
+                self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")), mode="word", attach_punctuation=False)),
                 resolved,
             ],
             [self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), resolved],
             [
-                self.ops.join(
-                    self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)))
-                ),
+                self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)))),
                 resolved,
             ],
             [
-                self.ops.join(
-                    self.ops.split(
-                        self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), mode="word"
-                    )
-                ),
+                self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), mode="word")),
                 resolved,
             ],
             [

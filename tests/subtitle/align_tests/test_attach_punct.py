@@ -2,7 +2,7 @@
 
 import pytest
 
-from subtitle import Word, attach_punct_words
+from domain.subtitle import Word, attach_punct_words
 
 
 class TestAttachPunctWords:

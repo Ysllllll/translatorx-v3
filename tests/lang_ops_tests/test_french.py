@@ -1,4 +1,4 @@
-from lang_ops import LangOps
+from domain.lang import LangOps
 
 from tests.lang_ops_tests._base import LangOpsTestCase
 
@@ -33,9 +33,7 @@ class FrenchTextTest(LangOpsTestCase):
             "portugais",
             "!",
         ]
-        expect_join_text1 = (
-            "Bonjour à tous : aujourd'hui, notre système traite les sous-titres français, allemands et portugais !"
-        )
+        expect_join_text1 = "Bonjour à tous : aujourd'hui, notre système traite les sous-titres français, allemands et portugais !"
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Gardez I'm deeplearning.ai et https://www.com intacts."

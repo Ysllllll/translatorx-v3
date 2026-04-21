@@ -1,6 +1,6 @@
 """Tests for media.protocol data types."""
 
-from media import (
+from adapters.media import (
     DownloadResult,
     MediaFileInfo,
     MediaInfo,
@@ -67,6 +67,6 @@ class TestProtocolConformance:
     """Verify that YtdlpSource satisfies the MediaSource protocol."""
 
     def test_ytdlp_is_media_source(self):
-        from media import YtdlpSource
+        from adapters.media import YtdlpSource
 
         assert isinstance(YtdlpSource(), MediaSource)

@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from subtitle.io.srt import read_srt
+from adapters.parsers.srt import read_srt
 
 SRT_ROOT = "/home/ysl/workspace/all_course2"
 

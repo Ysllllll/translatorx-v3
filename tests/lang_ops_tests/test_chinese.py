@@ -1,4 +1,4 @@
-from lang_ops import LangOps, jieba_is_available
+from domain.lang import LangOps, jieba_is_available
 
 from .conftest import TEST_FONT_PATH, expected_pixel_length
 from tests.lang_ops_tests._base import LangOpsTestCase

@@ -8,13 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from model import SentenceRecord
-from runtime import (
+from domain.model import SentenceRecord
+from adapters.reporters.reporters import (
     ChainReporter,
-    ErrorInfo,
     JsonlErrorReporter,
     LoggerReporter,
 )
+from application.observability.errors import ErrorInfo
 
 
 def _make_err(**kw) -> ErrorInfo:

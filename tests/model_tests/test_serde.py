@@ -17,7 +17,7 @@ import json
 
 import pytest
 
-from model import Segment, SentenceRecord, Word
+from domain.model import Segment, SentenceRecord, Word
 
 
 class TestWordSerde:

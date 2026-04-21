@@ -8,18 +8,18 @@ from pathlib import Path
 
 import pytest
 
-from checker import CheckReport
-from llm_ops import Checker, StaticTerms, TranslationContext
-from model import Segment
-from model.usage import CompletionResult
+from application.checker import CheckReport
+from application.translate import Checker, StaticTerms, TranslationContext
+from domain.model import Segment
+from domain.model.usage import CompletionResult
 
-from runtime import (
-    JsonFileStore,
+from adapters.processors import TranslateProcessor
+from adapters.storage.store import JsonFileStore
+from adapters.storage.workspace import Workspace
+from application.orchestrator.video import StreamingOrchestrator
+from ports.source import (
     Priority,
-    StreamingOrchestrator,
-    TranslateProcessor,
     VideoKey,
-    Workspace,
 )
 
 

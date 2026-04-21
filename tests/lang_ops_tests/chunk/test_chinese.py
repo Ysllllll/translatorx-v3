@@ -1,6 +1,6 @@
 """Chinese (zh) splitter tests."""
 
-from lang_ops import LangOps, TextPipeline
+from domain.lang import LangOps, TextPipeline
 from ._base import SplitterTestBase
 
 
@@ -181,12 +181,6 @@ class TestChineseSplitter(SplitterTestBase):
         ]
 
         # long text chunk chain()
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(
-            self.TEXT_SAMPLE
-        )
-        assert TextPipeline(
-            self.TEXT_SAMPLE, language=self.LANGUAGE
-        ).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
-        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(
-            self.TEXT_SAMPLE
-        )
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().result() == _ops.split_sentences(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).sentences().clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)
+        assert TextPipeline(self.TEXT_SAMPLE, language=self.LANGUAGE).clauses().result() == _ops.split_clauses(self.TEXT_SAMPLE)

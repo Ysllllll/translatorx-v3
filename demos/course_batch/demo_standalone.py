@@ -55,7 +55,7 @@ def demo_ner_punc() -> None:
     """Section 8a: NerPuncRestorer standalone."""
     sub("8a  NerPuncRestorer — 本地 NER 模型标点恢复")
     try:
-        from preprocess import NerPuncRestorer
+        from adapters.preprocess import NerPuncRestorer
     except ImportError:
         print(f"    {ts()} ⚠ deepmultilingualpunctuation 不可用, 跳过")
         return
@@ -71,8 +71,8 @@ def demo_ner_punc() -> None:
 async def demo_llm_punc() -> None:
     """Section 8b: LlmPuncRestorer standalone."""
     sub("8b  LlmPuncRestorer — LLM 标点恢复")
-    from preprocess import LlmPuncRestorer
-    from llm_ops import EngineConfig, OpenAICompatEngine
+    from adapters.preprocess import LlmPuncRestorer
+    from application.translate import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
         EngineConfig(
@@ -103,7 +103,7 @@ def demo_remote_punc() -> None:
     print('      Response: {"results": [["Hello world."], ["Another text."]]}')
     print()
     print("    用法:")
-    print("      from preprocess import RemotePuncRestorer")
+    print("      from adapters.preprocess import RemotePuncRestorer")
     print('      restorer = RemotePuncRestorer("http://host:port/restore", threshold=180)')
     print('      results = restorer(["hello world"])')
     print('      # → [["Hello world."]]  (1:1 替换)')
@@ -115,7 +115,7 @@ def demo_spacy_splitter() -> None:
     """Section 8d: SpacySplitter standalone."""
     sub("8d  SpacySplitter — spaCy NLP 拆句 (chunk_mode='spacy')")
     try:
-        from preprocess import SpacySplitter
+        from adapters.preprocess import SpacySplitter
     except ImportError:
         print(f"    {ts()} ⚠ spacy 不可用, 跳过")
         return
@@ -131,8 +131,8 @@ def demo_spacy_splitter() -> None:
 async def demo_llm_chunker() -> None:
     """Section 8e: LlmChunker standalone."""
     sub("8e  LlmChunker — LLM 二分法拆句 (chunk_mode='llm')")
-    from preprocess import LlmChunker
-    from llm_ops import EngineConfig, OpenAICompatEngine
+    from adapters.preprocess import LlmChunker
+    from application.translate import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
         EngineConfig(
@@ -154,10 +154,10 @@ async def demo_llm_chunker() -> None:
 
 async def demo_full_pipeline(srt_files: list[Path]) -> None:
     """Section 8f: Full pipeline step-by-step."""
-    from subtitle import Subtitle
-    from subtitle.io import read_srt
-    from preprocess import LlmPuncRestorer, LlmChunker
-    from llm_ops import EngineConfig, OpenAICompatEngine
+    from domain.subtitle import Subtitle
+    from adapters.parsers import read_srt
+    from adapters.preprocess import LlmPuncRestorer, LlmChunker
+    from application.translate import EngineConfig, OpenAICompatEngine
 
     sub("8f  完整预处理流水线 — 逐步可视化 (1 视频)")
     print(f"    {ts()} 流程: raw_segments → punc_global → sentences → punc_sentence → chunk → records")
