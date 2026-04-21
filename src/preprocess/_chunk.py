@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from lang_ops._core._base_ops import _BaseOps
     from llm_ops import LLMEngine
 
-from llm_ops.retries import retry_until_valid
+from llm_ops.retries import resolve_on_failure, retry_until_valid
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,9 @@ _SYSTEM_PROMPT_TEMPLATE = (
 # Matches leading punctuation in LLM output lines.
 _STRIP_LEADING_NUM = re.compile(r"^\d+[.)]\s*")
 
+#: Chunker extends the shared :data:`llm_ops.retries.OnFailure` vocabulary
+#: with a domain-specific ``"rule"`` option that falls back to a
+#: deterministic length-based splitter.
 OnFailure = Literal["rule", "keep", "raise"]
 
 
@@ -200,12 +203,14 @@ class LlmChunker:
 
     def _handle_failure(self, text: str) -> list[str]:
         """Resolve an unrecoverable LLM failure according to *on_failure*."""
-        if self._on_failure == "raise":
-            raise RuntimeError(f"LLM chunk failed for text: {text[:80]!r}")
-        if self._on_failure == "keep":
-            return [text]
-        # "rule"
-        return self._rule_split(text)
+        if self._on_failure == "rule":
+            return self._rule_split(text)
+        # "keep" / "raise" → delegate to shared helper.
+        return resolve_on_failure(
+            self._on_failure,
+            keep_value=[text],
+            reason=f"LLM chunk failed for text: {text[:80]!r}",
+        )
 
     async def _llm_split(self, text: str) -> list[str] | None:
         """Ask the LLM to split *text* into N parts. Returns None after exhausting retries."""

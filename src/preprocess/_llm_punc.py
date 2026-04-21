@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from llm_ops import LLMEngine
 
-from llm_ops.retries import retry_until_valid
+from llm_ops.retries import OnFailure, resolve_on_failure, retry_until_valid
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +51,11 @@ class LlmPuncRestorer:
         # → [["Hello world, this is a test."]]
 
     ``max_retries`` follows the codebase-wide convention: total attempts
-    equal ``max_retries + 1``.  On total failure the original text is
-    returned unchanged.
+    equal ``max_retries + 1``.  When all attempts fail the ``on_failure``
+    policy decides the outcome:
+
+    * ``"keep"`` (default): return the original text unchanged.
+    * ``"raise"``: raise :class:`RuntimeError`.
     """
 
     def __init__(
@@ -62,13 +65,17 @@ class LlmPuncRestorer:
         threshold: int = 0,
         max_concurrent: int = 8,
         max_retries: int = 2,
+        on_failure: OnFailure = "keep",
     ) -> None:
         if max_retries < 0:
             raise ValueError("max_retries must be >= 0")
+        if on_failure not in ("keep", "raise"):
+            raise ValueError(f"invalid on_failure: {on_failure!r}")
         self._engine = engine
         self._threshold = threshold
         self._max_concurrent = max_concurrent
         self._max_retries = max_retries
+        self._on_failure = on_failure
 
     def __call__(self, texts: list[str]) -> list[list[str]]:
         """Synchronous ApplyFn interface — runs async internally."""
@@ -126,11 +133,18 @@ class LlmPuncRestorer:
             if outcome.accepted:
                 return [outcome.value]  # type: ignore[list-item]
             logger.warning(
-                "LLM punc failed all %d attempts, keeping original: %r",
+                "LLM punc failed all %d attempts (%s), applying on_failure=%s: %r",
                 outcome.attempts,
+                outcome.last_reason,
+                self._on_failure,
                 text[:80],
             )
-            return [text]
+            kept = resolve_on_failure(
+                self._on_failure,
+                keep_value=[text],
+                reason=f"LLM punc restoration failed after {outcome.attempts} attempts: {text[:80]!r}",
+            )
+            return kept
 
         return list(await asyncio.gather(*(_restore(t) for t in texts)))
 

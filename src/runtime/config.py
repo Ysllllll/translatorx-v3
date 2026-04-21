@@ -121,6 +121,8 @@ class PreprocessConfig(BaseModel):
     punc_engine: str = "default"
     punc_endpoint: str | None = None
     punc_threshold: int = 180
+    punc_max_retries: int = 2
+    punc_on_failure: Literal["keep", "raise"] = "keep"
 
     spacy_model: str = "en_core_web_md"
 

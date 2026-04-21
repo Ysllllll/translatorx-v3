@@ -20,12 +20,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Literal
 
 from .agents import TermsAgent, TermsAgentResult
 from .protocol import LLMEngine
 from .retries import retry_until_valid
 
 logger = logging.getLogger(__name__)
+
+# Local policy literal — "empty" is domain-specific (fall back to empty
+# terms so translation can proceed), so we don't reuse the shared
+# :data:`llm_ops.retries.OnFailure` vocabulary here.
+TermsOnFailure = Literal["empty", "raise"]
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +56,7 @@ class PreloadableTerms:
         "_ready",
         "_lock",
         "_max_retries",
+        "_on_failure",
     )
 
     def __init__(
@@ -59,13 +66,17 @@ class PreloadableTerms:
         target_lang: str,
         *,
         max_retries: int = 2,
+        on_failure: TermsOnFailure = "empty",
         agent: TermsAgent | None = None,
     ):
+        if on_failure not in ("empty", "raise"):
+            raise ValueError(f"invalid on_failure: {on_failure!r}")
         self._agent = agent or TermsAgent(engine, source_lang, target_lang)
         self._terms: dict[str, str] = {}
         self._metadata: dict[str, str] = {}
         self._ready = False
         self._max_retries = max_retries
+        self._on_failure: TermsOnFailure = on_failure
         self._lock = asyncio.Lock()
 
     @property
@@ -88,7 +99,7 @@ class PreloadableTerms:
         async with self._lock:
             if self._ready:
                 return
-            result = await _run_with_retries(self._agent, texts, self._max_retries)
+            result = await _run_with_retries(self._agent, texts, self._max_retries, self._on_failure)
             self._terms = dict(result.terms)
             self._metadata = dict(result.metadata)
             self._ready = True
@@ -121,6 +132,7 @@ class OneShotTerms:
         "_agent",
         "_char_threshold",
         "_max_retries",
+        "_on_failure",
         "_terms",
         "_metadata",
         "_ready",
@@ -138,11 +150,15 @@ class OneShotTerms:
         *,
         char_threshold: int = 2000,
         max_retries: int = 2,
+        on_failure: TermsOnFailure = "empty",
         agent: TermsAgent | None = None,
     ):
+        if on_failure not in ("empty", "raise"):
+            raise ValueError(f"invalid on_failure: {on_failure!r}")
         self._agent = agent or TermsAgent(engine, source_lang, target_lang)
         self._char_threshold = char_threshold
         self._max_retries = max_retries
+        self._on_failure: TermsOnFailure = on_failure
         self._terms: dict[str, str] = {}
         self._metadata: dict[str, str] = {}
         self._ready = False
@@ -207,7 +223,7 @@ class OneShotTerms:
 
     async def _run_generation(self) -> None:
         texts = list(self._seen_texts)
-        result = await _run_with_retries(self._agent, texts, self._max_retries)
+        result = await _run_with_retries(self._agent, texts, self._max_retries, self._on_failure)
         async with self._state_lock:
             self._terms = dict(result.terms)
             self._metadata = dict(result.metadata)
@@ -223,8 +239,16 @@ async def _run_with_retries(
     agent: TermsAgent,
     texts: list[str],
     max_retries: int,
+    on_failure: TermsOnFailure = "empty",
 ) -> TermsAgentResult:
-    """Run ``agent.extract`` with retries; fall back to empty on total failure."""
+    """Run ``agent.extract`` with retries.
+
+    On total failure, ``on_failure`` decides the outcome:
+
+    * ``"empty"`` (default): return :meth:`TermsAgentResult.empty` so
+      translation can proceed without terms.
+    * ``"raise"``: raise :class:`RuntimeError`.
+    """
 
     async def _call(_attempt: int) -> TermsAgentResult:
         return await agent.extract(texts)
@@ -249,6 +273,8 @@ async def _run_with_retries(
     )
     if outcome.accepted:
         return outcome.value  # type: ignore[return-value]
+    if on_failure == "raise":
+        raise RuntimeError(f"TermsAgent failed after {outcome.attempts} attempts: {outcome.last_reason}")
     logger.warning(
         "TermsAgent: all retries exhausted, falling back to empty terms (%s)",
         outcome.last_reason,

@@ -113,6 +113,8 @@ class App:
                 engine,
                 threshold=cfg.punc_threshold,
                 max_concurrent=cfg.max_concurrent,
+                max_retries=cfg.punc_max_retries,
+                on_failure=cfg.punc_on_failure,
             )
         if cfg.punc_mode == "remote":
             from preprocess import RemotePuncRestorer

@@ -20,27 +20,74 @@ Semantic convention
 ``max_retries`` is the number of *retries after* the first attempt.
 Total attempts therefore equal ``max_retries + 1``. This matches the
 majority of pre-existing call sites.
+
+Shared failure vocabulary
+-------------------------
+Call sites that need a configurable fallback on total failure use the
+:data:`OnFailure` literal (``"keep"`` or ``"raise"``) with
+:func:`resolve_on_failure` to dispatch. Domain-specific extensions
+(e.g. :class:`preprocess._chunk.LlmChunker`'s ``"rule"``) layer on top.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Generic, TypeVar
+from typing import Awaitable, Callable, Generic, Literal, TypeVar
 
 __all__ = [
     "AttemptOutcome",
+    "OnFailure",
     "ValidateResult",
+    "resolve_on_failure",
     "retry_until_valid",
 ]
 
 R = TypeVar("R")  # raw result produced by ``call``
 V = TypeVar("V")  # validated / extracted value returned to the caller
+T = TypeVar("T")  # keep-value / raise-fallback return type
 
 #: Contract returned by ``validate``: ``(accepted, value, reason)``.
 #:
 #: ``accepted=True``  → ``value`` is used as the final result, ``reason`` ignored.
 #: ``accepted=False`` → ``value`` is ignored, ``reason`` surfaced via ``on_reject``.
 ValidateResult = tuple[bool, "V | None", str]
+
+#: Shared base policy for "what to do when all retries are exhausted".
+#:
+#: * ``"keep"``  → return a domain-specific fallback value unchanged.
+#: * ``"raise"`` → raise :class:`RuntimeError` with a diagnostic message.
+#:
+#: Domain modules may extend this literal with their own additional
+#: options (e.g. chunker's ``"rule"``); :func:`resolve_on_failure`
+#: rejects unknown policies, so extensions must dispatch before calling
+#: it.
+OnFailure = Literal["keep", "raise"]
+
+
+def resolve_on_failure(policy: str, *, keep_value: T, reason: str) -> T:
+    """Dispatch a :data:`OnFailure` policy.
+
+    Parameters
+    ----------
+    policy:
+        Must be one of the literal values in :data:`OnFailure`.
+    keep_value:
+        Value returned when ``policy == "keep"``.
+    reason:
+        Human-readable diagnostic message used when ``policy == "raise"``.
+
+    Raises
+    ------
+    RuntimeError
+        If ``policy == "raise"``.
+    ValueError
+        If ``policy`` is not a recognized value.
+    """
+    if policy == "keep":
+        return keep_value
+    if policy == "raise":
+        raise RuntimeError(reason)
+    raise ValueError(f"unknown on_failure policy: {policy!r}")
 
 
 @dataclass(frozen=True)

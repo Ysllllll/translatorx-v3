@@ -121,6 +121,25 @@ class TestPreloadableTerms:
         assert await provider.get_terms() == {"a": "b"}
         assert len(agent.calls) == 2
 
+    @pytest.mark.asyncio
+    async def test_on_failure_raise_propagates(self):
+        """on_failure='raise' turns total failure into a RuntimeError."""
+        agent = _FakeAgent(
+            terms={"ignored": "ignored"},
+            raises=[RuntimeError("fail1"), RuntimeError("fail2")],
+        )
+        provider = PreloadableTerms(agent, "en", "zh", max_retries=1, on_failure="raise", agent=agent)
+        with pytest.raises(RuntimeError, match="TermsAgent failed"):
+            await provider.preload(["text"])
+        # Provider stays un-ready on raise — caller must handle.
+        assert provider.ready is False
+        assert len(agent.calls) == 2  # 1 + 1 retry
+
+    def test_invalid_on_failure_rejected(self):
+        agent = _FakeAgent(terms={})
+        with pytest.raises(ValueError, match="invalid on_failure"):
+            PreloadableTerms(agent, "en", "zh", on_failure="bogus", agent=agent)  # type: ignore[arg-type]
+
 
 # ---------------------------------------------------------------------------
 # OneShotTerms

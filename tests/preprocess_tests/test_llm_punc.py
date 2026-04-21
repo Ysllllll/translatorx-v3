@@ -103,3 +103,26 @@ class TestLlmPuncRestorerAsync:
         restorer = LlmPuncRestorer(_FakePuncEngine())
         result = await restorer._process_batch(["hello world"])
         assert result == [["Hello world."]]
+
+
+class TestLlmPuncRestorerOnFailure:
+    def test_default_keep_returns_original(self) -> None:
+        """Default on_failure='keep' returns the source text unchanged on all-failure."""
+        from preprocess import LlmPuncRestorer
+
+        restorer = LlmPuncRestorer(_FakeWordChangingEngine(), max_retries=1)
+        # Engine always changes "gonna" → "going to", so every attempt is rejected.
+        assert restorer(["im gonna do it"]) == [["im gonna do it"]]
+
+    def test_raise_propagates_as_runtime_error(self) -> None:
+        from preprocess import LlmPuncRestorer
+
+        restorer = LlmPuncRestorer(_FakeWordChangingEngine(), max_retries=1, on_failure="raise")
+        with pytest.raises(RuntimeError, match="LLM punc restoration failed"):
+            restorer(["im gonna do it"])
+
+    def test_invalid_on_failure_rejected(self) -> None:
+        from preprocess import LlmPuncRestorer
+
+        with pytest.raises(ValueError, match="invalid on_failure"):
+            LlmPuncRestorer(_FakePuncEngine(), on_failure="bogus")  # type: ignore[arg-type]

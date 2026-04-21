@@ -182,3 +182,22 @@ class TestParameterValidation:
         assert outcome.accepted is False
         assert outcome.attempts == 1
         assert calls == 1
+
+
+class TestResolveOnFailure:
+    def test_keep_returns_value(self) -> None:
+        from llm_ops.retries import resolve_on_failure
+
+        assert resolve_on_failure("keep", keep_value=["fallback"], reason="why") == ["fallback"]
+
+    def test_raise_raises_runtime_error(self) -> None:
+        from llm_ops.retries import resolve_on_failure
+
+        with pytest.raises(RuntimeError, match="disk full"):
+            resolve_on_failure("raise", keep_value=None, reason="disk full")
+
+    def test_unknown_policy_rejected(self) -> None:
+        from llm_ops.retries import resolve_on_failure
+
+        with pytest.raises(ValueError, match="unknown on_failure"):
+            resolve_on_failure("bogus", keep_value=None, reason="x")
