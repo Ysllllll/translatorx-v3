@@ -33,10 +33,7 @@ class TestKoreanSplitter(SplitterTestBase):
         assert _ops.split_sentences("와! 정말? 네.") == ["와!", "정말?", "네."]
         assert _ops.split_sentences("대단해!! 정말???") == ["대단하어!!", "정말???"]
         assert _ops.split_sentences("뭐?! 네.") == ["뭐?!", "네."]
-        assert _ops.split_sentences("이것은 테스트입니다. 다음 문장입니다.") == [
-            "이것은 테스트입니다.",
-            "다음 문장입니다.",
-        ]
+        assert _ops.split_sentences("이것은 테스트입니다. 다음 문장입니다.") == ["이것은 테스트입니다.", "다음 문장입니다."]
         assert _ops.split_sentences('"안녕!" 그가 말했다.') == ['"안녕!"', "그가 말하었다."]
         assert _ops.split_sentences("대단해😊! 정말👋?") == ["대단하어😊!", "정말👋?"]
         assert _ops.split_sentences("") == []

@@ -7,12 +7,7 @@ Unit tests for parsing helpers run without network.
 import pytest
 
 from adapters.media import MediaInfo, PlaylistInfo
-from adapters.media.ytdlp import (
-    _detect_platform,
-    _extract_subtitle_languages,
-    _parse_info,
-    _parse_single,
-)
+from adapters.media.ytdlp import _detect_platform, _extract_subtitle_languages, _parse_info, _parse_single
 
 
 class TestDetectPlatform:
@@ -48,24 +43,14 @@ class TestExtractSubtitleLanguages:
         assert "ja" in langs
 
     def test_merged(self):
-        data = {
-            "subtitles": {"en": []},
-            "automatic_captions": {"en": [], "fr": []},
-        }
+        data = {"subtitles": {"en": []}, "automatic_captions": {"en": [], "fr": []}}
         langs = _extract_subtitle_languages(data)
         assert set(langs) == {"en", "fr"}
 
 
 class TestParseSingle:
     def test_basic(self):
-        data = {
-            "id": "abc123",
-            "title": "Test Video",
-            "webpage_url": "https://www.youtube.com/watch?v=abc123",
-            "extractor": "youtube",
-            "duration": 120.5,
-            "subtitles": {"en": []},
-        }
+        data = {"id": "abc123", "title": "Test Video", "webpage_url": "https://www.youtube.com/watch?v=abc123", "extractor": "youtube", "duration": 120.5, "subtitles": {"en": []}}
         info = _parse_single(data)
         assert isinstance(info, MediaInfo)
         assert info.id == "abc123"
@@ -83,13 +68,7 @@ class TestParseSingle:
 
 class TestParseInfo:
     def test_single_video(self):
-        data = {
-            "id": "v1",
-            "title": "Single",
-            "webpage_url": "https://youtube.com/watch?v=v1",
-            "extractor": "youtube",
-            "duration": 60,
-        }
+        data = {"id": "v1", "title": "Single", "webpage_url": "https://youtube.com/watch?v=v1", "extractor": "youtube", "duration": 60}
         result = _parse_info(data)
         assert isinstance(result, MediaInfo)
 
@@ -100,21 +79,9 @@ class TestParseInfo:
             "webpage_url": "https://youtube.com/playlist?list=pl1",
             "extractor": "youtube",
             "entries": [
-                {
-                    "id": "v1",
-                    "title": "Video 1",
-                    "webpage_url": "https://youtube.com/watch?v=v1",
-                    "extractor": "youtube",
-                    "duration": 30,
-                },
+                {"id": "v1", "title": "Video 1", "webpage_url": "https://youtube.com/watch?v=v1", "extractor": "youtube", "duration": 30},
                 None,  # yt-dlp sometimes returns None for unavailable entries
-                {
-                    "id": "v2",
-                    "title": "Video 2",
-                    "webpage_url": "https://youtube.com/watch?v=v2",
-                    "extractor": "youtube",
-                    "duration": 45,
-                },
+                {"id": "v2", "title": "Video 2", "webpage_url": "https://youtube.com/watch?v=v2", "extractor": "youtube", "duration": 45},
             ],
         }
         result = _parse_info(data)
@@ -124,13 +91,7 @@ class TestParseInfo:
         assert result.entries[1].id == "v2"
 
     def test_empty_playlist(self):
-        data = {
-            "id": "pl",
-            "title": "Empty",
-            "webpage_url": "",
-            "extractor": "",
-            "entries": [],
-        }
+        data = {"id": "pl", "title": "Empty", "webpage_url": "", "extractor": "", "entries": []}
         result = _parse_info(data)
         assert isinstance(result, PlaylistInfo)
         assert len(result) == 0

@@ -17,39 +17,12 @@ class VietnameseTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text0, expect_split_text, expect_join_text0)
 
         text1 = "Hệ thống phụ đề đa ngôn ngữ của chúng tôi xử lý tiếng Việt, tiếng Anh và tiếng Nhật trong một lần chạy."
-        expect_split_text = [
-            "Hệ",
-            "thống",
-            "phụ",
-            "đề",
-            "đa",
-            "ngôn",
-            "ngữ",
-            "của",
-            "chúng",
-            "tôi",
-            "xử",
-            "lý",
-            "tiếng",
-            "Việt,",
-            "tiếng",
-            "Anh",
-            "và",
-            "tiếng",
-            "Nhật",
-            "trong",
-            "một",
-            "lần",
-            "chạy.",
-        ]
+        expect_split_text = ["Hệ", "thống", "phụ", "đề", "đa", "ngôn", "ngữ", "của", "chúng", "tôi", "xử", "lý", "tiếng", "Việt,", "tiếng", "Anh", "và", "tiếng", "Nhật", "trong", "một", "lần", "chạy."]
         expect_join_text1 = "Hệ thống phụ đề đa ngôn ngữ của chúng tôi xử lý tiếng Việt, tiếng Anh và tiếng Nhật trong một lần chạy."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Giữ I'm deeplearning.ai và https://www.com nguyên vẹn."
-        self._assert_preserved_fragments(
-            mixed_text,
-            ["I'm", "deeplearning.ai", "https://www.com"],
-        )
+        self._assert_preserved_fragments(mixed_text, ["I'm", "deeplearning.ai", "https://www.com"])
 
         # split()
         self.assertEqual(o.split("Xin chào thế giới!"), ["Xin", "chào", "thế", "giới!"])
@@ -88,10 +61,7 @@ class VietnameseTextTest(LangOpsTestCase):
 
         # normalize()
         self._assert_entype_normalize()
-        self.assertEqual(
-            o.normalize("Xin chào , thế giới !"),
-            "Xin chào, thế giới!",
-        )
+        self.assertEqual(o.normalize("Xin chào , thế giới !"), "Xin chào, thế giới!")
 
         # strip_punc()
         self.assertEqual(o.strip_punc("(Xin chào!)"), "Xin chào")

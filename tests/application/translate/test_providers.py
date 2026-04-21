@@ -19,17 +19,8 @@ from application.translate.providers import OneShotTerms, PreloadableTerms
 class _FakeAgent:
     """Drop-in replacement for TermsAgent with configurable behavior."""
 
-    def __init__(
-        self,
-        *,
-        terms: dict[str, str] | None = None,
-        metadata: dict[str, str] | None = None,
-        raises: Exception | list[Exception | None] | None = None,
-    ):
-        self._result = TermsAgentResult(
-            terms=dict(terms or {}),
-            metadata=dict(metadata or {}),
-        )
+    def __init__(self, *, terms: dict[str, str] | None = None, metadata: dict[str, str] | None = None, raises: Exception | list[Exception | None] | None = None):
+        self._result = TermsAgentResult(terms=dict(terms or {}), metadata=dict(metadata or {}))
         if isinstance(raises, list):
             self._raises = list(raises)
         elif raises is not None:
@@ -70,10 +61,7 @@ class TestPreloadableTerms:
 
     @pytest.mark.asyncio
     async def test_preload_populates_terms(self):
-        agent = _FakeAgent(
-            terms={"ml": "机器学习"},
-            metadata={"topic": "deep learning", "title": "Intro"},
-        )
+        agent = _FakeAgent(terms={"ml": "机器学习"}, metadata={"topic": "deep learning", "title": "Intro"})
         provider = PreloadableTerms(agent, "en", "zh", agent=agent)
         await provider.preload(["text about machine learning"])
         assert provider.ready is True
@@ -98,10 +86,7 @@ class TestPreloadableTerms:
 
     @pytest.mark.asyncio
     async def test_failure_falls_back_to_empty(self):
-        agent = _FakeAgent(
-            terms={"ignored": "ignored"},
-            raises=[RuntimeError("fail1"), RuntimeError("fail2"), RuntimeError("fail3")],
-        )
+        agent = _FakeAgent(terms={"ignored": "ignored"}, raises=[RuntimeError("fail1"), RuntimeError("fail2"), RuntimeError("fail3")])
         provider = PreloadableTerms(agent, "en", "zh", max_retries=2, agent=agent)
         await provider.preload(["text"])
         assert provider.ready is True
@@ -111,10 +96,7 @@ class TestPreloadableTerms:
 
     @pytest.mark.asyncio
     async def test_recovers_on_retry(self):
-        agent = _FakeAgent(
-            terms={"a": "b"},
-            raises=[RuntimeError("fail1"), None],
-        )
+        agent = _FakeAgent(terms={"a": "b"}, raises=[RuntimeError("fail1"), None])
         provider = PreloadableTerms(agent, "en", "zh", max_retries=2, agent=agent)
         await provider.preload(["text"])
         assert provider.ready is True
@@ -124,10 +106,7 @@ class TestPreloadableTerms:
     @pytest.mark.asyncio
     async def test_on_failure_raise_propagates(self):
         """on_failure='raise' turns total failure into a RuntimeError."""
-        agent = _FakeAgent(
-            terms={"ignored": "ignored"},
-            raises=[RuntimeError("fail1"), RuntimeError("fail2")],
-        )
+        agent = _FakeAgent(terms={"ignored": "ignored"}, raises=[RuntimeError("fail1"), RuntimeError("fail2")])
         provider = PreloadableTerms(agent, "en", "zh", max_retries=1, on_failure="raise", agent=agent)
         with pytest.raises(RuntimeError, match="TermsAgent failed"):
             await provider.preload(["text"])
@@ -197,18 +176,8 @@ class TestOneShotTerms:
 
     @pytest.mark.asyncio
     async def test_failure_falls_back_to_empty(self):
-        agent = _FakeAgent(
-            terms={"ignored": "x"},
-            raises=[RuntimeError("1"), RuntimeError("2"), RuntimeError("3")],
-        )
-        provider = OneShotTerms(
-            agent,
-            "en",
-            "zh",
-            char_threshold=1,
-            max_retries=2,
-            agent=agent,
-        )
+        agent = _FakeAgent(terms={"ignored": "x"}, raises=[RuntimeError("1"), RuntimeError("2"), RuntimeError("3")])
+        provider = OneShotTerms(agent, "en", "zh", char_threshold=1, max_retries=2, agent=agent)
         await provider.request_generation(["hi"])
         await provider.wait_until_ready()
         assert provider.ready is True

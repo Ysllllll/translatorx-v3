@@ -5,15 +5,7 @@ from __future__ import annotations
 import pytest
 
 from domain.model import Word
-from adapters.parsers.whisperx import (
-    sanitize_whisperx,
-    parse_whisperx,
-    _dedup_untimed,
-    _interpolate_timestamps,
-    _attach_punctuation,
-    _collapse_repeats,
-    _replace_long_words,
-)
+from adapters.parsers.whisperx import sanitize_whisperx, parse_whisperx, _dedup_untimed, _interpolate_timestamps, _attach_punctuation, _collapse_repeats, _replace_long_words
 
 
 # ── helpers ───────────────────────────────────────────────────────────
@@ -114,31 +106,20 @@ class TestAttachPunctuation:
         assert _attach_punctuation([]) == []
 
     def test_standalone_period_merged(self):
-        ws = [
-            _w("word", 0, 0.5),
-            _w(".", 0.5, 0.51),
-        ]
+        ws = [_w("word", 0, 0.5), _w(".", 0.5, 0.51)]
         result = _attach_punctuation(ws)
         assert len(result) == 1
         assert result[0]["word"] == "word."
         assert result[0]["end"] == 0.51
 
     def test_standalone_comma_merged(self):
-        ws = [
-            _w("hello", 0, 0.5),
-            _w(",", 0.5, 0.51),
-            _w("world", 0.6, 1.0),
-        ]
+        ws = [_w("hello", 0, 0.5), _w(",", 0.5, 0.51), _w("world", 0.6, 1.0)]
         result = _attach_punctuation(ws)
         assert len(result) == 2
         assert result[0]["word"] == "hello,"
 
     def test_multiple_punct_merged(self):
-        ws = [
-            _w("word", 0, 0.5),
-            _w(".", 0.5, 0.51),
-            _w(".", 0.51, 0.52),
-        ]
+        ws = [_w("word", 0, 0.5), _w(".", 0.5, 0.51), _w(".", 0.51, 0.52)]
         result = _attach_punctuation(ws)
         assert len(result) == 1
         assert result[0]["word"] == "word.."
@@ -244,11 +225,7 @@ class TestSanitizeWhisperx:
         assert result[1].word == "world"
 
     def test_untimed_number_gets_timestamp(self):
-        ws = [
-            _w("year", 0, 0.5),
-            _w("1876."),
-            _w("The", 1.0, 1.3),
-        ]
+        ws = [_w("year", 0, 0.5), _w("1876."), _w("The", 1.0, 1.3)]
         result = sanitize_whisperx(ws)
         assert len(result) == 3
         num = result[1]
@@ -257,13 +234,7 @@ class TestSanitizeWhisperx:
 
     def test_dedup_then_interpolate(self):
         """Multiple untimed ♪ → single ♪ with interpolated timestamp."""
-        ws = [
-            _w("Hello", 0, 0.5),
-            _w("♪"),
-            _w("♪"),
-            _w("♪"),
-            _w("world", 1.0, 1.5),
-        ]
+        ws = [_w("Hello", 0, 0.5), _w("♪"), _w("♪"), _w("♪"), _w("world", 1.0, 1.5)]
         result = sanitize_whisperx(ws)
         symbols = [w for w in result if w.word == "♪"]
         assert len(symbols) == 1
@@ -271,11 +242,7 @@ class TestSanitizeWhisperx:
         assert symbols[0].end <= 1.0
 
     def test_punct_attached(self):
-        ws = [
-            _w("word", 0, 0.5),
-            _w(".", 0.5, 0.51),
-            _w("next", 0.6, 1.0),
-        ]
+        ws = [_w("word", 0, 0.5), _w(".", 0.5, 0.51), _w("next", 0.6, 1.0)]
         result = sanitize_whisperx(ws)
         assert len(result) == 2
         assert result[0].word == "word."
@@ -331,12 +298,7 @@ class TestSanitizeWhisperx:
 
 class TestParseWhisperx:
     def test_valid_json(self):
-        data = {
-            "word_segments": [
-                {"word": "Hello", "start": 0, "end": 0.5, "score": 0.9},
-                {"word": "world", "start": 0.5, "end": 1.0, "score": 0.8},
-            ]
-        }
+        data = {"word_segments": [{"word": "Hello", "start": 0, "end": 0.5, "score": 0.9}, {"word": "world", "start": 0.5, "end": 1.0, "score": 0.8}]}
         result = parse_whisperx(data)
         assert len(result) == 2
         assert all(isinstance(w, Word) for w in result)

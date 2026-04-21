@@ -57,12 +57,7 @@ class _ScriptedEngine:
 
 
 def _ctx() -> TranslationContext:
-    return TranslationContext(
-        source_lang="en",
-        target_lang="zh",
-        window_size=4,
-        terms_provider=StaticTerms({}),
-    )
+    return TranslationContext(source_lang="en", target_lang="zh", window_size=4, terms_provider=StaticTerms({}))
 
 
 def _rec(rid: int, text: str) -> SentenceRecord:
@@ -184,11 +179,7 @@ class TestWarmStart:
     async def test_fingerprint_mismatch_starts_fresh(self, store, video_key) -> None:
         # Seed a stored summary from a *different* fingerprint.
         seeded = IncrementalSummaryState(current=None, completed=True).to_dict()
-        await store.patch_video(
-            "v1",
-            summary=seeded,
-            meta={"_fingerprints": {"summary": "DIFFERENT-FP"}},
-        )
+        await store.patch_video("v1", summary=seeded, meta={"_fingerprints": {"summary": "DIFFERENT-FP"}})
 
         engine = _ScriptedEngine([_SUMMARY_JSON_1])
         proc = SummaryProcessor(engine, source_lang="en", target_lang="zh", window_words=3)

@@ -26,70 +26,24 @@ class LangOpsTestCase(unittest.TestCase):
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text)))), resolved],
             [self.ops.join(self.ops.split(text, attach_punctuation=False)), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)))), resolved],
-            [
-                self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)), attach_punctuation=False)),
-                resolved,
-            ],
-            [
-                self.ops.join(
-                    self.ops.split(
-                        self.ops.join(self.ops.split(text, attach_punctuation=False)),
-                        attach_punctuation=False,
-                        mode="word",
-                    )
-                ),
-                resolved,
-            ],
+            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)), attach_punctuation=False)), resolved],
+            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, attach_punctuation=False)), attach_punctuation=False, mode="word")), resolved],
             [self.ops.join(self.ops.split(text, mode="word")), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")))), resolved],
             [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")), mode="word")), resolved],
-            [
-                self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")), mode="word", attach_punctuation=False)),
-                resolved,
-            ],
+            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word")), mode="word", attach_punctuation=False)), resolved],
             [self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), resolved],
-            [
-                self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)))),
-                resolved,
-            ],
-            [
-                self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), mode="word")),
-                resolved,
-            ],
-            [
-                self.ops.join(
-                    self.ops.split(
-                        self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)),
-                        attach_punctuation=False,
-                    )
-                ),
-                resolved,
-            ],
-            [
-                self.ops.join(
-                    self.ops.split(
-                        self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)),
-                        mode="word",
-                        attach_punctuation=False,
-                    )
-                ),
-                resolved,
-            ],
+            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)))), resolved],
+            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), mode="word")), resolved],
+            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), attach_punctuation=False)), resolved],
+            [self.ops.join(self.ops.split(self.ops.join(self.ops.split(text, mode="word", attach_punctuation=False)), mode="word", attach_punctuation=False)), resolved],
         ]
         self.assert_actual_vs_expect(actual_vs_expect)
 
-    def _assert_entype_text_case(
-        self,
-        text: str,
-        expected_split: list[str],
-        expected_join_text: str | None = None,
-        expected_split_without_punctuation: list[str] | None = None,
-    ) -> None:
+    def _assert_entype_text_case(self, text: str, expected_split: list[str], expected_join_text: str | None = None, expected_split_without_punctuation: list[str] | None = None) -> None:
         """EnType: verify split (all modes), length, plength, and join roundtrip."""
         expected_chars = [ch for ch in text if not ch.isspace()]
-        expected_split_without_punctuation = (
-            expected_split if expected_split_without_punctuation is None else expected_split_without_punctuation
-        )
+        expected_split_without_punctuation = expected_split if expected_split_without_punctuation is None else expected_split_without_punctuation
         actual_vs_expect = [
             [self.ops.split(text), expected_split],
             [self.ops.split(text, mode="word"), expected_split],
@@ -103,23 +57,12 @@ class LangOpsTestCase(unittest.TestCase):
         self.assert_actual_vs_expect(actual_vs_expect)
         self._assert_text_join_case(text, expected_join_text)
 
-    def _assert_preserved_fragments(
-        self,
-        text: str,
-        fragments: list[str],
-        *,
-        modes: tuple[str, ...] = ("word",),
-        attach_punctuation: bool = False,
-    ) -> None:
+    def _assert_preserved_fragments(self, text: str, fragments: list[str], *, modes: tuple[str, ...] = ("word",), attach_punctuation: bool = False) -> None:
         """Assert protected Latin fragments survive tokenization as single tokens."""
         for mode in modes:
             tokens = self.ops.split(text, mode=mode, attach_punctuation=attach_punctuation)
             for fragment in fragments:
-                self.assertIn(
-                    fragment,
-                    tokens,
-                    msg=f"{fragment!r} should stay whole in {mode=} for {text!r}, got {tokens!r}",
-                )
+                self.assertIn(fragment, tokens, msg=f"{fragment!r} should stay whole in {mode=} for {text!r}, got {tokens!r}")
 
     # ── Composite helpers: EnType (en, ru, es, fr, de, pt, vi) ────────────
     # Call from test_edge / test_mode / test_normalize in EnType test files.
@@ -213,14 +156,8 @@ class LangOpsTestCase(unittest.TestCase):
             self.ops.split(text, mode="sentence")
 
     def _assert_mode_shorthand(self, text: str) -> None:
-        self.assertEqual(
-            self.ops.split(text, mode="c"),
-            self.ops.split(text, mode="character"),
-        )
-        self.assertEqual(
-            self.ops.split(text, mode="w"),
-            self.ops.split(text, mode="word"),
-        )
+        self.assertEqual(self.ops.split(text, mode="c"), self.ops.split(text, mode="character"))
+        self.assertEqual(self.ops.split(text, mode="w"), self.ops.split(text, mode="word"))
 
     # ── Atomic helpers: EnType-only ────────────────────────────────────────
     # Called from _assert_entype_edge / _assert_entype_normalize composites.
@@ -250,7 +187,4 @@ class LangOpsTestCase(unittest.TestCase):
         self.assertEqual(self.ops.normalize("(OK)"), "(OK)")
 
     def _assert_normalize_combined(self) -> None:
-        self.assertEqual(
-            self.ops.normalize('He said , "It\'s AI ." ( Really ? )'),
-            'He said, "It\'s AI." (Really?)',
-        )
+        self.assertEqual(self.ops.normalize('He said , "It\'s AI ." ( Really ? )'), 'He said, "It\'s AI." (Really?)')

@@ -16,27 +16,12 @@ class RussianTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text0, expect_split_text, expect_join_text0)
 
         text1 = "Сегодня система синхронизирует русские, английские и японские субтитры для большого проекта."
-        expect_split_text = [
-            "Сегодня",
-            "система",
-            "синхронизирует",
-            "русские,",
-            "английские",
-            "и",
-            "японские",
-            "субтитры",
-            "для",
-            "большого",
-            "проекта.",
-        ]
+        expect_split_text = ["Сегодня", "система", "синхронизирует", "русские,", "английские", "и", "японские", "субтитры", "для", "большого", "проекта."]
         expect_join_text1 = "Сегодня система синхронизирует русские, английские и японские субтитры для большого проекта."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Сохраните I'm deeplearning.ai и https://www.com целиком."
-        self._assert_preserved_fragments(
-            mixed_text,
-            ["I'm", "deeplearning.ai", "https://www.com"],
-        )
+        self._assert_preserved_fragments(mixed_text, ["I'm", "deeplearning.ai", "https://www.com"])
 
         # split()
         self.assertEqual(o.split("Привет, мир!"), ["Привет,", "мир!"])
@@ -75,10 +60,7 @@ class RussianTextTest(LangOpsTestCase):
 
         # normalize()
         self._assert_entype_normalize()
-        self.assertEqual(
-            o.normalize("Привет , мир !"),
-            "Привет, мир!",
-        )
+        self.assertEqual(o.normalize("Привет , мир !"), "Привет, мир!")
 
         # strip_punc()
         self.assertEqual(o.strip_punc("(Привет, мир!)"), "Привет, мир")

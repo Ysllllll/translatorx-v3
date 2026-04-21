@@ -17,10 +17,7 @@ from application.processors import TranslateProcessor
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
 from application.orchestrator.video import StreamingOrchestrator
-from ports.source import (
-    Priority,
-    VideoKey,
-)
+from ports.source import Priority, VideoKey
 
 
 class _Engine:
@@ -49,12 +46,7 @@ class _PassChecker(Checker):
 
 
 def _ctx() -> TranslationContext:
-    return TranslationContext(
-        source_lang="en",
-        target_lang="zh",
-        window_size=4,
-        terms_provider=StaticTerms({}),
-    )
+    return TranslationContext(source_lang="en", target_lang="zh", window_size=4, terms_provider=StaticTerms({}))
 
 
 @pytest.fixture
@@ -76,13 +68,7 @@ class TestStreamingOrchestrator:
     async def test_feed_then_close_drains(self, store, video_key):
         engine = _Engine()
         proc = TranslateProcessor(engine, _PassChecker(), flush_every=1)
-        orch = StreamingOrchestrator(
-            language="en",
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = StreamingOrchestrator(language="en", processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
 
         received = []
 
@@ -107,13 +93,7 @@ class TestStreamingOrchestrator:
         """HIGH items in the pending queue are drained before NORMAL."""
         engine = _Engine()
         proc = TranslateProcessor(engine, _PassChecker(), flush_every=1)
-        orch = StreamingOrchestrator(
-            language="en",
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = StreamingOrchestrator(language="en", processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
 
         # Pre-fill PQ *before* run() starts so ordering is deterministic.
         await orch.feed(_seg(0.0, "N0."), priority=Priority.NORMAL)
@@ -136,25 +116,13 @@ class TestStreamingOrchestrator:
     @pytest.mark.asyncio
     async def test_empty_processors_rejected(self, store, video_key):
         with pytest.raises(ValueError):
-            StreamingOrchestrator(
-                language="en",
-                processors=[],
-                ctx=_ctx(),
-                store=store,
-                video_key=video_key,
-            )
+            StreamingOrchestrator(language="en", processors=[], ctx=_ctx(), store=store, video_key=video_key)
 
     @pytest.mark.asyncio
     async def test_feed_after_close_raises(self, store, video_key):
         engine = _Engine()
         proc = TranslateProcessor(engine, _PassChecker())
-        orch = StreamingOrchestrator(
-            language="en",
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = StreamingOrchestrator(language="en", processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
 
         async def consume():
             async for _ in orch.run():
@@ -173,13 +141,7 @@ class TestStreamingOrchestrator:
         # Build orchestrator but do NOT call run() — we inspect pq state.
         engine = _Engine()
         proc = TranslateProcessor(engine, _PassChecker())
-        orch = StreamingOrchestrator(
-            language="en",
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = StreamingOrchestrator(language="en", processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
 
         await orch.feed(_seg(0.0, "A."))
         await orch.feed(_seg(10.0, "B."))
@@ -196,13 +158,7 @@ class TestStreamingOrchestrator:
     @pytest.mark.asyncio
     async def test_run_twice_raises(self, store, video_key):
         proc = TranslateProcessor(_Engine(), _PassChecker())
-        orch = StreamingOrchestrator(
-            language="en",
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = StreamingOrchestrator(language="en", processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
 
         async def consume(gen):
             async for _ in gen:
@@ -222,13 +178,7 @@ class TestStreamingOrchestrator:
         """Cancelling the consumer task runs aclose and stops the pump."""
         engine = _Engine()
         proc = TranslateProcessor(engine, _PassChecker())
-        orch = StreamingOrchestrator(
-            language="en",
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = StreamingOrchestrator(language="en", processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
 
         async def consume():
             async for _ in orch.run():

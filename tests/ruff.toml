@@ -1,0 +1,10 @@
+# tests/ 下放宽 line-length 到 320（ruff 允许的最大值）：
+# 测试里有大量 expected 列表（中文 token、SRT 字段、records 等），强制 140 列会被 ruff
+# 拆成每元素一行，反而失去 input → expected 直观对比的可读性。
+extend = "../pyproject.toml"
+line-length = 320
+
+[format]
+# 关闭 magic trailing comma：避免「数据有 trailing comma」就被强制多行；
+# 配合 line-length = 320，长列表会优先合并成单行。
+skip-magic-trailing-comma = true

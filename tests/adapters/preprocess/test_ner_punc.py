@@ -6,10 +6,7 @@ import pytest
 
 from adapters.preprocess.availability import punc_model_is_available
 
-pytestmark = pytest.mark.skipif(
-    not punc_model_is_available(),
-    reason="deepmultilingualpunctuation not installed",
-)
+pytestmark = pytest.mark.skipif(not punc_model_is_available(), reason="deepmultilingualpunctuation not installed")
 
 
 class TestNerPuncRestorer:
@@ -76,19 +73,13 @@ class TestProtectDottedWords:
     def test_node_js_preserved(self) -> None:
         from adapters.preprocess.ner_punc import _protect_dotted_words
 
-        result = _protect_dotted_words(
-            "you have Node.js version eighteen",
-            "you have Node. Js version eighteen,",
-        )
+        result = _protect_dotted_words("you have Node.js version eighteen", "you have Node. Js version eighteen,")
         assert "Node.js" in result
 
     def test_eg_preserved(self) -> None:
         from adapters.preprocess.ner_punc import _protect_dotted_words
 
-        result = _protect_dotted_words(
-            "use e.g. something here",
-            "use e. G. Something here,",
-        )
+        result = _protect_dotted_words("use e.g. something here", "use e. G. Something here,")
         assert "e.g." in result
 
     def test_no_dotted_words_passthrough(self) -> None:
@@ -100,10 +91,7 @@ class TestProtectDottedWords:
     def test_multiple_dotted_words(self) -> None:
         from adapters.preprocess.ner_punc import _protect_dotted_words
 
-        result = _protect_dotted_words(
-            "use Node.js and Vue.js here",
-            "use Node. Js and Vue. Js here,",
-        )
+        result = _protect_dotted_words("use Node.js and Vue.js here", "use Node. Js and Vue. Js here,")
         assert "Node.js" in result
         assert "Vue.js" in result
 
@@ -114,47 +102,32 @@ class TestPreserveTrailingPunc:
     def test_period_preserved(self) -> None:
         from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
-        result = _preserve_trailing_punc(
-            "hello world.",
-            "Hello, world",
-        )
+        result = _preserve_trailing_punc("hello world.", "Hello, world")
         assert result.endswith(".")
 
     def test_ellipsis_preserved(self) -> None:
         from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
-        result = _preserve_trailing_punc(
-            "hello world...",
-            "Hello, world.",
-        )
+        result = _preserve_trailing_punc("hello world...", "Hello, world.")
         assert result.endswith("...")
 
     def test_exclamation_preserved(self) -> None:
         from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
-        result = _preserve_trailing_punc(
-            "hello world!",
-            "Hello, world.",
-        )
+        result = _preserve_trailing_punc("hello world!", "Hello, world.")
         assert result.endswith("!")
 
     def test_no_trailing_punc_passthrough(self) -> None:
         from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
-        result = _preserve_trailing_punc(
-            "hello world",
-            "Hello, world.",
-        )
+        result = _preserve_trailing_punc("hello world", "Hello, world.")
         # No trailing punc in source, so restored text is unchanged
         assert result == "Hello, world."
 
     def test_question_mark_preserved(self) -> None:
         from adapters.preprocess.ner_punc import _preserve_trailing_punc
 
-        result = _preserve_trailing_punc(
-            "how are you?",
-            "How are you.",
-        )
+        result = _preserve_trailing_punc("how are you?", "How are you.")
         assert result.endswith("?")
 
 

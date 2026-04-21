@@ -9,36 +9,18 @@ from pathlib import Path
 import pytest
 
 from domain.model import SentenceRecord
-from adapters.reporters.reporters import (
-    ChainReporter,
-    JsonlErrorReporter,
-    LoggerReporter,
-)
+from adapters.reporters.reporters import ChainReporter, JsonlErrorReporter, LoggerReporter
 from ports.errors import ErrorInfo
 
 
 def _make_err(**kw) -> ErrorInfo:
-    defaults: dict = dict(
-        processor="T",
-        category="permanent",
-        code="oops",
-        message="boom",
-        retryable=False,
-        attempts=1,
-        at=1700000000.0,
-        cause="ValueError: x",
-    )
+    defaults: dict = dict(processor="T", category="permanent", code="oops", message="boom", retryable=False, attempts=1, at=1700000000.0, cause="ValueError: x")
     defaults.update(kw)
     return ErrorInfo(**defaults)
 
 
 def _make_rec() -> SentenceRecord:
-    return SentenceRecord(
-        src_text="hello",
-        start=0.0,
-        end=1.0,
-        extra={"stream_id": 42},
-    )
+    return SentenceRecord(src_text="hello", start=0.0, end=1.0, extra={"stream_id": 42})
 
 
 # ---------------------------------------------------------------------------
@@ -81,11 +63,7 @@ def test_jsonl_reporter_writes_line(tmp_path: Path) -> None:
     log_file = tmp_path / "errors.jsonl"
     reporter = JsonlErrorReporter(log_file)
     try:
-        reporter.report(
-            _make_err(),
-            _make_rec(),
-            {"video": "lec1", "course": "cs101", "fingerprint": "abc123"},
-        )
+        reporter.report(_make_err(), _make_rec(), {"video": "lec1", "course": "cs101", "fingerprint": "abc123"})
     finally:
         reporter.close()
 

@@ -80,10 +80,7 @@ class TestAppConfig:
 
     def test_rejects_unknown_fields(self, tmp_path: Path):
         cfg_path = tmp_path / "app.yaml"
-        cfg_path.write_text(
-            "engines: {default: {kind: openai_compat, model: x, base_url: y, bogus: 1}}\n",
-            encoding="utf-8",
-        )
+        cfg_path.write_text("engines: {default: {kind: openai_compat, model: x, base_url: y, bogus: 1}}\n", encoding="utf-8")
         with pytest.raises(Exception):
             AppConfig.load(cfg_path)
 
@@ -92,11 +89,7 @@ class TestAppConfig:
         assert cfg.engines["default"].model == "m"
 
     def test_from_dict(self):
-        cfg = AppConfig.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "b", "api_key": "k"}},
-            }
-        )
+        cfg = AppConfig.from_dict({"engines": {"default": {"model": "m", "base_url": "b", "api_key": "k"}}})
         assert cfg.engines["default"].base_url == "b"
 
     def test_from_dict_honors_env_overrides(self, monkeypatch):

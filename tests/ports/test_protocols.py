@@ -72,18 +72,8 @@ async def test_aclose_default_noop() -> None:
 
 def test_missing_inputs_all_present() -> None:
     p = _Concrete()
-    rec = SentenceRecord(
-        src_text="hi",
-        start=0.0,
-        end=1.0,
-        translations={"zh": "你好", "ja": "こんにちは"},
-        extra={"foo": 1},
-    )
-    result = p._missing_inputs(
-        rec,
-        required_translations=("zh", "ja"),
-        required_extra=("foo",),
-    )
+    rec = SentenceRecord(src_text="hi", start=0.0, end=1.0, translations={"zh": "你好", "ja": "こんにちは"}, extra={"foo": 1})
+    result = p._missing_inputs(rec, required_translations=("zh", "ja"), required_extra=("foo",))
     assert result == []
 
 
@@ -96,11 +86,7 @@ def test_missing_inputs_reports_missing_and_empty() -> None:
         translations={"zh": "", "ja": "こんにちは"},  # zh present but empty
         extra={},
     )
-    result = p._missing_inputs(
-        rec,
-        required_translations=("zh", "ko"),
-        required_extra=("foo",),
-    )
+    result = p._missing_inputs(rec, required_translations=("zh", "ko"), required_extra=("foo",))
     # empty translation counts as missing, ko not in dict, foo not in extra
     assert set(result) == {"translations[zh]", "translations[ko]", "extra[foo]"}
 
@@ -113,13 +99,7 @@ def test_missing_inputs_reports_missing_and_empty() -> None:
 def test_record_with_error_appends_error_info() -> None:
     p = _Concrete()
     rec = SentenceRecord(src_text="hi", start=0.0, end=1.0)
-    new_rec = p._record_with_error(
-        rec,
-        category="permanent",
-        code="oops",
-        message="broken",
-        attempts=2,
-    )
+    new_rec = p._record_with_error(rec, category="permanent", code="oops", message="broken", attempts=2)
     assert new_rec is not rec
     errors = new_rec.extra["errors"]
     assert len(errors) == 1

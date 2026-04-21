@@ -21,68 +21,18 @@ class EnglishTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         text2 = "In 2026, the translation engine processed English, Russian, and Japanese subtitles in one pass."
-        expect_split_text = [
-            "In",
-            "2026,",
-            "the",
-            "translation",
-            "engine",
-            "processed",
-            "English,",
-            "Russian,",
-            "and",
-            "Japanese",
-            "subtitles",
-            "in",
-            "one",
-            "pass.",
-        ]
+        expect_split_text = ["In", "2026,", "the", "translation", "engine", "processed", "English,", "Russian,", "and", "Japanese", "subtitles", "in", "one", "pass."]
         expect_join_text2 = "In 2026, the translation engine processed English, Russian, and Japanese subtitles in one pass."
         self._assert_entype_text_case(text2, expect_split_text, expect_join_text2)
 
         text3 = "He said, \"It's AI.\" (Really?) [Yes.] {'OK.'} \"orphan 'solo tail) [loose {brace ,"
-        expect_split_text = [
-            "He",
-            "said,",
-            "\"It's",
-            'AI."',
-            "(Really?)",
-            "[Yes.]",
-            "{'OK.'}",
-            '"orphan',
-            "'solo",
-            "tail)",
-            "[loose",
-            "{brace,",
-        ]
-        expect_split_text_raw = [
-            "He",
-            "said,",
-            "\"It's",
-            'AI."',
-            "(Really?)",
-            "[Yes.]",
-            "{'OK.'}",
-            '"orphan',
-            "'solo",
-            "tail)",
-            "[loose",
-            "{brace",
-            ",",
-        ]
+        expect_split_text = ["He", "said,", "\"It's", 'AI."', "(Really?)", "[Yes.]", "{'OK.'}", '"orphan', "'solo", "tail)", "[loose", "{brace,"]
+        expect_split_text_raw = ["He", "said,", "\"It's", 'AI."', "(Really?)", "[Yes.]", "{'OK.'}", '"orphan', "'solo", "tail)", "[loose", "{brace", ","]
         expect_join_text3 = "He said, \"It's AI.\" (Really?) [Yes.] {'OK.'} \"orphan 'solo tail) [loose {brace,"
-        self._assert_entype_text_case(
-            text3,
-            expect_split_text,
-            expect_join_text3,
-            expected_split_without_punctuation=expect_split_text_raw,
-        )
+        self._assert_entype_text_case(text3, expect_split_text, expect_join_text3, expected_split_without_punctuation=expect_split_text_raw)
 
         mixed_text = "Keep I'm deeplearning.ai and https://www.com intact."
-        self._assert_preserved_fragments(
-            mixed_text,
-            ["I'm", "deeplearning.ai", "https://www.com"],
-        )
+        self._assert_preserved_fragments(mixed_text, ["I'm", "deeplearning.ai", "https://www.com"])
 
         # split()
         self.assertEqual(o.split("Hello, world!"), ["Hello,", "world!"])
@@ -101,13 +51,7 @@ class EnglishTextTest(LangOpsTestCase):
         # join()
         self.assertEqual(o.join(["Hello,", "world!"]), "Hello, world!")
         self.assertEqual(o.join(["It's", "AI."]), "It's AI.")
-        self.assert_actual_vs_expect(
-            [
-                [o.join(['"', "Hello", ",", "world", "!", '"']), '"Hello, world!"'],
-                [o.join(["'", "Hello", "'"]), "'Hello'"],
-                [o.join(["It", "'", "s", '"', "AI", '"']), 'It\'s "AI"'],
-            ]
-        )
+        self.assert_actual_vs_expect([[o.join(['"', "Hello", ",", "world", "!", '"']), '"Hello, world!"'], [o.join(["'", "Hello", "'"]), "'Hello'"], [o.join(["It", "'", "s", '"', "AI", '"']), 'It\'s "AI"']])
 
         # strip()
         self.assertEqual(o.strip("  Hello  "), "Hello")

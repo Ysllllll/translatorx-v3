@@ -4,12 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.translate import (
-    StaticTerms,
-    TranslationContext,
-    get_default_system_prompt,
-    register_default_prompt,
-)
+from application.translate import StaticTerms, TranslationContext, get_default_system_prompt, register_default_prompt
 
 
 class TestEnZhDefault:
@@ -22,20 +17,12 @@ class TestEnZhDefault:
         assert "本段" not in prompt
 
     def test_en_zh_with_topic_only(self):
-        ctx = TranslationContext(
-            source_lang="en",
-            target_lang="zh",
-            terms_provider=StaticTerms({}, metadata={"topic": "RLHF"}),
-        )
+        ctx = TranslationContext(source_lang="en", target_lang="zh", terms_provider=StaticTerms({}, metadata={"topic": "RLHF"}))
         prompt = get_default_system_prompt(ctx)
         assert "关于 RLHF" in prompt
 
     def test_en_zh_with_topic_and_field(self):
-        ctx = TranslationContext(
-            source_lang="en",
-            target_lang="zh",
-            terms_provider=StaticTerms({}, metadata={"topic": "transformers", "field": "AI"}),
-        )
+        ctx = TranslationContext(source_lang="en", target_lang="zh", terms_provider=StaticTerms({}, metadata={"topic": "transformers", "field": "AI"}))
         prompt = get_default_system_prompt(ctx)
         assert "AI 领域关于 transformers" in prompt
 
@@ -53,11 +40,7 @@ class TestGenericFallback:
         assert "fluent, natural de" in prompt
 
     def test_generic_topic_field_in_english(self):
-        ctx = TranslationContext(
-            source_lang="fr",
-            target_lang="de",
-            terms_provider=StaticTerms({}, metadata={"topic": "chess", "field": "games"}),
-        )
+        ctx = TranslationContext(source_lang="fr", target_lang="de", terms_provider=StaticTerms({}, metadata={"topic": "chess", "field": "games"}))
         prompt = get_default_system_prompt(ctx)
         assert "This segment is about chess in the games domain." in prompt
 
@@ -70,11 +53,7 @@ class TestRegister:
         before = get_default_system_prompt(ctx)
         assert "ja-to-zh" in before
 
-        register_default_prompt(
-            "ja",
-            "zh",
-            "日译中专家。{scope_line}请翻译。",
-        )
+        register_default_prompt("ja", "zh", "日译中专家。{scope_line}请翻译。")
         try:
             after = get_default_system_prompt(ctx)
             assert after[: len("日译中专家。")] == "日译中专家。"

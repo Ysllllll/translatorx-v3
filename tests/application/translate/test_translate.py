@@ -7,13 +7,7 @@ from typing import AsyncIterator
 import pytest
 
 from application.translate.context import ContextWindow, StaticTerms, TranslationContext
-from application.translate.translate import (
-    TranslateResult,
-    _build_messages_compressed,
-    _build_messages_full,
-    _build_messages_minimal,
-    translate_with_verify,
-)
+from application.translate.translate import TranslateResult, _build_messages_compressed, _build_messages_full, _build_messages_minimal, translate_with_verify
 from application.checker import CheckReport, Checker, Issue, Severity
 from domain.model.usage import CompletionResult
 
@@ -111,10 +105,7 @@ class _AlwaysFailChecker:
 
 class TestPromptBuilders:
     def test_full_with_system_and_context(self):
-        ctx = [
-            {"role": "user", "content": "hi"},
-            {"role": "assistant", "content": "你好"},
-        ]
+        ctx = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "你好"}]
         msgs = _build_messages_full("You are a translator.", ctx, "hello")
         assert msgs[0] == {"role": "system", "content": "You are a translator."}
         assert msgs[1] == {"role": "user", "content": "hi"}
@@ -127,10 +118,7 @@ class TestPromptBuilders:
         assert msgs[0] == {"role": "user", "content": "hello"}
 
     def test_compressed_folds_history(self):
-        ctx = [
-            {"role": "user", "content": "hi"},
-            {"role": "assistant", "content": "你好"},
-        ]
+        ctx = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "你好"}]
         msgs = _build_messages_compressed("System.", ctx, "hello")
         assert len(msgs) == 1
         assert msgs[0]["role"] == "system"
@@ -228,14 +216,7 @@ class TestTranslateWithVerify:
         window = ContextWindow(size=4)
         window.add("prev", "前")
 
-        await translate_with_verify(
-            "hello",
-            engine,
-            ctx,
-            checker,
-            window,
-            system_prompt="System.",
-        )
+        await translate_with_verify("hello", engine, ctx, checker, window, system_prompt="System.")
 
         # Attempt 0: full (system + context + user)
         assert engine.calls[0][0]["role"] == "system"
@@ -297,11 +278,7 @@ class TestTranslateWithVerify:
     async def test_engine_receives_frozen_pairs(self):
         engine = _MockEngine(["翻译"])
         checker = _AlwaysPassChecker()
-        ctx = TranslationContext(
-            source_lang="en",
-            target_lang="zh",
-            frozen_pairs=(("fix_src", "fix_tgt"),),
-        )
+        ctx = TranslationContext(source_lang="en", target_lang="zh", frozen_pairs=(("fix_src", "fix_tgt"),))
         window = ContextWindow(size=4)
 
         await translate_with_verify("hello", engine, ctx, checker, window)
@@ -317,11 +294,7 @@ class TestTranslateWithVerify:
         engine = _MockEngine(["翻译"])
         checker = _AlwaysPassChecker()
         provider = StaticTerms({"neural net": "神经网络"})
-        ctx = TranslationContext(
-            source_lang="en",
-            target_lang="zh",
-            terms_provider=provider,
-        )
+        ctx = TranslationContext(source_lang="en", target_lang="zh", terms_provider=provider)
         window = ContextWindow(size=4)
 
         await translate_with_verify("hello", engine, ctx, checker, window)
@@ -349,11 +322,7 @@ class TestTranslateWithVerify:
 
         engine = _MockEngine(["翻译"])
         checker = _AlwaysPassChecker()
-        ctx = TranslationContext(
-            source_lang="en",
-            target_lang="zh",
-            terms_provider=_NotReadyProvider(),
-        )
+        ctx = TranslationContext(source_lang="en", target_lang="zh", terms_provider=_NotReadyProvider())
         window = ContextWindow(size=4)
 
         await translate_with_verify("hello", engine, ctx, checker, window)
@@ -367,23 +336,11 @@ class TestTranslateWithVerify:
         engine = _MockEngine(["翻译"])
         checker = _AlwaysPassChecker()
         provider = StaticTerms({}, metadata={"topic": "ai", "title": "Intro"})
-        ctx = TranslationContext(
-            source_lang="en",
-            target_lang="zh",
-            terms_provider=provider,
-            system_prompt_template="You are a {topic} translator. Doc: {title}.",
-        )
+        ctx = TranslationContext(source_lang="en", target_lang="zh", terms_provider=provider, system_prompt_template="You are a {topic} translator. Doc: {title}.")
         window = ContextWindow(size=4)
 
         # system_prompt arg is ignored when template is set
-        await translate_with_verify(
-            "hello",
-            engine,
-            ctx,
-            checker,
-            window,
-            system_prompt="ignored-base",
-        )
+        await translate_with_verify("hello", engine, ctx, checker, window, system_prompt="ignored-base")
 
         system = engine.calls[0][0]
         assert system["role"] == "system"
@@ -394,12 +351,7 @@ class TestTranslateWithVerify:
         engine = _MockEngine(["翻译"])
         checker = _AlwaysPassChecker()
         provider = StaticTerms({}, metadata={"topic": "ai"})
-        ctx = TranslationContext(
-            source_lang="en",
-            target_lang="zh",
-            terms_provider=provider,
-            system_prompt_template="Topic: {topic}. Missing: {nonexistent}.",
-        )
+        ctx = TranslationContext(source_lang="en", target_lang="zh", terms_provider=provider, system_prompt_template="Topic: {topic}. Missing: {nonexistent}.")
         window = ContextWindow(size=4)
         await translate_with_verify("hello", engine, ctx, checker, window)
         system = engine.calls[0][0]

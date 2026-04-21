@@ -4,12 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.translate.context import (
-    ContextWindow,
-    StaticTerms,
-    TermsProvider,
-    TranslationContext,
-)
+from application.translate.context import ContextWindow, StaticTerms, TermsProvider, TranslationContext
 
 
 # ---------------------------------------------------------------------------
@@ -91,10 +86,7 @@ class TestContextWindow:
         w = ContextWindow(size=4)
         w.add("hello", "你好")
         msgs = w.build_messages()
-        assert msgs == [
-            {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "你好"},
-        ]
+        assert msgs == [{"role": "user", "content": "hello"}, {"role": "assistant", "content": "你好"}]
 
     def test_frozen_pairs_come_first(self):
         """Compact form: primer + concatenated pair, then dynamic history."""
@@ -115,12 +107,7 @@ class TestContextWindow:
         w = ContextWindow(size=4)
         frozen = (("a", "A"), ("b", "B"))
         msgs = w.build_messages(frozen_pairs=frozen, compact_frozen=False)
-        assert msgs == [
-            {"role": "user", "content": "a"},
-            {"role": "assistant", "content": "A"},
-            {"role": "user", "content": "b"},
-            {"role": "assistant", "content": "B"},
-        ]
+        assert msgs == [{"role": "user", "content": "a"}, {"role": "assistant", "content": "A"}, {"role": "user", "content": "b"}, {"role": "assistant", "content": "B"}]
 
     def test_frozen_pairs_compact_concatenation(self):
         """<8 term pairs: all concatenated into ONE user + ONE assistant message."""
@@ -196,15 +183,7 @@ class TestTranslationContext:
 
     def test_custom_fields(self):
         terms = StaticTerms({"ml": "机器学习"})
-        ctx = TranslationContext(
-            source_lang="en",
-            target_lang="zh",
-            terms_provider=terms,
-            frozen_pairs=(("hello", "你好"),),
-            window_size=8,
-            max_retries=5,
-            system_prompt_template="You are a {topic} translator.",
-        )
+        ctx = TranslationContext(source_lang="en", target_lang="zh", terms_provider=terms, frozen_pairs=(("hello", "你好"),), window_size=8, max_retries=5, system_prompt_template="You are a {topic} translator.")
         assert ctx.terms_provider is terms
         assert ctx.frozen_pairs == (("hello", "你好"),)
         assert ctx.window_size == 8

@@ -6,11 +6,7 @@ import asyncio
 
 import pytest
 
-from application.resources import (
-    DEFAULT_TIERS,
-    InMemoryResourceManager,
-    UserTier,
-)
+from application.resources import DEFAULT_TIERS, InMemoryResourceManager, UserTier
 from domain.model import Usage
 # ---------------------------------------------------------------------------
 # UserTier / DEFAULT_TIERS
@@ -40,13 +36,7 @@ def test_usertier_is_frozen() -> None:
 @pytest.mark.asyncio
 async def test_acquire_video_slot_serializes_over_limit() -> None:
     rm = InMemoryResourceManager()
-    tier = UserTier(
-        name="t",
-        daily_budget_usd=100,
-        monthly_budget_usd=1000,
-        concurrent_videos=1,
-        concurrent_requests_per_video=4,
-    )
+    tier = UserTier(name="t", daily_budget_usd=100, monthly_budget_usd=1000, concurrent_videos=1, concurrent_requests_per_video=4)
 
     order: list[str] = []
 
@@ -58,22 +48,13 @@ async def test_acquire_video_slot_serializes_over_limit() -> None:
 
     await asyncio.gather(worker("a"), worker("b"))
     # With concurrency=1, start/end must interleave per task (no overlap).
-    assert order in (
-        ["start:a", "end:a", "start:b", "end:b"],
-        ["start:b", "end:b", "start:a", "end:a"],
-    )
+    assert order in (["start:a", "end:a", "start:b", "end:b"], ["start:b", "end:b", "start:a", "end:a"])
 
 
 @pytest.mark.asyncio
 async def test_acquire_request_slot_allows_parallel() -> None:
     rm = InMemoryResourceManager()
-    tier = UserTier(
-        name="t",
-        daily_budget_usd=100,
-        monthly_budget_usd=1000,
-        concurrent_videos=4,
-        concurrent_requests_per_video=4,
-    )
+    tier = UserTier(name="t", daily_budget_usd=100, monthly_budget_usd=1000, concurrent_videos=4, concurrent_requests_per_video=4)
     active = 0
     peak = 0
 
@@ -97,14 +78,7 @@ async def test_acquire_request_slot_allows_parallel() -> None:
 @pytest.mark.asyncio
 async def test_check_budget_ok_soft_deny() -> None:
     rm = InMemoryResourceManager()
-    tier = UserTier(
-        name="t",
-        daily_budget_usd=1.0,
-        monthly_budget_usd=10.0,
-        concurrent_videos=1,
-        concurrent_requests_per_video=1,
-        soft_warn_threshold=0.8,
-    )
+    tier = UserTier(name="t", daily_budget_usd=1.0, monthly_budget_usd=10.0, concurrent_videos=1, concurrent_requests_per_video=1, soft_warn_threshold=0.8)
 
     assert await rm.check_budget("u1", tier, 0.1) == "ok"
 
@@ -120,14 +94,7 @@ async def test_check_budget_ok_soft_deny() -> None:
 @pytest.mark.asyncio
 async def test_check_budget_byok_always_ok() -> None:
     rm = InMemoryResourceManager()
-    tier = UserTier(
-        name="ent",
-        daily_budget_usd=0.0,
-        monthly_budget_usd=0.0,
-        concurrent_videos=1,
-        concurrent_requests_per_video=1,
-        byok=True,
-    )
+    tier = UserTier(name="ent", daily_budget_usd=0.0, monthly_budget_usd=0.0, concurrent_videos=1, concurrent_requests_per_video=1, byok=True)
     assert await rm.check_budget("u1", tier, 9999.0) == "ok"
 
 

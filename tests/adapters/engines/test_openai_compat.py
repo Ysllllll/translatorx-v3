@@ -5,12 +5,7 @@ from __future__ import annotations
 import pytest
 
 from ports.engine import LLMEngine
-from adapters.engines.openai_compat import (
-    EngineConfig,
-    OpenAICompatEngine,
-    _clean_response,
-    _strip_think_tags,
-)
+from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine, _clean_response, _strip_think_tags
 
 
 # ---------------------------------------------------------------------------
@@ -71,12 +66,7 @@ class TestEngineConfig:
         assert cfg.timeout == 150.0
 
     def test_custom(self):
-        cfg = EngineConfig(
-            model="Qwen/Qwen3-32B",
-            base_url="http://localhost:26592",
-            temperature=0.5,
-            max_tokens=4096,
-        )
+        cfg = EngineConfig(model="Qwen/Qwen3-32B", base_url="http://localhost:26592", temperature=0.5, max_tokens=4096)
         assert cfg.model == "Qwen/Qwen3-32B"
         assert cfg.temperature == 0.5
 
@@ -128,12 +118,7 @@ class TestOpenAICompatEngineLive:
 
     @pytest.mark.asyncio
     async def test_complete(self):
-        cfg = EngineConfig(
-            model="Qwen/Qwen3-32B",
-            base_url="http://localhost:26592",
-            temperature=0.3,
-            max_tokens=100,
-        )
+        cfg = EngineConfig(model="Qwen/Qwen3-32B", base_url="http://localhost:26592", temperature=0.3, max_tokens=100)
         engine = OpenAICompatEngine(cfg)
         result = await engine.complete([{"role": "user", "content": "Say hello in Chinese"}])
         # Live LLM call — we cannot pin the exact text, so we assert
@@ -146,12 +131,7 @@ class TestOpenAICompatEngineLive:
 
     @pytest.mark.asyncio
     async def test_stream(self):
-        cfg = EngineConfig(
-            model="Qwen/Qwen3-32B",
-            base_url="http://localhost:26592",
-            temperature=0.3,
-            max_tokens=100,
-        )
+        cfg = EngineConfig(model="Qwen/Qwen3-32B", base_url="http://localhost:26592", temperature=0.3, max_tokens=100)
         engine = OpenAICompatEngine(cfg)
         chunks = []
         async for chunk in engine.stream([{"role": "user", "content": "Say hello"}]):

@@ -16,28 +16,12 @@ class GermanTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text0, expect_split_text, expect_join_text0)
 
         text1 = "Heute verarbeitet unser System deutsche, französische und portugiesische Untertitel in einem Durchgang."
-        expect_split_text = [
-            "Heute",
-            "verarbeitet",
-            "unser",
-            "System",
-            "deutsche,",
-            "französische",
-            "und",
-            "portugiesische",
-            "Untertitel",
-            "in",
-            "einem",
-            "Durchgang.",
-        ]
+        expect_split_text = ["Heute", "verarbeitet", "unser", "System", "deutsche,", "französische", "und", "portugiesische", "Untertitel", "in", "einem", "Durchgang."]
         expect_join_text1 = "Heute verarbeitet unser System deutsche, französische und portugiesische Untertitel in einem Durchgang."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Lasst I'm deeplearning.ai und https://www.com ganz."
-        self._assert_preserved_fragments(
-            mixed_text,
-            ["I'm", "deeplearning.ai", "https://www.com"],
-        )
+        self._assert_preserved_fragments(mixed_text, ["I'm", "deeplearning.ai", "https://www.com"])
 
         # split()
         self.assertEqual(o.split("Hallo, schöne Welt!"), ["Hallo,", "schöne", "Welt!"])
@@ -76,10 +60,7 @@ class GermanTextTest(LangOpsTestCase):
 
         # normalize()
         self._assert_entype_normalize()
-        self.assertEqual(
-            o.normalize("Hallo , schöne Welt !"),
-            "Hallo, schöne Welt!",
-        )
+        self.assertEqual(o.normalize("Hallo , schöne Welt !"), "Hallo, schöne Welt!")
 
         # strip_punc()
         self.assertEqual(o.strip_punc("(Hallo, Welt!)"), "Hallo, Welt")

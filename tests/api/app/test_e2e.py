@@ -41,21 +41,7 @@ def _write_srt(path: Path, lines: list[str]) -> None:
 
 
 def _make_app(root: Path) -> App:
-    return App.from_dict(
-        {
-            "engines": {
-                "default": {
-                    "kind": "openai_compat",
-                    "model": "mock",
-                    "base_url": "http://localhost:0/v1",
-                    "api_key": "EMPTY",
-                }
-            },
-            "contexts": {"en_zh": {"src": "en", "tgt": "zh"}},
-            "store": {"kind": "json", "root": root.as_posix()},
-            "runtime": {"flush_every": 1, "max_concurrent_videos": 2},
-        }
-    )
+    return App.from_dict({"engines": {"default": {"kind": "openai_compat", "model": "mock", "base_url": "http://localhost:0/v1", "api_key": "EMPTY"}}, "contexts": {"en_zh": {"src": "en", "tgt": "zh"}}, "store": {"kind": "json", "root": root.as_posix()}, "runtime": {"flush_every": 1, "max_concurrent_videos": 2}})
 
 
 class _CountingEngine:
@@ -198,13 +184,7 @@ class TestCourseE2E:
         eng = _CountingEngine()
         _bind(app, eng)
 
-        result = await (
-            app.course(course="cs101")
-            .add_video("vid_a", a, language="en")
-            .add_video("vid_b", b, language="en")
-            .translate(src="en", tgt="zh")
-            .run()
-        )
+        result = await app.course(course="cs101").add_video("vid_a", a, language="en").add_video("vid_b", b, language="en").translate(src="en", tgt="zh").run()
 
         assert len(result.succeeded) == 2
         # On disk: both videos written under same course directory
@@ -302,18 +282,7 @@ class TestConfigVariants:
     @pytest.mark.asyncio
     async def test_yaml_string_app_produces_translations(self, tmp_path: Path):
         ws = tmp_path / "ws"
-        text = (
-            "engines:\n"
-            "  default:\n"
-            "    kind: openai_compat\n"
-            "    model: mock\n"
-            "    base_url: http://localhost:0/v1\n"
-            "    api_key: EMPTY\n"
-            "store:\n"
-            f"  root: {ws.as_posix()}\n"
-            "runtime:\n"
-            "  flush_every: 1\n"
-        )
+        text = f"engines:\n  default:\n    kind: openai_compat\n    model: mock\n    base_url: http://localhost:0/v1\n    api_key: EMPTY\nstore:\n  root: {ws.as_posix()}\nruntime:\n  flush_every: 1\n"
         app = App.from_yaml(text)
         eng = _CountingEngine()
         _bind(app, eng)

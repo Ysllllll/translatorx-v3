@@ -15,15 +15,8 @@ from domain.model.usage import CompletionResult
 from application.processors import TranslateProcessor
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
-from application.orchestrator.course import (
-    CourseOrchestrator,
-    CourseResult,
-    VideoSpec,
-)
-from application.orchestrator.video import (
-    VideoOrchestrator,
-    VideoResult,
-)
+from application.orchestrator.course import CourseOrchestrator, CourseResult, VideoSpec
+from application.orchestrator.video import VideoOrchestrator, VideoResult
 from ports.source import Priority
 from adapters.sources.srt import SrtSource
 
@@ -57,12 +50,7 @@ class _PassChecker(Checker):
 
 
 def _ctx() -> TranslationContext:
-    return TranslationContext(
-        source_lang="en",
-        target_lang="zh",
-        window_size=4,
-        terms_provider=StaticTerms({}),
-    )
+    return TranslationContext(source_lang="en", target_lang="zh", window_size=4, terms_provider=StaticTerms({}))
 
 
 def _write_srt(path: Path, lines: list[str]) -> None:
@@ -96,17 +84,8 @@ class TestCourseOrchestrator:
 
         engine = _Engine()
 
-        orch = CourseOrchestrator(
-            store=store,
-            ctx=_ctx(),
-            processors_factory=lambda: [TranslateProcessor(engine, _PassChecker(), flush_every=1)],
-        )
-        result = await orch.run(
-            [
-                VideoSpec(video="a", source=SrtSource(srt_a, language="en")),
-                VideoSpec(video="b", source=SrtSource(srt_b, language="en")),
-            ]
-        )
+        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [TranslateProcessor(engine, _PassChecker(), flush_every=1)])
+        result = await orch.run([VideoSpec(video="a", source=SrtSource(srt_a, language="en")), VideoSpec(video="b", source=SrtSource(srt_b, language="en"))])
 
         assert isinstance(result, CourseResult)
         assert len(result.videos) == 2
@@ -131,18 +110,8 @@ class TestCourseOrchestrator:
         def factory():
             return [TranslateProcessor(engine, _PassChecker(), flush_every=1)]
 
-        orch = CourseOrchestrator(
-            store=store,
-            ctx=_ctx(),
-            processors_factory=factory,
-            max_concurrent_videos=2,
-        )
-        result = await orch.run(
-            [
-                VideoSpec(video="good", source=SrtSource(srt_good, language="en")),
-                VideoSpec(video="bad", source=SrtSource(srt_bad, language="en")),
-            ]
-        )
+        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=factory, max_concurrent_videos=2)
+        result = await orch.run([VideoSpec(video="good", source=SrtSource(srt_good, language="en")), VideoSpec(video="bad", source=SrtSource(srt_bad, language="en"))])
 
         assert len(result.videos) == 2
         # The "good" video must succeed regardless of "bad".
@@ -152,11 +121,7 @@ class TestCourseOrchestrator:
 
     @pytest.mark.asyncio
     async def test_empty_batch(self, workspace, store):
-        orch = CourseOrchestrator(
-            store=store,
-            ctx=_ctx(),
-            processors_factory=lambda: [TranslateProcessor(_Engine(), _PassChecker())],
-        )
+        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [TranslateProcessor(_Engine(), _PassChecker())])
         result = await orch.run([])
         assert result.videos == ()
         assert result.elapsed_s == 0.0
@@ -164,23 +129,14 @@ class TestCourseOrchestrator:
     @pytest.mark.asyncio
     async def test_max_concurrent_validated(self, workspace, store):
         with pytest.raises(ValueError):
-            CourseOrchestrator(
-                store=store,
-                ctx=_ctx(),
-                processors_factory=lambda: [],
-                max_concurrent_videos=0,
-            )
+            CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [], max_concurrent_videos=0)
 
     @pytest.mark.asyncio
     async def test_empty_factory_caught(self, workspace, store, tmp_path):
         srt = tmp_path / "a.srt"
         _write_srt(srt, ["Hi."])
 
-        orch = CourseOrchestrator(
-            store=store,
-            ctx=_ctx(),
-            processors_factory=lambda: [],
-        )
+        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [])
         result = await orch.run([VideoSpec(video="a", source=SrtSource(srt, language="en"))])
         assert len(result.failed_videos) == 1
 
@@ -216,12 +172,7 @@ class TestCourseOrchestrator:
             _write_srt(p, [f"S{i}."])
             srts.append(p)
 
-        orch = CourseOrchestrator(
-            store=store,
-            ctx=_ctx(),
-            processors_factory=lambda: [TranslateProcessor(shared_engine, _PassChecker(), flush_every=1)],
-            max_concurrent_videos=2,
-        )
+        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [TranslateProcessor(shared_engine, _PassChecker(), flush_every=1)], max_concurrent_videos=2)
 
         async def release_soon():
             await asyncio.sleep(0.05)

@@ -2,25 +2,7 @@
 
 import pytest
 
-from application.checker import (
-    Severity,
-    Issue,
-    CheckReport,
-    ProfileOverrides,
-    PROFILES,
-    RatioThresholds,
-    Rule,
-    LengthRatioRule,
-    FormatRule,
-    QuestionMarkRule,
-    KeywordRule,
-    TrailingAnnotationRule,
-    build_default_rules,
-    Checker,
-    default_checker,
-    get_profile,
-    registered_langs,
-)
+from application.checker import Severity, Issue, CheckReport, ProfileOverrides, PROFILES, RatioThresholds, Rule, LengthRatioRule, FormatRule, QuestionMarkRule, KeywordRule, TrailingAnnotationRule, build_default_rules, Checker, default_checker, get_profile, registered_langs
 
 
 # ===================================================================
@@ -65,13 +47,7 @@ class TestCheckReport:
         assert not r.passed
 
     def test_errors_property(self):
-        r = CheckReport(
-            issues=(
-                Issue("a", Severity.ERROR, "e"),
-                Issue("b", Severity.WARNING, "w"),
-                Issue("c", Severity.ERROR, "e2"),
-            )
-        )
+        r = CheckReport(issues=(Issue("a", Severity.ERROR, "e"), Issue("b", Severity.WARNING, "w"), Issue("c", Severity.ERROR, "e2")))
         assert len(r.errors) == 2
         assert len(r.warnings) == 1
 
@@ -210,13 +186,7 @@ class TestLengthRatioRule:
 
 class TestFormatRule:
     def _rule(self, **kw) -> FormatRule:
-        defaults = {
-            "hallucination_starts": [
-                (r"^明白了", r"吗"),
-                (r"^知道了", r"吗"),
-                (r"^没关系", None),
-            ]
-        }
+        defaults = {"hallucination_starts": [(r"^明白了", r"吗"), (r"^知道了", r"吗"), (r"^没关系", None)]}
         defaults.update(kw)
         return FormatRule(**defaults)
 
@@ -305,19 +275,11 @@ class TestKeywordRule:
         assert "TRANSLATE" in issues[0].message
 
     def test_keyword_pair_passes_when_consistent(self):
-        rule = self._rule(
-            keyword_pairs=[
-                (["translate", "translation"], ["翻译"]),
-            ]
-        )
+        rule = self._rule(keyword_pairs=[(["translate", "translation"], ["翻译"])])
         assert rule.check("Please translate this", "请翻译这个") == []
 
     def test_keyword_pair_fails_when_inconsistent(self):
-        rule = self._rule(
-            keyword_pairs=[
-                (["translate", "translation"], ["翻译"]),
-            ]
-        )
+        rule = self._rule(keyword_pairs=[(["translate", "translation"], ["翻译"])])
         issues = rule.check("Hello world", "翻译结果：你好世界")
         assert len(issues) == 1
         assert issues[0].rule == "keyword_inconsistency"
@@ -327,12 +289,7 @@ class TestKeywordRule:
         assert rule.check("Hello world", "你好世界") == []
 
     def test_multiple_pairs(self):
-        rule = self._rule(
-            keyword_pairs=[
-                (["english"], ["英语", "英文"]),
-                (["subtitle"], ["字幕"]),
-            ]
-        )
+        rule = self._rule(keyword_pairs=[(["english"], ["英语", "英文"]), (["subtitle"], ["字幕"])])
         issues_a = rule.check("Hello", "英文翻译")
         assert len(issues_a) == 1
         assert issues_a[0].rule == "keyword_inconsistency"
@@ -435,10 +392,7 @@ class TestBuildDefaultRules:
         assert rules[4].name == "trailing_annotation"
 
     def test_custom_params(self):
-        rules = build_default_rules(
-            ratio_severity=Severity.WARNING,
-            forbidden_terms=["test"],
-        )
+        rules = build_default_rules(ratio_severity=Severity.WARNING, forbidden_terms=["test"])
         assert rules[0].severity is Severity.WARNING
         assert isinstance(rules[3], KeywordRule)
         assert rules[3].forbidden_terms == ["test"]
@@ -455,12 +409,7 @@ class TestBuildDefaultRules:
 
 class TestChecker:
     def _make(self, **kw) -> Checker:
-        return Checker(
-            rules=build_default_rules(
-                expected_question_marks=["?", "？"],
-                **kw,
-            ),
-        )
+        return Checker(rules=build_default_rules(expected_question_marks=["?", "？"], **kw))
 
     def test_all_pass(self):
         checker = self._make()
@@ -522,17 +471,9 @@ class TestChecker:
         assert checker.check("any", "thing").passed
 
     def test_profile_switching(self):
-        base_rules = build_default_rules(
-            ratio_thresholds=RatioThresholds(short=2.0),
-        )
-        lenient_rules = build_default_rules(
-            ratio_severity=Severity.WARNING,
-            ratio_thresholds=RatioThresholds(short=8.0),
-        )
-        checker = Checker(
-            rules=base_rules,
-            profile_rules={"lenient": lenient_rules},
-        )
+        base_rules = build_default_rules(ratio_thresholds=RatioThresholds(short=2.0))
+        lenient_rules = build_default_rules(ratio_severity=Severity.WARNING, ratio_thresholds=RatioThresholds(short=8.0))
+        checker = Checker(rules=base_rules, profile_rules={"lenient": lenient_rules})
 
         # Strict (default) — ratio 4.0 > 2.0 → ERROR
         r1 = checker.check("Hi", "你好你好你好你好")
@@ -543,11 +484,7 @@ class TestChecker:
         assert r2.passed
 
     def test_lang_properties(self):
-        checker = Checker(
-            rules=[],
-            source_lang="en",
-            target_lang="zh",
-        )
+        checker = Checker(rules=[], source_lang="en", target_lang="zh")
         assert checker.source_lang == "en"
         assert checker.target_lang == "zh"
 
@@ -648,18 +585,7 @@ class TestCheckerData:
         assert len(translate_pair) == 1
         assert "翻译" in translate_pair[0][1]
 
-    @pytest.mark.parametrize(
-        "src,tgt",
-        [
-            ("en", "ja"),
-            ("en", "ko"),
-            ("en", "ru"),
-            ("en", "es"),
-            ("zh", "en"),
-            ("ja", "en"),
-            ("ko", "en"),
-        ],
-    )
+    @pytest.mark.parametrize("src,tgt", [("en", "ja"), ("en", "ko"), ("en", "ru"), ("en", "es"), ("zh", "en"), ("ja", "en"), ("ko", "en")])
     def test_concept_overlap_exists(self, src, tgt):
         src_p = get_profile(src)
         tgt_p = get_profile(tgt)
@@ -673,25 +599,7 @@ class TestCheckerData:
 
 
 class TestDefaultChecker:
-    @pytest.mark.parametrize(
-        "src,tgt",
-        [
-            ("en", "zh"),
-            ("en", "ja"),
-            ("en", "ko"),
-            ("en", "ru"),
-            ("en", "es"),
-            ("en", "fr"),
-            ("en", "de"),
-            ("en", "pt"),
-            ("en", "vi"),
-            ("zh", "en"),
-            ("ja", "en"),
-            ("ko", "en"),
-            ("zh", "ja"),
-            ("ru", "es"),
-        ],
-    )
+    @pytest.mark.parametrize("src,tgt", [("en", "zh"), ("en", "ja"), ("en", "ko"), ("en", "ru"), ("en", "es"), ("en", "fr"), ("en", "de"), ("en", "pt"), ("en", "vi"), ("zh", "en"), ("ja", "en"), ("ko", "en"), ("zh", "ja"), ("ru", "es")])
     def test_returns_checker_with_rules(self, src, tgt):
         checker = default_checker(src, tgt)
         assert isinstance(checker, Checker)
@@ -793,10 +701,7 @@ class TestDefaultChecker:
     # --- Hallucination patterns ---
     def test_hallucination_start_en(self):
         checker = default_checker("zh", "en")
-        report = checker.check(
-            "我们现在开始讨论这个重要的话题吧朋友们",
-            "Sure, let's start discussing this important topic",
-        )
+        report = checker.check("我们现在开始讨论这个重要的话题吧朋友们", "Sure, let's start discussing this important topic")
         assert not report.passed
         assert any(i.rule == "format_hallucination" for i in report.errors)
 

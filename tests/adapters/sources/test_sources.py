@@ -72,16 +72,7 @@ class TestSrtSource:
 
 
 def _whisperx_json(tmp_path: Path) -> Path:
-    data = {
-        "word_segments": [
-            {"word": "Hello", "start": 0.0, "end": 0.5},
-            {"word": " world.", "start": 0.5, "end": 1.0},
-            {"word": " This", "start": 1.2, "end": 1.4},
-            {"word": " is", "start": 1.4, "end": 1.5},
-            {"word": " a", "start": 1.5, "end": 1.6},
-            {"word": " test.", "start": 1.6, "end": 2.0},
-        ]
-    }
+    data = {"word_segments": [{"word": "Hello", "start": 0.0, "end": 0.5}, {"word": " world.", "start": 0.5, "end": 1.0}, {"word": " This", "start": 1.2, "end": 1.4}, {"word": " is", "start": 1.4, "end": 1.5}, {"word": " a", "start": 1.5, "end": 1.6}, {"word": " test.", "start": 1.6, "end": 2.0}]}
     p = tmp_path / "sample.json"
     p.write_text(json.dumps(data), encoding="utf-8")
     return p

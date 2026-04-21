@@ -29,16 +29,7 @@ class TestLineEndings:
 
 
 class TestInvisibleChars:
-    @pytest.mark.parametrize(
-        "char,name",
-        [
-            ("\u200b", "ZERO WIDTH SPACE"),
-            ("\u200c", "ZERO WIDTH NON-JOINER"),
-            ("\u200d", "ZERO WIDTH JOINER"),
-            ("\u2060", "WORD JOINER"),
-            ("\u007f", "DEL"),
-        ],
-    )
+    @pytest.mark.parametrize("char,name", [("\u200b", "ZERO WIDTH SPACE"), ("\u200c", "ZERO WIDTH NON-JOINER"), ("\u200d", "ZERO WIDTH JOINER"), ("\u2060", "WORD JOINER"), ("\u007f", "DEL")])
     def test_invisible_stripped(self, char, name):
         raw = f"1\n00:00:00,000 --> 00:00:01,000\nHel{char}lo"
         result = sanitize_srt(raw)
@@ -134,15 +125,7 @@ class TestTimestampsPreserved:
         assert "00:00:01,234 --> 00:00:05,678" in clean
 
     def test_parse_after_sanitize(self):
-        raw = (
-            "\ufeff1\r\n"
-            "00:00:00,000 --> 00:00:02,000\r\n"
-            "<b>Hello\u2026</b> \u201cworld\u201d\r\n"
-            "\r\n"
-            "2\r\n"
-            "00:00:02,000 --> 00:00:04,000\r\n"
-            "Good\u00a0morning\r\n"
-        )
+        raw = "\ufeff1\r\n00:00:00,000 --> 00:00:02,000\r\n<b>Hello\u2026</b> \u201cworld\u201d\r\n\r\n2\r\n00:00:02,000 --> 00:00:04,000\r\nGood\u00a0morning\r\n"
         segments = parse_srt(sanitize_srt(raw))
         assert len(segments) == 2
         assert segments[0].text == 'Hello... "world"'

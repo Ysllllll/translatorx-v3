@@ -33,23 +33,7 @@ def _asr_news_segments() -> list[Segment]:
             "近年来，人工智能技术蓬勃发展。",
             0.0,
             5.0,
-            words=[
-                W("近", 0.0, 0.3),
-                W("年", 0.3, 0.6),
-                W("来", 0.6, 0.9),
-                W("，", 0.9, 1.0),
-                W("人", 1.0, 1.3),
-                W("工", 1.3, 1.6),
-                W("智", 1.6, 1.9),
-                W("能", 1.9, 2.2),
-                W("技", 2.2, 2.5),
-                W("术", 2.5, 2.8),
-                W("蓬", 2.8, 3.1),
-                W("勃", 3.1, 3.4),
-                W("发", 3.4, 3.8),
-                W("展", 3.8, 4.5),
-                W("。", 4.5, 5.0),
-            ],
+            words=[W("近", 0.0, 0.3), W("年", 0.3, 0.6), W("来", 0.6, 0.9), W("，", 0.9, 1.0), W("人", 1.0, 1.3), W("工", 1.3, 1.6), W("智", 1.6, 1.9), W("能", 1.9, 2.2), W("技", 2.2, 2.5), W("术", 2.5, 2.8), W("蓬", 2.8, 3.1), W("勃", 3.1, 3.4), W("发", 3.4, 3.8), W("展", 3.8, 4.5), W("。", 4.5, 5.0)],
         ),
         S(
             "专家认为，这一趋势将持续加速；然而，",
@@ -113,69 +97,14 @@ def _asr_news_segments() -> list[Segment]:
 
 def _short_segments() -> list[Segment]:
     """Two simple Chinese segments."""
-    return [
-        S(
-            "你好世界。",
-            0.0,
-            2.0,
-            words=[
-                W("你", 0.0, 0.4),
-                W("好", 0.4, 0.8),
-                W("世", 0.8, 1.3),
-                W("界", 1.3, 1.8),
-                W("。", 1.8, 2.0),
-            ],
-        ),
-        S(
-            "今天天气不错！",
-            2.0,
-            5.0,
-            words=[
-                W("今", 2.0, 2.4),
-                W("天", 2.4, 2.8),
-                W("天", 2.8, 3.1),
-                W("气", 3.1, 3.5),
-                W("不", 3.5, 4.0),
-                W("错", 4.0, 4.5),
-                W("！", 4.5, 5.0),
-            ],
-        ),
-    ]
+    return [S("你好世界。", 0.0, 2.0, words=[W("你", 0.0, 0.4), W("好", 0.4, 0.8), W("世", 0.8, 1.3), W("界", 1.3, 1.8), W("。", 1.8, 2.0)]), S("今天天气不错！", 2.0, 5.0, words=[W("今", 2.0, 2.4), W("天", 2.4, 2.8), W("天", 2.8, 3.1), W("气", 3.1, 3.5), W("不", 3.5, 4.0), W("错", 4.0, 4.5), W("！", 4.5, 5.0)])]
 
 
 def _mixed_language_segments() -> list[Segment]:
     """Chinese segment mixed with English words."""
     return [
-        S(
-            "我正在学习Python编程。",
-            0.0,
-            3.0,
-            words=[
-                W("我", 0.0, 0.3),
-                W("正", 0.3, 0.6),
-                W("在", 0.6, 0.9),
-                W("学", 0.9, 1.2),
-                W("习", 1.2, 1.5),
-                W("Python", 1.5, 2.2),
-                W("编", 2.2, 2.5),
-                W("程", 2.5, 2.8),
-                W("。", 2.8, 3.0),
-            ],
-        ),
-        S(
-            "This是混合测试！",
-            3.0,
-            5.0,
-            words=[
-                W("This", 3.0, 3.5),
-                W("是", 3.5, 3.8),
-                W("混", 3.8, 4.1),
-                W("合", 4.1, 4.4),
-                W("测", 4.4, 4.7),
-                W("试", 4.7, 4.9),
-                W("！", 4.9, 5.0),
-            ],
-        ),
+        S("我正在学习Python编程。", 0.0, 3.0, words=[W("我", 0.0, 0.3), W("正", 0.3, 0.6), W("在", 0.6, 0.9), W("学", 0.9, 1.2), W("习", 1.2, 1.5), W("Python", 1.5, 2.2), W("编", 2.2, 2.5), W("程", 2.5, 2.8), W("。", 2.8, 3.0)]),
+        S("This是混合测试！", 3.0, 5.0, words=[W("This", 3.0, 3.5), W("是", 3.5, 3.8), W("混", 3.8, 4.1), W("合", 4.1, 4.4), W("测", 4.4, 4.7), W("试", 4.7, 4.9), W("！", 4.9, 5.0)]),
     ]
 
 
@@ -242,60 +171,21 @@ def _clause_rich_segment() -> list[Segment]:
                 W("餐", 6.6, 7.5),
                 W("。", 7.5, 10.0),
             ],
-        ),
+        )
     ]
 
 
 def _abnormal_punctuation_segments() -> list[Segment]:
     """Segments with multiple punctuations, missing punctuation, or spaces."""
     return [
-        S(
-            "等等！！！你确定吗？？？",
-            0.0,
-            3.0,
-            words=[
-                W("等", 0.0, 0.3),
-                W("等", 0.3, 0.6),
-                W("！", 0.6, 0.8),
-                W("！", 0.8, 1.0),
-                W("！", 1.0, 1.2),
-                W("你", 1.2, 1.5),
-                W("确", 1.5, 1.8),
-                W("定", 1.8, 2.1),
-                W("吗", 2.1, 2.4),
-                W("？", 2.4, 2.6),
-                W("？", 2.6, 2.8),
-                W("？", 2.8, 3.0),
-            ],
-        ),
-        S(
-            "这  是  空 格 测试",
-            3.0,
-            6.0,
-            words=[
-                W("这", 3.0, 3.3),
-                W(" ", 3.3, 3.4),
-                W(" ", 3.4, 3.5),
-                W("是", 3.5, 3.8),
-                W(" ", 3.8, 3.9),
-                W(" ", 3.9, 4.0),
-                W("空", 4.0, 4.3),
-                W(" ", 4.3, 4.5),
-                W("格", 4.5, 4.8),
-                W(" ", 4.8, 5.0),
-                W("测", 5.0, 5.5),
-                W("试", 5.5, 6.0),
-            ],
-        ),
+        S("等等！！！你确定吗？？？", 0.0, 3.0, words=[W("等", 0.0, 0.3), W("等", 0.3, 0.6), W("！", 0.6, 0.8), W("！", 0.8, 1.0), W("！", 1.0, 1.2), W("你", 1.2, 1.5), W("确", 1.5, 1.8), W("定", 1.8, 2.1), W("吗", 2.1, 2.4), W("？", 2.4, 2.6), W("？", 2.6, 2.8), W("？", 2.8, 3.0)]),
+        S("这  是  空 格 测试", 3.0, 6.0, words=[W("这", 3.0, 3.3), W(" ", 3.3, 3.4), W(" ", 3.4, 3.5), W("是", 3.5, 3.8), W(" ", 3.8, 3.9), W(" ", 3.9, 4.0), W("空", 4.0, 4.3), W(" ", 4.3, 4.5), W("格", 4.5, 4.8), W(" ", 4.8, 5.0), W("测", 5.0, 5.5), W("试", 5.5, 6.0)]),
     ]
 
 
 def _extreme_short_segment() -> list[Segment]:
     """Extremely short segments, e.g., single character or just punctuation."""
-    return [
-        S("啊", 0.0, 0.5, words=[W("啊", 0.0, 0.5)]),
-        S("？", 0.5, 1.0, words=[W("？", 0.5, 1.0)]),
-    ]
+    return [S("啊", 0.0, 0.5, words=[W("啊", 0.0, 0.5)]), S("？", 0.5, 1.0, words=[W("？", 0.5, 1.0)])]
 
 
 def _multi_speaker_segments() -> list[Segment]:
@@ -365,11 +255,7 @@ class TestChineseJoin:
         assert [s.text for s in result] == ["你好世界。今天天气不错！"]
 
     def test_three_segments_joined(self) -> None:
-        segments = [
-            S("你好", 0.0, 1.0, words=[W("你", 0.0, 0.5), W("好", 0.5, 1.0)]),
-            S("世界", 1.0, 2.0, words=[W("世", 1.0, 1.5), W("界", 1.5, 2.0)]),
-            S("再见", 2.0, 3.0, words=[W("再", 2.0, 2.5), W("见", 2.5, 3.0)]),
-        ]
+        segments = [S("你好", 0.0, 1.0, words=[W("你", 0.0, 0.5), W("好", 0.5, 1.0)]), S("世界", 1.0, 2.0, words=[W("世", 1.0, 1.5), W("界", 1.5, 2.0)]), S("再见", 2.0, 3.0, words=[W("再", 2.0, 2.5), W("见", 2.5, 3.0)])]
         result = Subtitle(segments, _ops).build()
         assert [s.text for s in result] == ["你好世界再见"]
 
@@ -386,11 +272,7 @@ class TestChineseSentences:
 
     def test_sentences_across_boundaries(self) -> None:
         result = Subtitle(_asr_news_segments(), _ops).sentences().build()
-        assert [s.text for s in result] == [
-            "近年来，人工智能技术蓬勃发展。",
-            "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。",
-            "我们需要审慎评估新技术的风险。",
-        ]
+        assert [s.text for s in result] == ["近年来，人工智能技术蓬勃发展。", "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。", "我们需要审慎评估新技术的风险。"]
 
     def test_sentence_timing(self) -> None:
         result = Subtitle(_asr_news_segments(), _ops).sentences().build()
@@ -420,15 +302,7 @@ class TestChineseSentences:
 class TestChineseClauses:
     def test_clause_split(self) -> None:
         result = Subtitle(_clause_rich_segment(), _ops).clauses().build()
-        assert [s.text for s in result] == [
-            "苹果、",
-            "香蕉、",
-            "橘子，",
-            "都是水果；",
-            "牛奶、",
-            "面包，",
-            "都是早餐。",
-        ]
+        assert [s.text for s in result] == ["苹果、", "香蕉、", "橘子，", "都是水果；", "牛奶、", "面包，", "都是早餐。"]
 
     def test_clause_timing(self) -> None:
         result = Subtitle(_clause_rich_segment(), _ops).clauses().build()
@@ -439,15 +313,7 @@ class TestChineseClauses:
 
     def test_sentences_then_clauses(self) -> None:
         result = Subtitle(_asr_news_segments(), _ops).sentences().clauses().build()
-        assert [s.text for s in result] == [
-            "近年来，",
-            "人工智能技术蓬勃发展。",
-            "专家认为，",
-            "这一趋势将持续加速；",
-            "然而，",
-            "也有学者表达了担忧。",
-            "我们需要审慎评估新技术的风险。",
-        ]
+        assert [s.text for s in result] == ["近年来，", "人工智能技术蓬勃发展。", "专家认为，", "这一趋势将持续加速；", "然而，", "也有学者表达了担忧。", "我们需要审慎评估新技术的风险。"]
 
 
 # ---------------------------------------------------------------------------
@@ -458,31 +324,11 @@ class TestChineseClauses:
 class TestChineseByLength:
     def test_sentences_then_split(self) -> None:
         result = Subtitle(_asr_news_segments(), _ops).sentences().split(10).build()
-        assert [s.text for s in result] == [
-            "近年来，人工智能技术",
-            "蓬勃发展。",
-            "专家认为，这一趋势将",
-            "持续加速；然而，也有",
-            "学者表达了担忧。",
-            "我们需要审慎评估新",
-            "技术的风险。",
-        ]
+        assert [s.text for s in result] == ["近年来，人工智能技术", "蓬勃发展。", "专家认为，这一趋势将", "持续加速；然而，也有", "学者表达了担忧。", "我们需要审慎评估新", "技术的风险。"]
 
     def test_sentences_then_clauses_then_split(self) -> None:
         result = Subtitle(_asr_news_segments(), _ops).sentences().clauses().split(8).build()
-        assert [s.text for s in result] == [
-            "近年来，",
-            "人工智能技术",
-            "蓬勃发展。",
-            "专家认为，",
-            "这一趋势将持续",
-            "加速；",
-            "然而，",
-            "也有学者表达了",
-            "担忧。",
-            "我们需要审慎评估",
-            "新技术的风险。",
-        ]
+        assert [s.text for s in result] == ["近年来，", "人工智能技术", "蓬勃发展。", "专家认为，", "这一趋势将持续", "加速；", "然而，", "也有学者表达了", "担忧。", "我们需要审慎评估", "新技术的风险。"]
 
     def test_short_text_no_split(self) -> None:
         result = Subtitle(_short_segments(), _ops).split(50).build()
@@ -490,19 +336,11 @@ class TestChineseByLength:
 
     def test_mixed_language_split(self) -> None:
         result = Subtitle(_mixed_language_segments(), _ops).sentences().split(10).build()
-        assert [s.text for s in result] == [
-            "我正在学习",
-            "Python 编程。",
-            "This 是混合测试！",
-        ]
+        assert [s.text for s in result] == ["我正在学习", "Python 编程。", "This 是混合测试！"]
 
     def test_extreme_length_word_fallback(self) -> None:
         result = Subtitle(_extreme_length_segment(), _ops).sentences().split(15).build()
-        assert [s.text for s in result] == [
-            "这是一个超级长的英文单词",
-            "supercalifragilisticexpialidocious",
-            "测试",
-        ]
+        assert [s.text for s in result] == ["这是一个超级长的英文单词", "supercalifragilisticexpialidocious", "测试"]
 
 
 # ---------------------------------------------------------------------------
@@ -533,11 +371,7 @@ class TestChineseMerge:
         #   "都是水果；" len=5, +"牛奶、面包，"=10, +"都是早餐。"=15>12 → flush
         #   "都是水果；牛奶、面包，" len=10, → try +"都是早餐。"=15>12 → flush
         result = Subtitle(_clause_rich_segment(), _ops).sentences().clauses().merge(12).build()
-        assert [s.text for s in result] == [
-            "苹果、香蕉、橘子，",
-            "都是水果；牛奶、面包，",
-            "都是早餐。",
-        ]
+        assert [s.text for s in result] == ["苹果、香蕉、橘子，", "都是水果；牛奶、面包，", "都是早餐。"]
 
     def test_merge_all_fit(self) -> None:
         """After sentences(), merge(100) merges within each sentence only."""
@@ -593,16 +427,8 @@ class TestChineseRecords:
 
     def test_records_with_split(self) -> None:
         records = Subtitle(_asr_news_segments(), _ops).sentences().clauses().split(8).records()
-        assert [rec.src_text for rec in records] == [
-            "近年来，人工智能技术蓬勃发展。",
-            "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。",
-            "我们需要审慎评估新技术的风险。",
-        ]
-        assert [[seg.text for seg in rec.segments] for rec in records] == [
-            ["近年来，", "人工智能技术", "蓬勃发展。"],
-            ["专家认为，", "这一趋势将持续", "加速；", "然而，", "也有学者表达了", "担忧。"],
-            ["我们需要审慎评估", "新技术的风险。"],
-        ]
+        assert [rec.src_text for rec in records] == ["近年来，人工智能技术蓬勃发展。", "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。", "我们需要审慎评估新技术的风险。"]
+        assert [[seg.text for seg in rec.segments] for rec in records] == [["近年来，", "人工智能技术", "蓬勃发展。"], ["专家认为，", "这一趋势将持续", "加速；", "然而，", "也有学者表达了", "担忧。"], ["我们需要审慎评估", "新技术的风险。"]]
         assert all(len(seg.words) >= 1 for rec in records for seg in rec.segments)
 
 
@@ -650,10 +476,7 @@ class TestChineseSpeaker:
 
 class TestChineseAutoFill:
     def test_no_words_auto_filled(self) -> None:
-        segments = [
-            S("你好世界。", 0.0, 2.0),
-            S("今天天气好。", 2.0, 5.0),
-        ]
+        segments = [S("你好世界。", 0.0, 2.0), S("今天天气好。", 2.0, 5.0)]
         result = Subtitle(segments, _ops).sentences().build()
         assert [s.text for s in result] == ["你好世界。", "今天天气好。"]
         # jieba splits each Chinese sentence into two tokens.
@@ -673,11 +496,7 @@ class TestChineseStream:
         for seg in _asr_news_segments():
             all_done.extend(stream.feed(seg))
         all_done.extend(stream.flush())
-        assert [s.text for s in all_done] == [
-            "近年来，人工智能技术蓬勃发展。",
-            "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。",
-            "我们需要审慎评估新技术的风险。",
-        ]
+        assert [s.text for s in all_done] == ["近年来，人工智能技术蓬勃发展。", "专家认为，这一趋势将持续加速；然而，也有学者表达了担忧。", "我们需要审慎评估新技术的风险。"]
 
     def test_stream_flush_empty(self) -> None:
         stream = Subtitle.stream(_ops)
@@ -686,20 +505,7 @@ class TestChineseStream:
 
     def test_stream_single_segment(self) -> None:
         stream = Subtitle.stream(_ops)
-        done = stream.feed(
-            S(
-                "你好世界。",
-                0.0,
-                2.0,
-                words=[
-                    W("你", 0.0, 0.4),
-                    W("好", 0.4, 0.8),
-                    W("世", 0.8, 1.3),
-                    W("界", 1.3, 1.8),
-                    W("。", 1.8, 2.0),
-                ],
-            )
-        )
+        done = stream.feed(S("你好世界。", 0.0, 2.0, words=[W("你", 0.0, 0.4), W("好", 0.4, 0.8), W("世", 0.8, 1.3), W("界", 1.3, 1.8), W("。", 1.8, 2.0)]))
         assert done == []
 
         rest = stream.flush()

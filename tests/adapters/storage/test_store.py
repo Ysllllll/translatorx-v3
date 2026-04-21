@@ -8,15 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from adapters.storage.store import (
-    IncompatibleStoreError,
-    JsonFileStore,
-    SCHEMA_VERSION,
-    Store,
-    empty_course_data,
-    empty_video_data,
-    set_nested,
-)
+from adapters.storage.store import IncompatibleStoreError, JsonFileStore, SCHEMA_VERSION, Store, empty_course_data, empty_video_data, set_nested
 from adapters.storage.workspace import Workspace
 
 
@@ -158,10 +150,7 @@ class TestLoadSave:
 class TestPatchVideo:
     @pytest.mark.asyncio
     async def test_patch_creates_file_if_missing(self, store: JsonFileStore) -> None:
-        await store.patch_video(
-            "v",
-            records={0: {"src": "hello", "translations.zh": "你好"}},
-        )
+        await store.patch_video("v", records={0: {"src": "hello", "translations.zh": "你好"}})
         data = await store.load_video("v")
         assert data["records"] == [{"id": 0, "src": "hello", "translations": {"zh": "你好"}}]
 
@@ -170,10 +159,7 @@ class TestPatchVideo:
         await store.patch_video("v", records={0: {"src": "hello", "translations.en": "hello"}})
         await store.patch_video("v", records={0: {"translations.zh": "你好"}})
         data = await store.load_video("v")
-        assert data["records"][0]["translations"] == {
-            "en": "hello",
-            "zh": "你好",
-        }
+        assert data["records"][0]["translations"] == {"en": "hello", "zh": "你好"}
         assert data["records"][0]["src"] == "hello"
 
     @pytest.mark.asyncio
@@ -201,10 +187,7 @@ class TestPatchVideo:
 
     @pytest.mark.asyncio
     async def test_patch_records_sorted_by_id(self, store: JsonFileStore) -> None:
-        await store.patch_video(
-            "v",
-            records={2: {"src": "c"}, 0: {"src": "a"}, 1: {"src": "b"}},
-        )
+        await store.patch_video("v", records={2: {"src": "c"}, 0: {"src": "a"}, 1: {"src": "b"}})
         data = await store.load_video("v")
         assert [r["id"] for r in data["records"]] == [0, 1, 2]
 
@@ -217,19 +200,7 @@ class TestPatchVideo:
     async def test_patch_preserves_unknown_fields(self, store: JsonFileStore, tmp_path: Path) -> None:
         path = tmp_path / "c" / "zzz_translation" / "v.json"
         path.parent.mkdir(parents=True)
-        path.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "meta": {"future_key": "keep"},
-                    "records": [{"id": 0, "custom_namespace": {"x": 1}}],
-                    "failed": [],
-                    "terms": {},
-                    "source_subtitle": [],
-                }
-            ),
-            encoding="utf-8",
-        )
+        path.write_text(json.dumps({"schema_version": 1, "meta": {"future_key": "keep"}, "records": [{"id": 0, "custom_namespace": {"x": 1}}], "failed": [], "terms": {}, "source_subtitle": []}), encoding="utf-8")
         await store.patch_video("v", records={0: {"translations.zh": "你好"}})
         data = await store.load_video("v")
         assert data["meta"]["future_key"] == "keep"
@@ -277,10 +248,7 @@ class TestSchema:
     async def test_missing_schema_version_backfilled(self, store: JsonFileStore, tmp_path: Path) -> None:
         path = tmp_path / "c" / "zzz_translation" / "v.json"
         path.parent.mkdir(parents=True)
-        path.write_text(
-            json.dumps({"records": [{"id": 0, "src": "x"}]}),
-            encoding="utf-8",
-        )
+        path.write_text(json.dumps({"records": [{"id": 0, "src": "x"}]}), encoding="utf-8")
         data = await store.load_video("v")
         assert data["schema_version"] == SCHEMA_VERSION
         assert data["records"][0]["src"] == "x"
@@ -290,10 +258,7 @@ class TestSchema:
     async def test_future_version_raises(self, store: JsonFileStore, tmp_path: Path) -> None:
         path = tmp_path / "c" / "zzz_translation" / "v.json"
         path.parent.mkdir(parents=True)
-        path.write_text(
-            json.dumps({"schema_version": SCHEMA_VERSION + 1}),
-            encoding="utf-8",
-        )
+        path.write_text(json.dumps({"schema_version": SCHEMA_VERSION + 1}), encoding="utf-8")
         with pytest.raises(IncompatibleStoreError):
             await store.load_video("v")
         with pytest.raises(IncompatibleStoreError):
@@ -308,24 +273,7 @@ class TestSchema:
 class TestInvalidate:
     async def _seed(self, store: JsonFileStore) -> None:
         await store.patch_video(
-            "v",
-            records={
-                0: {
-                    "src": "a",
-                    "translations.zh": "甲",
-                    "_fingerprints.translate": "f0",
-                    "errors.translate": {"code": "x"},
-                },
-                1: {
-                    "src": "b",
-                    "translations.zh": "乙",
-                    "_fingerprints.translate": "f1",
-                },
-            },
-            failed=[
-                {"id": 0, "processor": "translate", "code": "x"},
-                {"id": 1, "processor": "tts", "code": "y"},
-            ],
+            "v", records={0: {"src": "a", "translations.zh": "甲", "_fingerprints.translate": "f0", "errors.translate": {"code": "x"}}, 1: {"src": "b", "translations.zh": "乙", "_fingerprints.translate": "f1"}}, failed=[{"id": 0, "processor": "translate", "code": "x"}, {"id": 1, "processor": "tts", "code": "y"}]
         )
 
     @pytest.mark.asyncio

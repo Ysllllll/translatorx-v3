@@ -6,12 +6,7 @@ import json
 
 import pytest
 
-from application.translate import (
-    CompletionResult,
-    IncrementalSummaryAgent,
-    IncrementalSummaryState,
-    SummarySnapshot,
-)
+from application.translate import CompletionResult, IncrementalSummaryAgent, IncrementalSummaryState, SummarySnapshot
 
 
 class FakeEngine:
@@ -44,16 +39,7 @@ async def test_window_not_triggered_buffers_only():
 
 @pytest.mark.asyncio
 async def test_window_triggers_merge_and_records_snapshot():
-    engine = FakeEngine(
-        [
-            {
-                "topic": "deep learning",
-                "title": "Intro",
-                "description": "An introductory lecture.",
-                "terms": {"gradient": "梯度"},
-            }
-        ]
-    )
+    engine = FakeEngine([{"topic": "deep learning", "title": "Intro", "description": "An introductory lecture.", "terms": {"gradient": "梯度"}}])
     agent = IncrementalSummaryAgent(engine, "en", "zh", window_words=5)
     state = IncrementalSummaryState()
     state = await agent.feed(state, "one two three four five six")
@@ -68,12 +54,7 @@ async def test_window_triggers_merge_and_records_snapshot():
 
 @pytest.mark.asyncio
 async def test_subsequent_merge_increments_version_and_unions_terms():
-    engine = FakeEngine(
-        [
-            {"topic": "ml", "title": "t1", "description": "d1", "terms": {"a": "A"}},
-            {"topic": "ml", "title": "t2", "description": "d2", "terms": {"b": "B"}},
-        ]
-    )
+    engine = FakeEngine([{"topic": "ml", "title": "t1", "description": "d1", "terms": {"a": "A"}}, {"topic": "ml", "title": "t2", "description": "d2", "terms": {"b": "B"}}])
     agent = IncrementalSummaryAgent(engine, "en", "zh", window_words=3)
     state = IncrementalSummaryState()
     state = await agent.feed(state, "one two three four")
@@ -106,15 +87,7 @@ async def test_feed_is_noop_after_completed():
 
 
 def test_state_to_dict_and_back_roundtrips():
-    snap = SummarySnapshot(
-        version=2,
-        topic="t",
-        title="title",
-        description="d",
-        terms={"a": "b"},
-        word_count=42,
-        timestamp=1.5,
-    )
+    snap = SummarySnapshot(version=2, topic="t", title="title", description="d", terms={"a": "b"}, word_count=42, timestamp=1.5)
     state = IncrementalSummaryState(current=snap, updates=[snap], pending_text="pt", pending_words=3)
     roundtripped = IncrementalSummaryState.from_dict(state.to_dict())
     assert roundtripped.current == snap

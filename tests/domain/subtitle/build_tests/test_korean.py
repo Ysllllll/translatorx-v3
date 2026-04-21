@@ -31,71 +31,15 @@ def _news_segments() -> list[Segment]:
     그러나 우려의 목소리도 있습니다."
     """
     return [
-        S(
-            "최근 인공지능 기술이 빠르게 발전하고 있습니다.",
-            0.0,
-            5.0,
-            words=[
-                W("최근", 0.0, 0.5),
-                W("인공지능", 0.5, 1.2),
-                W("기술이", 1.2, 1.8),
-                W("빠르게", 1.8, 2.4),
-                W("발전하고", 2.4, 3.2),
-                W("있습니다", 3.2, 4.5),
-                W(".", 4.5, 5.0),
-            ],
-        ),
-        S(
-            "전문가들은 이 추세가 계속될 것이라고 전망합니다. 그러나",
-            5.0,
-            10.0,
-            words=[
-                W("전문가들은", 5.0, 5.8),
-                W("이", 5.8, 6.0),
-                W("추세가", 6.0, 6.6),
-                W("계속될", 6.6, 7.2),
-                W("것이라고", 7.2, 7.8),
-                W("전망합니다", 7.8, 8.8),
-                W(".", 8.8, 9.0),
-                W("그러나", 9.0, 10.0),
-            ],
-        ),
-        S(
-            "우려의 목소리도 있습니다.",
-            10.0,
-            13.0,
-            words=[
-                W("우려의", 10.0, 10.6),
-                W("목소리도", 10.6, 11.4),
-                W("있습니다", 11.4, 12.5),
-                W(".", 12.5, 13.0),
-            ],
-        ),
+        S("최근 인공지능 기술이 빠르게 발전하고 있습니다.", 0.0, 5.0, words=[W("최근", 0.0, 0.5), W("인공지능", 0.5, 1.2), W("기술이", 1.2, 1.8), W("빠르게", 1.8, 2.4), W("발전하고", 2.4, 3.2), W("있습니다", 3.2, 4.5), W(".", 4.5, 5.0)]),
+        S("전문가들은 이 추세가 계속될 것이라고 전망합니다. 그러나", 5.0, 10.0, words=[W("전문가들은", 5.0, 5.8), W("이", 5.8, 6.0), W("추세가", 6.0, 6.6), W("계속될", 6.6, 7.2), W("것이라고", 7.2, 7.8), W("전망합니다", 7.8, 8.8), W(".", 8.8, 9.0), W("그러나", 9.0, 10.0)]),
+        S("우려의 목소리도 있습니다.", 10.0, 13.0, words=[W("우려의", 10.0, 10.6), W("목소리도", 10.6, 11.4), W("있습니다", 11.4, 12.5), W(".", 12.5, 13.0)]),
     ]
 
 
 def _short_segments() -> list[Segment]:
     """Two simple Korean segments."""
-    return [
-        S(
-            "안녕하세요.",
-            0.0,
-            2.0,
-            words=[
-                W("안녕하세요", 0.0, 1.8),
-                W(".", 1.8, 2.0),
-            ],
-        ),
-        S(
-            "반갑습니다!",
-            2.0,
-            4.0,
-            words=[
-                W("반갑습니다", 2.0, 3.8),
-                W("!", 3.8, 4.0),
-            ],
-        ),
-    ]
+    return [S("안녕하세요.", 0.0, 2.0, words=[W("안녕하세요", 0.0, 1.8), W(".", 1.8, 2.0)]), S("반갑습니다!", 2.0, 4.0, words=[W("반갑습니다", 2.0, 3.8), W("!", 3.8, 4.0)])]
 
 
 def _clause_segments() -> list[Segment]:
@@ -108,21 +52,8 @@ def _clause_segments() -> list[Segment]:
             "사과, 바나나, 오렌지는 과일이고; 우유, 빵은 아침식사입니다.",
             0.0,
             8.0,
-            words=[
-                W("사과", 0.0, 0.5),
-                W(",", 0.5, 0.6),
-                W("바나나", 0.6, 1.2),
-                W(",", 1.2, 1.3),
-                W("오렌지는", 1.3, 2.0),
-                W("과일이고", 2.0, 3.0),
-                W(";", 3.0, 3.2),
-                W("우유", 3.2, 3.8),
-                W(",", 3.8, 3.9),
-                W("빵은", 3.9, 4.5),
-                W("아침식사입니다", 4.5, 7.5),
-                W(".", 7.5, 8.0),
-            ],
-        ),
+            words=[W("사과", 0.0, 0.5), W(",", 0.5, 0.6), W("바나나", 0.6, 1.2), W(",", 1.2, 1.3), W("오렌지는", 1.3, 2.0), W("과일이고", 2.0, 3.0), W(";", 3.0, 3.2), W("우유", 3.2, 3.8), W(",", 3.8, 3.9), W("빵은", 3.9, 4.5), W("아침식사입니다", 4.5, 7.5), W(".", 7.5, 8.0)],
+        )
     ]
 
 
@@ -133,16 +64,8 @@ def _multi_speaker_segments() -> list[Segment]:
             "어떻게 생각하세요? 아주 좋다고 생각합니다!",
             0.0,
             5.0,
-            words=[
-                W("어떻게", 0.0, 0.6, speaker="A"),
-                W("생각하세요", 0.6, 1.5, speaker="A"),
-                W("?", 1.5, 2.0, speaker="A"),
-                W("아주", 2.0, 2.5, speaker="B"),
-                W("좋다고", 2.5, 3.2, speaker="B"),
-                W("생각합니다", 3.2, 4.5, speaker="B"),
-                W("!", 4.5, 5.0, speaker="B"),
-            ],
-        ),
+            words=[W("어떻게", 0.0, 0.6, speaker="A"), W("생각하세요", 0.6, 1.5, speaker="A"), W("?", 1.5, 2.0, speaker="A"), W("아주", 2.0, 2.5, speaker="B"), W("좋다고", 2.5, 3.2, speaker="B"), W("생각합니다", 3.2, 4.5, speaker="B"), W("!", 4.5, 5.0, speaker="B")],
+        )
     ]
 
 
@@ -181,10 +104,7 @@ class TestKoreanSentences:
     def test_words_preserved(self) -> None:
         result = Subtitle(_short_segments(), _ops).sentences().build()
         actual = [(s.text, [w.word for w in s.words]) for s in result]
-        expected = [
-            ("안녕하세요.", ["안녕하세요", "."]),
-            ("반갑습니다!", ["반갑습니다", "!"]),
-        ]
+        expected = [("안녕하세요.", ["안녕하세요", "."]), ("반갑습니다!", ["반갑습니다", "!"])]
         assert actual == expected
 
 
@@ -209,11 +129,7 @@ class TestKoreanClauses:
         result = Subtitle(_news_segments(), _ops).sentences().clauses().build()
         # 3 sentences without internal clause separators → 3 chunks.
         actual = [s.text for s in result]
-        expected = [
-            "최근 인공지능 기술이 빠르게 발전하고 있습니다.",
-            "전문가들은 이 추세가 계속될 것이라고 전망합니다.",
-            "그러나우려의 목소리도 있습니다.",
-        ]
+        expected = ["최근 인공지능 기술이 빠르게 발전하고 있습니다.", "전문가들은 이 추세가 계속될 것이라고 전망합니다.", "그러나우려의 목소리도 있습니다."]
         assert actual == expected
 
 
@@ -258,13 +174,7 @@ class TestKoreanMerge:
         result = Subtitle(_clause_segments(), _ops).clauses().merge(30).build()
         # Single merged segment containing every word in original order.
         actual = [(s.text, [w.word for w in s.words], s.start <= s.end) for s in result]
-        expected = [
-            (
-                "사과, 바나나, 오렌지는 과일이고; 우유, 빵은 아침식사입니다.",
-                ["사과", ",", "바나나", ",", "오렌지는", "과일이고", ";", "우유", ",", "빵은", "아침식사입니다", "."],
-                True,
-            )
-        ]
+        expected = [("사과, 바나나, 오렌지는 과일이고; 우유, 빵은 아침식사입니다.", ["사과", ",", "바나나", ",", "오렌지는", "과일이고", ";", "우유", ",", "빵은", "아침식사입니다", "."], True)]
         assert actual == expected
 
 
@@ -305,19 +215,7 @@ class TestKoreanSpeaker:
         assert actual == expected
 
     def test_same_speaker_no_extra_splits(self) -> None:
-        single = [
-            S(
-                "안녕하세요. 반갑습니다.",
-                0.0,
-                3.0,
-                words=[
-                    W("안녕하세요", 0.0, 1.0, speaker="A"),
-                    W(".", 1.0, 1.2, speaker="A"),
-                    W("반갑습니다", 1.2, 2.8, speaker="A"),
-                    W(".", 2.8, 3.0, speaker="A"),
-                ],
-            )
-        ]
+        single = [S("안녕하세요. 반갑습니다.", 0.0, 3.0, words=[W("안녕하세요", 0.0, 1.0, speaker="A"), W(".", 1.0, 1.2, speaker="A"), W("반갑습니다", 1.2, 2.8, speaker="A"), W(".", 2.8, 3.0, speaker="A")])]
         result = Subtitle(single, _ops, split_by_speaker=True).sentences().build()
         assert len(result) == 2  # two sentences, no extra speaker splits
 
@@ -336,11 +234,7 @@ class TestKoreanStream:
             all_done.extend(stream.feed(seg))
         all_done.extend(stream.flush())
         actual = [s.text for s in all_done]
-        expected = [
-            "최근 인공지능 기술이 빠르게 발전하고 있습니다.",
-            "전문가들은 이 추세가 계속될 것이라고 전망합니다.",
-            "그러나우려의 목소리도 있습니다.",
-        ]
+        expected = ["최근 인공지능 기술이 빠르게 발전하고 있습니다.", "전문가들은 이 추세가 계속될 것이라고 전망합니다.", "그러나우려의 목소리도 있습니다."]
         assert actual == expected
 
     def test_stream_flush_empty(self) -> None:

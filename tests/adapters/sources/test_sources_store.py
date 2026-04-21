@@ -66,13 +66,7 @@ class TestSrtSourceStoreIntegration:
             calls.append(list(batch))
             return [[t + "." for t in batch]] if False else [[t + "."] for t in batch]
 
-        src = SrtSource(
-            srt_path,
-            language="en",
-            store=store,
-            video_key=vk,
-            restore_punc=punc,
-        )
+        src = SrtSource(srt_path, language="en", store=store, video_key=vk, restore_punc=punc)
         await _drain(src.read())
         data = await store.load_video("v1")
         assert data["punc_cache"]  # non-empty
@@ -85,13 +79,7 @@ class TestSrtSourceStoreIntegration:
         def chunker(batch: list[str]) -> list[list[str]]:
             return [t.split() for t in batch]
 
-        src = SrtSource(
-            srt_path,
-            language="en",
-            store=store,
-            video_key=vk,
-            chunk_llm=chunker,
-        )
+        src = SrtSource(srt_path, language="en", store=store, video_key=vk, chunk_llm=chunker)
         records = await _drain(src.read())
         assert records
         # chunk_cache is persisted at video level, not per record

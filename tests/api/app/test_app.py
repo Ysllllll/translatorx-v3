@@ -133,9 +133,7 @@ class TestCourseBuilder:
         _write_srt(a, ["Alpha."])
         _write_srt(b, ["Bravo."])
 
-        result = await (
-            app.course(course="c1").add_video("a", a, language="en").add_video("b", b, language="en").translate(src="en", tgt="zh").run()
-        )
+        result = await app.course(course="c1").add_video("a", a, language="en").add_video("b", b, language="en").translate(src="en", tgt="zh").run()
         assert len(result.succeeded) == 2
 
     @pytest.mark.asyncio
@@ -149,23 +147,11 @@ class TestBuilderEnhancements:
     """Polish items: from_dict/from_yaml + kind auto-detect."""
 
     def test_app_from_dict(self, tmp_path: Path):
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}})
         assert app.engine("default").config.model == "m"
 
     def test_app_from_yaml_string(self, tmp_path: Path):
-        text = (
-            "engines:\n"
-            "  default:\n"
-            "    model: m2\n"
-            "    base_url: http://x/v1\n"
-            "    api_key: k\n"
-            f"store:\n  root: {(tmp_path / 'ws').as_posix()}\n"
-        )
+        text = f"engines:\n  default:\n    model: m2\n    base_url: http://x/v1\n    api_key: k\nstore:\n  root: {(tmp_path / 'ws').as_posix()}\n"
         app = App.from_yaml(text)
         assert app.engine("default").config.model == "m2"
 
@@ -383,17 +369,7 @@ class TestNewAPIFeatures:
 
     def test_preprocess_config_from_dict(self, tmp_path: Path):
         """PreprocessConfig can be set via dict."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {
-                    "punc_mode": "llm",
-                    "chunk_mode": "llm",
-                    "chunk_len": 120,
-                },
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm", "chunk_mode": "llm", "chunk_len": 120}})
         assert app.config.preprocess.punc_mode == "llm"
         assert app.config.preprocess.chunk_mode == "llm"
         assert app.config.preprocess.chunk_len == 120
@@ -421,13 +397,7 @@ class TestPreprocessIntegration:
         assert app.chunker() is None
 
     def test_punc_restorer_llm(self, tmp_path: Path, monkeypatch):
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"punc_mode": "llm"},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm"}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         restorer = app.punc_restorer()
@@ -436,37 +406,19 @@ class TestPreprocessIntegration:
         assert type(restorer) is LlmPuncRestorer
 
     def test_punc_restorer_remote_requires_endpoint(self, tmp_path: Path):
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"punc_mode": "remote"},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "remote"}})
         with pytest.raises(ValueError, match="punc_endpoint"):
             app.punc_restorer()
 
     def test_punc_restorer_remote_with_endpoint(self, tmp_path: Path):
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"punc_mode": "remote", "punc_endpoint": "http://localhost:8080/restore"},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "remote", "punc_endpoint": "http://localhost:8080/restore"}})
         restorer = app.punc_restorer()
         from adapters.preprocess import RemotePuncRestorer
 
         assert type(restorer) is RemotePuncRestorer
 
     def test_chunker_llm(self, tmp_path: Path, monkeypatch):
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"chunk_mode": "llm"},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "llm"}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         chunker = app.chunker()
@@ -476,13 +428,7 @@ class TestPreprocessIntegration:
 
     def test_punc_threshold_propagated(self, tmp_path: Path, monkeypatch):
         """punc_threshold in config reaches the LlmPuncRestorer instance."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"punc_mode": "llm", "punc_threshold": 200},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm", "punc_threshold": 200}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         restorer = app.punc_restorer()
@@ -490,13 +436,7 @@ class TestPreprocessIntegration:
 
     def test_chunk_len_propagated(self, tmp_path: Path, monkeypatch):
         """chunk_len in config reaches the LlmChunker instance."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"chunk_mode": "llm", "chunk_len": 120},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "llm", "chunk_len": 120}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         chunker = app.chunker()
@@ -504,20 +444,7 @@ class TestPreprocessIntegration:
 
     def test_chunk_advanced_options_propagated(self, tmp_path: Path, monkeypatch):
         """max_depth / max_retries / on_failure / split_parts flow from config → LlmChunker."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {
-                    "chunk_mode": "llm",
-                    "chunk_len": 60,
-                    "chunk_max_depth": 6,
-                    "chunk_max_retries": 5,
-                    "chunk_on_failure": "keep",
-                    "chunk_split_parts": 3,
-                },
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "llm", "chunk_len": 60, "chunk_max_depth": 6, "chunk_max_retries": 5, "chunk_on_failure": "keep", "chunk_split_parts": 3}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         chunker = app.chunker()
@@ -529,13 +456,7 @@ class TestPreprocessIntegration:
     @pytest.mark.asyncio
     async def test_video_run_with_llm_punc(self, tmp_path: Path, monkeypatch):
         """Video builder with punc_mode=llm wires restorer through to source."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"punc_mode": "llm", "punc_threshold": 0},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm", "punc_threshold": 0}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
@@ -553,13 +474,7 @@ class TestPreprocessIntegration:
     @pytest.mark.asyncio
     async def test_video_run_with_llm_chunk(self, tmp_path: Path, monkeypatch):
         """Video builder with chunk_mode=llm wires chunker through to source."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"chunk_mode": "llm", "chunk_len": 20},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "llm", "chunk_len": 20}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
@@ -571,12 +486,7 @@ class TestPreprocessIntegration:
         # Fake LLM chunker leaves text intact (returns single chunk per item),
         # so we expect one record with the original source text.
         actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
-        expected = [
-            (
-                "This is a long sentence that needs chunking",
-                "[This is a long sentence that needs chunking]",
-            )
-        ]
+        expected = [("This is a long sentence that needs chunking", "[This is a long sentence that needs chunking]")]
         assert actual == expected
 
     def test_punc_position_default_global(self, app: App):
@@ -586,24 +496,12 @@ class TestPreprocessIntegration:
     def test_punc_position_configurable(self, tmp_path: Path):
         """punc_position can be set to 'sentence' or 'both'."""
         for pos in ("global", "sentence", "both"):
-            a = App.from_dict(
-                {
-                    "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                    "store": {"root": (tmp_path / "ws").as_posix()},
-                    "preprocess": {"punc_mode": "llm", "punc_position": pos},
-                }
-            )
+            a = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm", "punc_position": pos}})
             assert a.config.preprocess.punc_position == pos
 
     def test_chunker_spacy(self, tmp_path: Path):
         """chunk_mode='spacy' returns a SpacySplitter instance."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"chunk_mode": "spacy"},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"chunk_mode": "spacy"}})
         chunker = app.chunker()
         from adapters.preprocess import SpacySplitter
 
@@ -612,13 +510,7 @@ class TestPreprocessIntegration:
     @pytest.mark.asyncio
     async def test_video_run_with_punc_position_sentence(self, tmp_path: Path, monkeypatch):
         """punc_position='sentence' runs punc after sentences() splitting."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"punc_mode": "llm", "punc_threshold": 0, "punc_position": "sentence"},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm", "punc_threshold": 0, "punc_position": "sentence"}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
@@ -635,13 +527,7 @@ class TestPreprocessIntegration:
     @pytest.mark.asyncio
     async def test_video_run_with_punc_position_both(self, tmp_path: Path, monkeypatch):
         """punc_position='both' runs punc at both positions."""
-        app = App.from_dict(
-            {
-                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
-                "store": {"root": (tmp_path / "ws").as_posix()},
-                "preprocess": {"punc_mode": "llm", "punc_threshold": 0, "punc_position": "both"},
-            }
-        )
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}, "preprocess": {"punc_mode": "llm", "punc_threshold": 0, "punc_position": "both"}})
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())

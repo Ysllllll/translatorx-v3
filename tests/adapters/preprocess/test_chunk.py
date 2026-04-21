@@ -125,13 +125,7 @@ class TestLlmChunker:
         # Fake engine splits at word midpoint (11 words → 5/6):
         #   depth=0: "This is a sentence that" (23) | "is definitely longer than thirty characters" (43)
         #   depth=1 on second half (6 words → 3/3): "is definitely longer" (20) | "than thirty characters" (22)
-        assert result == [
-            [
-                "This is a sentence that",
-                "is definitely longer",
-                "than thirty characters",
-            ]
-        ]
+        assert result == [["This is a sentence that", "is definitely longer", "than thirty characters"]]
 
     def test_batch_processing(self) -> None:
         from adapters.preprocess import LlmChunker
@@ -148,12 +142,7 @@ class TestLlmChunker:
         result = chunker([text])
         # max_depth=1: only one split allowed (8 words → 4/4).
         # Each half still exceeds chunk_len=5 but recursion halts at depth>=max_depth.
-        assert result == [
-            [
-                "This is a longer",
-                "text that needs splitting",
-            ]
-        ]
+        assert result == [["This is a longer", "text that needs splitting"]]
 
     def test_llm_failure_falls_back_to_rule(self) -> None:
         from adapters.preprocess import LlmChunker
@@ -163,15 +152,7 @@ class TestLlmChunker:
         result = chunker([text])
         # LLM always returns invalid 3-line output → rule_split (midpoint word boundary)
         # No ops configured, so the simple rfind-based fallback is used recursively.
-        assert result == [
-            [
-                "This is a sentence that needs",
-                "to",
-                "be",
-                "split",
-                "somehow",
-            ]
-        ]
+        assert result == [["This is a sentence that needs", "to", "be", "split", "somehow"]]
 
     def test_rule_split_with_ops(self) -> None:
         from adapters.preprocess import LlmChunker
@@ -182,13 +163,7 @@ class TestLlmChunker:
         text = "This is a sentence that needs to be split by ops"
         result = chunker([text])
         # LLM fails → ops.split_by_length(text, 20) produces balanced word-boundary chunks.
-        assert result == [
-            [
-                "This is a sentence",
-                "that needs to be",
-                "split by ops",
-            ]
-        ]
+        assert result == [["This is a sentence", "that needs to be", "split by ops"]]
 
     def test_rejects_content_changing_split(self) -> None:
         """Chunk must fall back when LLM changes word content."""
@@ -200,14 +175,7 @@ class TestLlmChunker:
         # At depth=0 the LLM inserts "indeed" → reconstruction check fails → rule_split.
         # At deeper levels the LLM halves no longer contain "somehow", so they pass
         # verification and are used directly.
-        assert result == [
-            [
-                "This is a sentence",
-                "that needs",
-                "to be split",
-                "somehow",
-            ]
-        ]
+        assert result == [["This is a sentence", "that needs", "to be split", "somehow"]]
 
     def test_applyfn_conformance(self) -> None:
         from adapters.preprocess import LlmChunker
@@ -228,13 +196,7 @@ class TestLlmChunkerRetry:
         result = chunker([text])
         # depth=0 uses attempts 1,2 (fail) + 3 (succeed → midpoint split);
         # depth=1 on second half uses attempt 4 (succeed).
-        assert result == [
-            [
-                "This is a sentence that",
-                "is definitely longer",
-                "than thirty characters",
-            ]
-        ]
+        assert result == [["This is a sentence that", "is definitely longer", "than thirty characters"]]
         assert engine.calls == 4
 
     def test_retry_exhausted_then_rule(self) -> None:
@@ -296,15 +258,7 @@ class TestLlmChunkerSplitParts:
         # depth=0: ["This is a"(9), "sentence that is"(16), "definitely longer than thirty characters"(40)]
         # Third chunk exceeds 30 → recurse at depth=1 (5 words / 3 = 1 per group, last 3):
         #   ["definitely"(10), "longer"(6), "than thirty characters"(22)]
-        assert result == [
-            [
-                "This is a",
-                "sentence that is",
-                "definitely",
-                "longer",
-                "than thirty characters",
-            ]
-        ]
+        assert result == [["This is a", "sentence that is", "definitely", "longer", "than thirty characters"]]
 
     def test_split_parts_below_two_rejected(self) -> None:
         from adapters.preprocess import LlmChunker
@@ -334,12 +288,7 @@ class TestLlmChunkerLengthMetric:
         assert chunker_default([text])[0] != [text]
 
         # chunk_len=8 with display-width metric (6 ≤ 8) → no split.
-        chunker_w2 = LlmChunker(
-            _FailingChunkEngine(),
-            chunk_len=8,
-            ops=ops,
-            length_fn=lambda t: ops.length(t, cjk_width=2),
-        )
+        chunker_w2 = LlmChunker(_FailingChunkEngine(), chunk_len=8, ops=ops, length_fn=lambda t: ops.length(t, cjk_width=2))
         assert chunker_w2([text]) == [[text]]
 
     def test_defaults_to_ops_length_when_ops_given(self) -> None:
@@ -370,11 +319,7 @@ class TestLlmChunkerAsync:
         chunker = LlmChunker(_FakeChunkEngine(), chunk_len=30)
         text = "This is a sentence that is definitely longer than thirty characters"
         chunks = await chunker._chunk_recursive(text, depth=0)
-        assert chunks == [
-            "This is a sentence that",
-            "is definitely longer",
-            "than thirty characters",
-        ]
+        assert chunks == ["This is a sentence that", "is definitely longer", "than thirty characters"]
 
     @pytest.mark.asyncio
     async def test_llm_split_valid(self) -> None:

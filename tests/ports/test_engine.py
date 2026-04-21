@@ -18,23 +18,10 @@ from domain.model.usage import CompletionResult
 class _GoodEngine:
     """Satisfies the LLMEngine Protocol."""
 
-    async def complete(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        json_mode: bool = False,
-    ) -> CompletionResult:
+    async def complete(self, messages: list[dict[str, str]], *, temperature: float | None = None, max_tokens: int | None = None, json_mode: bool = False) -> CompletionResult:
         return CompletionResult(text="ok")
 
-    async def stream(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-    ) -> AsyncIterator[str]:
+    async def stream(self, messages: list[dict[str, str]], *, temperature: float | None = None, max_tokens: int | None = None) -> AsyncIterator[str]:
         yield "o"
         yield "k"
 

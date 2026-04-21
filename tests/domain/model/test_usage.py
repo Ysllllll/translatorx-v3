@@ -60,11 +60,7 @@ def test_zero_is_additive_identity() -> None:
 
 
 def test_sum_iterable_with_zero() -> None:
-    usages = [
-        Usage(prompt_tokens=10, cost_usd=0.1, model="m"),
-        Usage(prompt_tokens=5, cost_usd=0.05, model="m"),
-        Usage(prompt_tokens=2, cost_usd=0.02, model="m"),
-    ]
+    usages = [Usage(prompt_tokens=10, cost_usd=0.1, model="m"), Usage(prompt_tokens=5, cost_usd=0.05, model="m"), Usage(prompt_tokens=2, cost_usd=0.02, model="m")]
     total = sum(usages, Usage.zero())
     assert total.prompt_tokens == 17
     assert total.cost_usd == pytest.approx(0.17)

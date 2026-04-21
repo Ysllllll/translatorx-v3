@@ -37,12 +37,7 @@ class TestRejectThenAccept:
                 return False, None, f"need >= 1, got {n}"
             return True, n, ""
 
-        outcome = await retry_until_valid(
-            _call,
-            validate=_validate,
-            max_retries=3,
-            on_reject=lambda i, r: rejects.append((i, r)),
-        )
+        outcome = await retry_until_valid(_call, validate=_validate, max_retries=3, on_reject=lambda i, r: rejects.append((i, r)))
         assert outcome.accepted is True
         assert outcome.value == 1
         assert outcome.attempts == 2
@@ -61,12 +56,7 @@ class TestAllAttemptsFail:
         def _validate(n: int):
             return False, None, f"reject-{n}"
 
-        outcome = await retry_until_valid(
-            _call,
-            validate=_validate,
-            max_retries=2,
-            on_reject=lambda i, r: rejects.append((i, r)),
-        )
+        outcome = await retry_until_valid(_call, validate=_validate, max_retries=2, on_reject=lambda i, r: rejects.append((i, r)))
         assert outcome.accepted is False
         assert outcome.value is None
         assert outcome.attempts == 3  # max_retries=2 → 3 total attempts
@@ -87,12 +77,7 @@ class TestExceptionHandling:
         def _validate(text: str):
             return True, text, ""
 
-        outcome = await retry_until_valid(
-            _call,
-            validate=_validate,
-            max_retries=3,
-            on_exception=lambda i, e: exceptions.append((i, str(e))),
-        )
+        outcome = await retry_until_valid(_call, validate=_validate, max_retries=3, on_exception=lambda i, e: exceptions.append((i, str(e))))
         assert outcome.accepted is True
         assert outcome.value == "ok"
         assert outcome.attempts == 2

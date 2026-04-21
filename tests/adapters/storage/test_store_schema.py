@@ -18,11 +18,7 @@ def store(tmp_path: Path) -> JsonFileStore:
 
 @pytest.mark.asyncio
 async def test_patch_segment_type_and_raw_segment_ref(store: JsonFileStore) -> None:
-    await store.patch_video(
-        "v1",
-        segment_type="whisperx",
-        raw_segment_ref={"file": "../zzz_subtitle_jsonl/v1.words.jsonl", "n": 3},
-    )
+    await store.patch_video("v1", segment_type="whisperx", raw_segment_ref={"file": "../zzz_subtitle_jsonl/v1.words.jsonl", "n": 3})
     data = await store.load_video("v1")
     assert data["segment_type"] == "whisperx"
     assert data["raw_segment_ref"]["n"] == 3
@@ -33,10 +29,7 @@ async def test_patch_punc_cache_merges(store: JsonFileStore) -> None:
     await store.patch_video("v1", punc_cache={"hello world": ["hello world."]})
     await store.patch_video("v1", punc_cache={"foo bar": ["Foo bar."]})
     data = await store.load_video("v1")
-    assert data["punc_cache"] == {
-        "hello world": ["hello world."],
-        "foo bar": ["Foo bar."],
-    }
+    assert data["punc_cache"] == {"hello world": ["hello world."], "foo bar": ["Foo bar."]}
 
 
 @pytest.mark.asyncio
@@ -48,24 +41,8 @@ async def test_patch_summary_replaces(store: JsonFileStore) -> None:
 
 
 @pytest.mark.asyncio
-async def test_patch_record_nested_fields_and_segments(
-    store: JsonFileStore,
-) -> None:
-    await store.patch_video(
-        "v1",
-        records={
-            0: {
-                "src_text": "Hello world.",
-                "start": 0.0,
-                "end": 1.0,
-                "segments": [
-                    Segment(0.0, 0.5, "Hello").to_dict(),
-                    Segment(0.5, 1.0, "world.").to_dict(),
-                ],
-                "translations.zh": "你好世界。",
-            }
-        },
-    )
+async def test_patch_record_nested_fields_and_segments(store: JsonFileStore) -> None:
+    await store.patch_video("v1", records={0: {"src_text": "Hello world.", "start": 0.0, "end": 1.0, "segments": [Segment(0.0, 0.5, "Hello").to_dict(), Segment(0.5, 1.0, "world.").to_dict()], "translations.zh": "你好世界。"}})
     data = await store.load_video("v1")
     rec = data["records"][0]
     assert rec["src_text"] == "Hello world."
@@ -89,15 +66,8 @@ async def test_empty_patch_is_noop(store: JsonFileStore) -> None:
 
 
 @pytest.mark.asyncio
-async def test_save_load_round_trip_preserves_new_fields(
-    store: JsonFileStore,
-) -> None:
-    payload = {
-        "segment_type": "srt",
-        "raw_segment_ref": {"n": 1, "sha256": "abc"},
-        "punc_cache": {"hi": ["hi."]},
-        "summary": {"title": "t"},
-    }
+async def test_save_load_round_trip_preserves_new_fields(store: JsonFileStore) -> None:
+    payload = {"segment_type": "srt", "raw_segment_ref": {"n": 1, "sha256": "abc"}, "punc_cache": {"hi": ["hi."]}, "summary": {"title": "t"}}
     await store.save_video("v1", payload)
     data = await store.load_video("v1")
     for k, v in payload.items():

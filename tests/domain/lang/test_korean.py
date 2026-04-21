@@ -146,48 +146,7 @@ class KoreanTextTest(LangOpsTestCase):
             "히",
             "!",
         ]
-        expected_word_tokens = [
-            "질문",
-            "이나",
-            " ",
-            "건의",
-            "사항",
-            "은",
-            " ",
-            "깃헙",
-            " ",
-            "이슈",
-            " ",
-            "트래커",
-            "에",
-            " ",
-            "남기",
-            "어",
-            "주",
-            "세요.",
-            " ",
-            "English",
-            " ",
-            "Subtitle,",
-            " ",
-            "오류",
-            "보고",
-            "는",
-            " ",
-            "실행",
-            "환경,",
-            " ",
-            "에러",
-            "메세지",
-            "와",
-            "함께",
-            " ",
-            "설명",
-            "을",
-            " ",
-            "최대한",
-            "상세히!",
-        ]
+        expected_word_tokens = ["질문", "이나", " ", "건의", "사항", "은", " ", "깃헙", " ", "이슈", " ", "트래커", "에", " ", "남기", "어", "주", "세요.", " ", "English", " ", "Subtitle,", " ", "오류", "보고", "는", " ", "실행", "환경,", " ", "에러", "메세지", "와", "함께", " ", "설명", "을", " ", "최대한", "상세히!"]
         expected_word_tokens_without_punctuation = [
             "질문",
             "이나",
@@ -254,11 +213,7 @@ class KoreanTextTest(LangOpsTestCase):
         self.assertEqual(o.join(o.split(text0, mode="character", attach_punctuation=False)), expected_join_text0)
 
         mixed_text = "이건 I'm 예시고 deeplearning.ai와 https://www.com 을 쓴다."
-        self._assert_preserved_fragments(
-            mixed_text,
-            ["I'm", "deeplearning.ai", "https://www.com"],
-            modes=("word", "character"),
-        )
+        self._assert_preserved_fragments(mixed_text, ["I'm", "deeplearning.ai", "https://www.com"], modes=("word", "character"))
 
         # split()
         self.assertEqual(o.split("안녕하세요"), ["안녕", "하", "세요"])

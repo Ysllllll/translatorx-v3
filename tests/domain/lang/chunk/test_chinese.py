@@ -26,11 +26,7 @@ class TestChineseSplitter(SplitterTestBase):
         assert _ops.split_sentences("“太棒了！”她喊道。") == ["“太棒了！”", "她喊道。"]
 
         # 英文标点混合与多重标点（对于中文 split_sentences，可能并未按英文标点拆分，暂匹配当前实现）
-        assert _ops.split_sentences("Hello! 这是一个测试...真的吗?! 是的。") == [
-            "Hello!",
-            "这是一个测试...真的吗?!",
-            "是的。",
-        ]
+        assert _ops.split_sentences("Hello! 这是一个测试...真的吗?! 是的。") == ["Hello!", "这是一个测试...真的吗?!", "是的。"]
         assert _ops.split_sentences("等一下！！！你要去哪？？？") == ["等一下！！！", "你要去哪？？？"]
 
         # 带有小数点/数字的句子
@@ -57,12 +53,7 @@ class TestChineseSplitter(SplitterTestBase):
         assert _ops.split_clauses("苹果、香蕉、橘子") == ["苹果、", "香蕉、", "橘子"]
 
         # 逗号、分号与冒号
-        assert _ops.split_clauses("第一，我们去吃饭；第二，去看电影。") == [
-            "第一，",
-            "我们去吃饭；",
-            "第二，",
-            "去看电影。",
-        ]
+        assert _ops.split_clauses("第一，我们去吃饭；第二，去看电影。") == ["第一，", "我们去吃饭；", "第二，", "去看电影。"]
         assert _ops.split_clauses("他列出了清单：A、B、C。") == ["他列出了清单：", "A、", "B、", "C。"]
 
         # 破折号与省略号（对于当前子句引擎，可能不将其视为断点，验证现有表现）
@@ -86,27 +77,16 @@ class TestChineseSplitter(SplitterTestBase):
     def test_split_by_length(self) -> None:
         # split_by_length() — oversized tokens kept whole (minimum unit = one token)
         assert _ops.split_by_length("你好世界", max_len=1) == ["你好", "世界"]
-        assert _ops.split_by_length("人工智能技术在中国蓬勃发展", max_len=6) == [
-            "人工智能技术",
-            "在中国",
-            "蓬勃发展",
-        ]
+        assert _ops.split_by_length("人工智能技术在中国蓬勃发展", max_len=6) == ["人工智能技术", "在中国", "蓬勃发展"]
 
         # 中英文混合、带网址与特殊符号的长度切分
         # URL 现在会作为单个 token 保留，长度切分不会再把它拆坏。
-        assert _ops.split_by_length("访问https://example.com查看", max_len=15) == [
-            "访问",
-            "https://example.com",
-            "查看",
-        ]
+        assert _ops.split_by_length("访问https://example.com查看", max_len=15) == ["访问", "https://example.com", "查看"]
         assert _ops.split_by_length("你好😊世界", max_len=2) == ["你好", "😊", "世界"]
 
         assert _ops.split_by_length("你好", max_len=10) == ["你好"]
         assert _ops.split_by_length("", max_len=10) == []
-        assert _ops.split_by_length("这是一段比较长的中文文本需要切分", max_len=8) == [
-            "这是一段比较长的",
-            "中文文本需要切分",
-        ]
+        assert _ops.split_by_length("这是一段比较长的中文文本需要切分", max_len=8) == ["这是一段比较长的", "中文文本需要切分"]
         import pytest
 
         with pytest.raises(ValueError):
@@ -118,16 +98,8 @@ class TestChineseSplitter(SplitterTestBase):
 
         # chunk chain
         assert _ops.chunk("你好。世界！").sentences().result() == ["你好。", "世界！"]
-        assert _ops.chunk("这是第一句。这是一个比较长的第二句话需要被切分。").sentences().split(10).result() == [
-            "这是第一句。",
-            "这是一个比较长的",
-            "第二句话需要被切分。",
-        ]
-        assert _ops.chunk("近年来，人工智能技术在中国蓬勃发展。").clauses().split(8).result() == [
-            "近年来，",
-            "人工智能技术在",
-            "中国蓬勃发展。",
-        ]
+        assert _ops.chunk("这是第一句。这是一个比较长的第二句话需要被切分。").sentences().split(10).result() == ["这是第一句。", "这是一个比较长的", "第二句话需要被切分。"]
+        assert _ops.chunk("近年来，人工智能技术在中国蓬勃发展。").clauses().split(8).result() == ["近年来，", "人工智能技术在", "中国蓬勃发展。"]
 
     def test_split_long_text(self) -> None:
         # long text split_sentences()

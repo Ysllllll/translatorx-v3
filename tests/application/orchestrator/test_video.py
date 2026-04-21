@@ -50,12 +50,7 @@ class _PassChecker(Checker):
 
 
 def _ctx() -> TranslationContext:
-    return TranslationContext(
-        source_lang="en",
-        target_lang="zh",
-        window_size=4,
-        terms_provider=StaticTerms({}),
-    )
+    return TranslationContext(source_lang="en", target_lang="zh", window_size=4, terms_provider=StaticTerms({}))
 
 
 def _rec(rid: int, text: str) -> SentenceRecord:
@@ -96,13 +91,7 @@ class TestVideoOrchestrator:
         proc = TranslateProcessor(engine, _PassChecker(), flush_every=1)
 
         src = _ListSource([_rec(0, "Hello."), _rec(1, "Bye.")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
         result = await orch.run()
 
         assert len(result.records) == 2
@@ -118,13 +107,7 @@ class TestVideoOrchestrator:
     async def test_empty_processors_rejected(self, store, video_key):
         src = _ListSource([_rec(0, "hi")])
         with pytest.raises(ValueError):
-            VideoOrchestrator(
-                source=src,
-                processors=[],
-                ctx=_ctx(),
-                store=store,
-                video_key=video_key,
-            )
+            VideoOrchestrator(source=src, processors=[], ctx=_ctx(), store=store, video_key=video_key)
 
     @pytest.mark.asyncio
     async def test_aclose_called_on_completion(self, store, video_key):
@@ -142,13 +125,7 @@ class TestVideoOrchestrator:
         proc.aclose = _tracked  # type: ignore[method-assign]
 
         src = _ListSource([_rec(0, "Hello.")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
         await orch.run()
 
         # aclose is idempotent per protocol; processor may self-close inside
@@ -174,13 +151,7 @@ class TestVideoOrchestrator:
         proc.output_is_stale = lambda rec: True  # type: ignore[method-assign]
 
         src = _ListSource([_rec(0, "Hi."), _rec(1, "Bye.")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
         result = await orch.run()
 
         assert set(result.stale_ids) == {0, 1}
@@ -209,13 +180,7 @@ class TestVideoOrchestrator:
                 return
 
         src = _ListSource([_rec(0, "Hello.")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[translate, _Marker()],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = VideoOrchestrator(source=src, processors=[translate, _Marker()], ctx=_ctx(), store=store, video_key=video_key)
         result = await orch.run()
 
         assert result.records[0].translations["zh"] == "[翻译]Hello."
@@ -306,13 +271,7 @@ class TestVideoOrchestratorErrors:
     async def test_errorinfo_harvested_into_failed(self, store, video_key):
         proc = _ErrorEmitter(category="permanent")
         src = _ListSource([_rec(0, "a"), _rec(1, "b")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
         result = await orch.run()
 
         assert len(result.failed) == 2
@@ -331,14 +290,7 @@ class TestVideoOrchestratorErrors:
 
         proc = _ErrorEmitter()
         src = _ListSource([_rec(0, "a")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-            error_reporter=_Reporter(),
-        )
+        orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key, error_reporter=_Reporter())
         await orch.run()
         assert len(received) == 1
 
@@ -350,14 +302,7 @@ class TestVideoOrchestratorErrors:
 
         proc = _ErrorEmitter()
         src = _ListSource([_rec(0, "a")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-            error_reporter=_BadReporter(),
-        )
+        orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key, error_reporter=_BadReporter())
         result = await orch.run()  # must not raise
         assert len(result.failed) == 1
 
@@ -365,13 +310,7 @@ class TestVideoOrchestratorErrors:
     async def test_exception_in_processor_propagates_and_closes(self, store, video_key):
         proc = _CrashInProcess()
         src = _ListSource([_rec(0, "a")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
         with pytest.raises(RuntimeError, match="kaboom"):
             await orch.run()
         assert proc.closed is True
@@ -380,13 +319,7 @@ class TestVideoOrchestratorErrors:
     async def test_cancellation_runs_aclose(self, store, video_key):
         proc = _Slow()
         src = _ListSource([_rec(0, "a")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[proc],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
         task = asyncio.create_task(orch.run())
         await asyncio.sleep(0.05)
         task.cancel()
@@ -405,13 +338,7 @@ class TestVideoOrchestratorErrors:
         p2.name = "err2"  # type: ignore[misc]
 
         src = _ListSource([_rec(0, "a")])
-        orch = VideoOrchestrator(
-            source=src,
-            processors=[p1, p2],
-            ctx=_ctx(),
-            store=store,
-            video_key=video_key,
-        )
+        orch = VideoOrchestrator(source=src, processors=[p1, p2], ctx=_ctx(), store=store, video_key=video_key)
         result = await orch.run()
         # One error from each processor, not four.
         by_proc = {info.processor for info in result.failed}

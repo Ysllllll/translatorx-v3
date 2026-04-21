@@ -22,13 +22,7 @@ import pytest
 SRC = Path(__file__).resolve().parent.parent / "src"
 
 # Allowed deps for each layer (layer → set of allowed layers)
-ALLOWED = {
-    "domain": set(),
-    "ports": {"domain"},
-    "adapters": {"domain", "ports"},
-    "application": {"domain", "ports", "adapters"},
-    "api": {"domain", "ports", "adapters", "application"},
-}
+ALLOWED = {"domain": set(), "ports": {"domain"}, "adapters": {"domain", "ports"}, "application": {"domain", "ports", "adapters"}, "api": {"domain", "ports", "adapters", "application"}}
 
 LAYERS = tuple(ALLOWED.keys())
 
@@ -46,12 +40,7 @@ def _iter_imports(tree: ast.AST) -> list[str]:
         test = node.test
         if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING":
             return True
-        if (
-            isinstance(test, ast.Attribute)
-            and isinstance(test.value, ast.Name)
-            and test.value.id == "typing"
-            and test.attr == "TYPE_CHECKING"
-        ):
+        if isinstance(test, ast.Attribute) and isinstance(test.value, ast.Name) and test.value.id == "typing" and test.attr == "TYPE_CHECKING":
             return True
         return False
 

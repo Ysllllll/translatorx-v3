@@ -6,16 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from adapters.storage.workspace import (
-    SubDirSpec,
-    Workspace,
-    canonical_key,
-    extract_id,
-    register_subdir,
-    registered_specs,
-    strip_id,
-    strip_lang_tail,
-)
+from adapters.storage.workspace import SubDirSpec, Workspace, canonical_key, extract_id, register_subdir, registered_specs, strip_id, strip_lang_tail
 
 
 # ---------------------------------------------------------------------------
@@ -276,13 +267,7 @@ class TestPathFor:
 
     def test_truncate_stem_with_id(self, tmp_path: Path) -> None:
         # Register a test subdir with truncate
-        register_subdir(
-            call="_test_trunc",
-            name="zzz_test_trunc",
-            types=(".mp4",),
-            default_suffix=".mp4",
-            truncate_stem=30,
-        )
+        register_subdir(call="_test_trunc", name="zzz_test_trunc", types=(".mp4",), default_suffix=".mp4", truncate_stem=30)
         ws = Workspace(tmp_path, "c")
         long_stem = "A" * 100 + " [LUU0EuDKgKo]"
         p = ws.get_subdir("_test_trunc").path_for(long_stem, suffix=".mp4")
@@ -291,13 +276,7 @@ class TestPathFor:
         assert len(p.stem) == 30
 
     def test_strip_id_on_write(self, tmp_path: Path) -> None:
-        register_subdir(
-            call="_test_strip",
-            name="zzz_test_strip",
-            types=(".mp4",),
-            default_suffix=".mp4",
-            strip_id_on_write=True,
-        )
+        register_subdir(call="_test_strip", name="zzz_test_strip", types=(".mp4",), default_suffix=".mp4", strip_id_on_write=True)
         ws = Workspace(tmp_path, "c")
         p = ws.get_subdir("_test_strip").path_for("Intro [LUU0EuDKgKo]")
         assert p.stem == "Intro"

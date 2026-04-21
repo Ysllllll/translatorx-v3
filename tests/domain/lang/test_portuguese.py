@@ -16,30 +16,12 @@ class PortugueseTextTest(LangOpsTestCase):
         self._assert_entype_text_case(text0, expect_split_text, expect_join_text0)
 
         text1 = "Hoje o mecanismo organiza legendas em português, espanhol e inglês para uma série inteira."
-        expect_split_text = [
-            "Hoje",
-            "o",
-            "mecanismo",
-            "organiza",
-            "legendas",
-            "em",
-            "português,",
-            "espanhol",
-            "e",
-            "inglês",
-            "para",
-            "uma",
-            "série",
-            "inteira.",
-        ]
+        expect_split_text = ["Hoje", "o", "mecanismo", "organiza", "legendas", "em", "português,", "espanhol", "e", "inglês", "para", "uma", "série", "inteira."]
         expect_join_text1 = "Hoje o mecanismo organiza legendas em português, espanhol e inglês para uma série inteira."
         self._assert_entype_text_case(text1, expect_split_text, expect_join_text1)
 
         mixed_text = "Mantenha I'm deeplearning.ai e https://www.com juntos."
-        self._assert_preserved_fragments(
-            mixed_text,
-            ["I'm", "deeplearning.ai", "https://www.com"],
-        )
+        self._assert_preserved_fragments(mixed_text, ["I'm", "deeplearning.ai", "https://www.com"])
 
         # split()
         self.assertEqual(o.split("Olá, mundo!"), ["Olá,", "mundo!"])
@@ -78,10 +60,7 @@ class PortugueseTextTest(LangOpsTestCase):
 
         # normalize()
         self._assert_entype_normalize()
-        self.assertEqual(
-            o.normalize("Olá , mundo !"),
-            "Olá, mundo!",
-        )
+        self.assertEqual(o.normalize("Olá , mundo !"), "Olá, mundo!")
 
         # strip_punc()
         self.assertEqual(o.strip_punc("(Olá, mundo!)"), "Olá, mundo")

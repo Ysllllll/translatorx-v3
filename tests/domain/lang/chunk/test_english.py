@@ -71,9 +71,7 @@ class TestEnglishSplitter(SplitterTestBase):
         assert _ops.split_by_length("a b c d e", max_len=3) == ["a b", "c d", "e"]
 
         # Oversized token kept whole (minimum unit = one token)
-        assert _ops.split_by_length("supercalifragilisticexpialidocious", max_len=5) == [
-            "supercalifragilisticexpialidocious",
-        ]
+        assert _ops.split_by_length("supercalifragilisticexpialidocious", max_len=5) == ["supercalifragilisticexpialidocious"]
 
         # Boundary
         assert _ops.split_by_length("a b c", max_len=1) == ["a", "b", "c"]
@@ -98,15 +96,8 @@ class TestEnglishSplitter(SplitterTestBase):
             _ops.split_by_length("Hello", max_len=5, unit="sentence")
 
         # Chunk chains
-        assert _ops.chunk("Hello world. This is a test sentence.").sentences().split(25).result() == [
-            "Hello world.",
-            "This is a test sentence.",
-        ]
-        assert _ops.chunk("First clause, second clause, and a third one.").clauses().split(20).result() == [
-            "First clause,",
-            "second clause,",
-            "and a third one.",
-        ]
+        assert _ops.chunk("Hello world. This is a test sentence.").sentences().split(25).result() == ["Hello world.", "This is a test sentence."]
+        assert _ops.chunk("First clause, second clause, and a third one.").clauses().split(20).result() == ["First clause,", "second clause,", "and a third one."]
 
         with pytest.raises(AttributeError):
             _ops.chunk("Hello world.").by_length(25)

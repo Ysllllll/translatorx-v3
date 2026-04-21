@@ -1,12 +1,6 @@
 """Tests for media.protocol data types."""
 
-from adapters.media import (
-    DownloadResult,
-    MediaFileInfo,
-    MediaInfo,
-    MediaSource,
-    PlaylistInfo,
-)
+from adapters.media import DownloadResult, MediaFileInfo, MediaInfo, MediaSource, PlaylistInfo
 from pathlib import Path
 
 
@@ -32,10 +26,7 @@ class TestMediaInfo:
 
 class TestPlaylistInfo:
     def test_len_and_iter(self):
-        entries = (
-            MediaInfo(id="1", title="A", url=""),
-            MediaInfo(id="2", title="B", url=""),
-        )
+        entries = (MediaInfo(id="1", title="A", url=""), MediaInfo(id="2", title="B", url=""))
         pl = PlaylistInfo(id="pl", title="Playlist", url="", entries=entries)
         assert len(pl) == 2
         assert list(pl) == list(entries)

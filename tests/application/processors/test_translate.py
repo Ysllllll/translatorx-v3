@@ -66,12 +66,7 @@ class _PassChecker(Checker):
 
 
 def _ctx(**overrides) -> TranslationContext:
-    params = {
-        "source_lang": "en",
-        "target_lang": "zh",
-        "window_size": 4,
-        "terms_provider": StaticTerms({}),
-    }
+    params = {"source_lang": "en", "target_lang": "zh", "window_size": 4, "terms_provider": StaticTerms({})}
     params.update(overrides)
     return TranslationContext(**params)
 
@@ -128,11 +123,7 @@ class TestFingerprint:
     def test_sensitive_to_direct_map(self):
         e = _RecordingEngine()
         p1 = TranslateProcessor(e, _PassChecker())
-        p2 = TranslateProcessor(
-            e,
-            _PassChecker(),
-            config=TranslateNodeConfig(direct_translate={"hi": "你好"}),
-        )
+        p2 = TranslateProcessor(e, _PassChecker(), config=TranslateNodeConfig(direct_translate={"hi": "你好"}))
         assert p1.fingerprint() != p2.fingerprint()
 
     def test_sensitive_to_model(self):
@@ -157,15 +148,9 @@ class TestHitPath:
         proc = TranslateProcessor(engine, _PassChecker())
 
         # Seed the store with the current fingerprint.
-        await store.patch_video(
-            video_key.video,
-            meta={"_fingerprints": {"translate": proc.fingerprint()}},
-        )
+        await store.patch_video(video_key.video, meta={"_fingerprints": {"translate": proc.fingerprint()}})
 
-        recs = [
-            replace(_rec(0, "Hello."), translations={"zh": "你好。"}),
-            replace(_rec(1, "Bye."), translations={"zh": "再见。"}),
-        ]
+        recs = [replace(_rec(0, "Hello."), translations={"zh": "你好。"}), replace(_rec(1, "Bye."), translations={"zh": "再见。"})]
 
         async def src():
             for r in recs:
@@ -187,14 +172,7 @@ class TestHitPath:
 
         # Seed the store as if a previous run had completed: records
         # persisted + fingerprint stamped.
-        await store.patch_video(
-            video_key.video,
-            records={
-                0: {"translations.zh": "你好。"},
-                1: {"translations.zh": "再见。"},
-            },
-            meta={"_fingerprints": {"translate": proc.fingerprint()}},
-        )
+        await store.patch_video(video_key.video, records={0: {"translations.zh": "你好。"}, 1: {"translations.zh": "再见。"}}, meta={"_fingerprints": {"translate": proc.fingerprint()}})
 
         # Upstream now emits *fresh* records (empty translations) — what
         # SrtSource does in practice.
@@ -305,11 +283,7 @@ class TestRefinements:
     @pytest.mark.asyncio
     async def test_direct_translate_bypass(self, store, video_key):
         engine = _RecordingEngine()
-        proc = TranslateProcessor(
-            engine,
-            _PassChecker(),
-            config=TranslateNodeConfig(direct_translate={"hi": "你好"}),
-        )
+        proc = TranslateProcessor(engine, _PassChecker(), config=TranslateNodeConfig(direct_translate={"hi": "你好"}))
 
         async def src():
             yield _rec(0, "hi")
@@ -322,11 +296,7 @@ class TestRefinements:
     @pytest.mark.asyncio
     async def test_skip_long_bypass(self, store, video_key):
         engine = _RecordingEngine()
-        proc = TranslateProcessor(
-            engine,
-            _PassChecker(),
-            config=TranslateNodeConfig(max_source_len=5),
-        )
+        proc = TranslateProcessor(engine, _PassChecker(), config=TranslateNodeConfig(max_source_len=5))
 
         async def src():
             yield _rec(0, "hello world")  # len 11 > 5
@@ -342,10 +312,7 @@ class TestRefinements:
         proc = TranslateProcessor(engine, _PassChecker())
 
         # Seed store with matching fingerprint so the hit path fires.
-        await store.patch_video(
-            video_key.video,
-            meta={"_fingerprints": {"translate": proc.fingerprint()}},
-        )
+        await store.patch_video(video_key.video, meta={"_fingerprints": {"translate": proc.fingerprint()}})
 
         async def src():
             yield replace(_rec(0, "Hello."), translations={"zh": "preloaded"})
@@ -357,11 +324,7 @@ class TestRefinements:
     @pytest.mark.asyncio
     async def test_prefix_strip_and_readd(self, store, video_key):
         engine = _RecordingEngine()
-        proc = TranslateProcessor(
-            engine,
-            _PassChecker(),
-            config=TranslateNodeConfig(prefix_rules=EN_ZH_PREFIX_RULES),
-        )
+        proc = TranslateProcessor(engine, _PassChecker(), config=TranslateNodeConfig(prefix_rules=EN_ZH_PREFIX_RULES))
 
         async def src():
             yield _rec(0, "ok, let's go")
@@ -426,12 +389,7 @@ class TestBufferedFlush:
     @pytest.mark.asyncio
     async def test_flush_by_count(self, store, video_key):
         engine = _RecordingEngine()
-        proc = TranslateProcessor(
-            engine,
-            _PassChecker(),
-            flush_every=2,
-            flush_interval_s=3600,
-        )
+        proc = TranslateProcessor(engine, _PassChecker(), flush_every=2, flush_interval_s=3600)
 
         async def src():
             for i in range(5):
@@ -445,12 +403,7 @@ class TestBufferedFlush:
     async def test_final_flush_happens_on_cancel(self, store, video_key):
         """Cancelling mid-stream still flushes the pending buffer."""
         engine = _RecordingEngine()
-        proc = TranslateProcessor(
-            engine,
-            _PassChecker(),
-            flush_every=100,
-            flush_interval_s=3600,
-        )
+        proc = TranslateProcessor(engine, _PassChecker(), flush_every=100, flush_interval_s=3600)
 
         async def src():
             yield _rec(0, "a")

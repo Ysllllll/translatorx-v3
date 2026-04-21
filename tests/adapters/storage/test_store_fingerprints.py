@@ -6,11 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from adapters.storage.store import (
-    FINGERPRINT_CHAIN,
-    JsonFileStore,
-    get_stale_steps,
-)
+from adapters.storage.store import FINGERPRINT_CHAIN, JsonFileStore, get_stale_steps
 from adapters.storage.workspace import Workspace
 
 
@@ -117,30 +113,14 @@ def _seeded_video_data() -> dict:
     """Fully-populated video document mimicking a completed translate+tts run."""
     return {
         "schema_version": 1,
-        "meta": {
-            "_fingerprints": {
-                "raw": "r",
-                "preprocess.punc": "p",
-                "preprocess.chunk": "c",
-                "translate": "t",
-                "tts": "v",
-            },
-        },
+        "meta": {"_fingerprints": {"raw": "r", "preprocess.punc": "p", "preprocess.chunk": "c", "translate": "t", "tts": "v"}},
         "source_subtitle": [{"text": "Hello world."}],
         "segment_type": "srt",
         "raw_segment_ref": {"sha256": "abc", "n": 1},
         "punc_cache": {"Hello world": ["Hello world."]},
         "chunk_cache": {"Hello world.": ["Hello", "world."]},
         "summary": {"title": "demo", "terms": []},
-        "records": [
-            {
-                "id": 0,
-                "src_text": "Hello world.",
-                "translations": {"zh": "你好世界。"},
-                "alignment": {"method": "wx"},
-                "tts": {"path": "x.wav"},
-            }
-        ],
+        "records": [{"id": 0, "src_text": "Hello world.", "translations": {"zh": "你好世界。"}, "alignment": {"method": "wx"}, "tts": {"path": "x.wav"}}],
         "failed": [],
         "terms": {},
     }

@@ -63,16 +63,8 @@ class TestPortugueseSplitter(SplitterTestBase):
             _ops.split_by_length("Olá", max_len=5, unit="sentence")
 
         # Chunk chains
-        assert _ops.chunk("Hello world. This is a test. Another one.").sentences().split(20).result() == [
-            "Hello world.",
-            "This is a test.",
-            "Another one.",
-        ]
-        assert _ops.chunk("First clause, second clause, and third.").clauses().split(20).result() == [
-            "First clause,",
-            "second clause,",
-            "and third.",
-        ]
+        assert _ops.chunk("Hello world. This is a test. Another one.").sentences().split(20).result() == ["Hello world.", "This is a test.", "Another one."]
+        assert _ops.chunk("First clause, second clause, and third.").clauses().split(20).result() == ["First clause,", "second clause,", "and third."]
 
     def test_split_long_text(self) -> None:
         # long text split_sentences()

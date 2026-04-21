@@ -24,19 +24,11 @@ def store(ws: Workspace) -> JsonFileStore:
 
 
 def _sample_words() -> list[Word]:
-    return [
-        Word("Hello", 0.0, 0.4, speaker="A"),
-        Word("world.", 0.4, 1.5, speaker="A"),
-        Word("Next", 1.5, 1.9),
-        Word("line.", 1.9, 2.5, speaker="B", extra={"score": 0.9}),
-    ]
+    return [Word("Hello", 0.0, 0.4, speaker="A"), Word("world.", 0.4, 1.5, speaker="A"), Word("Next", 1.5, 1.9), Word("line.", 1.9, 2.5, speaker="B", extra={"score": 0.9})]
 
 
 def _sample_segments() -> list[Segment]:
-    return [
-        Segment(start=0.0, end=1.5, text="Hello world.", speaker="A"),
-        Segment(start=1.5, end=2.8, text="Next line."),
-    ]
+    return [Segment(start=0.0, end=1.5, text="Hello world.", speaker="A"), Segment(start=1.5, end=2.8, text="Next line.")]
 
 
 class TestLayout:

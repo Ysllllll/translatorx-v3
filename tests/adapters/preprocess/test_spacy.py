@@ -6,10 +6,7 @@ import pytest
 
 from adapters.preprocess.availability import spacy_is_available
 
-pytestmark = pytest.mark.skipif(
-    not spacy_is_available(),
-    reason="spacy not installed",
-)
+pytestmark = pytest.mark.skipif(not spacy_is_available(), reason="spacy not installed")
 
 
 class TestSpacySplitter:
@@ -46,10 +43,7 @@ class TestSpacySplitter:
         from adapters.preprocess import SpacySplitter
 
         splitter = SpacySplitter.get_instance()
-        texts = [
-            "First text. Second sentence.",
-            "Another text here.",
-        ]
+        texts = ["First text. Second sentence.", "Another text here."]
         result = splitter(texts)
         assert len(result) == 2
         assert len(result[0]) == 2
