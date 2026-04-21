@@ -139,6 +139,50 @@ class PreprocessConfig(BaseModel):
     max_concurrent: int = 8
 
 
+class TranscriberConfig(BaseModel):
+    """Transcriber backend configuration (Stage 6).
+
+    Two flavors are bundled:
+
+    - ``library="whisperx"`` — local WhisperX model (GPU).
+    - ``library="openai"`` — OpenAI-compatible ``/v1/audio/transcriptions``.
+    - ``library="http"`` — self-hosted HTTP WhisperX-style service.
+
+    Leave ``library`` empty to disable transcription entirely.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    library: Literal["", "whisperx", "openai", "http"] = ""
+    model: str = ""
+    base_url: str = ""
+    api_key: str = ""
+    language: str | None = None
+    word_timestamps: bool = True
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class TTSConfig(BaseModel):
+    """TTS backend configuration (Stage 6).
+
+    The backend is resolved via :func:`adapters.tts.create` using the
+    ``library`` field. Arbitrary extra keys pass through to the
+    backend-specific factory.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    library: Literal["", "edge-tts", "openai-tts", "elevenlabs", "local"] = ""
+    default_voice: str = ""
+    format: str = "mp3"
+    rate: float = 1.0
+    api_key: str = ""
+    base_url: str = ""
+    speaker_map: dict[str, str] = Field(default_factory=dict)
+    gender_map: dict[str, Literal["male", "female", "neutral"]] = Field(default_factory=dict)
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
 class AppConfig(BaseModel):
     """Root configuration model."""
 
@@ -149,6 +193,8 @@ class AppConfig(BaseModel):
     store: StoreConfig = Field(default_factory=StoreConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     preprocess: PreprocessConfig = Field(default_factory=PreprocessConfig)
+    transcriber: TranscriberConfig = Field(default_factory=TranscriberConfig)
+    tts: TTSConfig = Field(default_factory=TTSConfig)
 
     # -- loaders ---------------------------------------------------------
 

@@ -255,6 +255,12 @@ register_subdir(
     types=(".jsonl",),
 )
 register_subdir(
+    call="tts",
+    name="zzz_tts",
+    types=(".mp3", ".wav", ".ogg", ".flac", ".m4a"),
+    default_suffix=".mp3",
+)
+register_subdir(
     call="official_translation",
     name="zzz_official_translation",
     types=(".srt", ".vtt"),
