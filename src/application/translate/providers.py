@@ -24,7 +24,7 @@ from typing import Literal
 
 from .agents import TermsAgent, TermsAgentResult
 from ports.engine import LLMEngine
-from .retries import retry_until_valid
+from ports.retries import retry_until_valid
 
 logger = logging.getLogger(__name__)
 

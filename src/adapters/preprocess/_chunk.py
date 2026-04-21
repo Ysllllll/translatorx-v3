@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from domain.lang._core._base_ops import _BaseOps
     from application.translate import LLMEngine
 
-from application.translate.retries import resolve_on_failure, retry_until_valid
+from ports.retries import resolve_on_failure, retry_until_valid
 
 logger = logging.getLogger(__name__)
 

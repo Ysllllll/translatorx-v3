@@ -14,7 +14,7 @@ from adapters.reporters.reporters import (
     JsonlErrorReporter,
     LoggerReporter,
 )
-from application.observability.errors import ErrorInfo
+from ports.errors import ErrorInfo
 
 
 def _make_err(**kw) -> ErrorInfo:

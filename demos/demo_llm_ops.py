@@ -254,8 +254,8 @@ async def section_2_bypasses() -> None:
     from dataclasses import replace as _replace
 
     from domain.model import SentenceRecord
-    from adapters.processors import TranslateProcessor
-    from adapters.processors.prefix import TranslateNodeConfig
+    from application.processors import TranslateProcessor
+    from application.processors.prefix import TranslateNodeConfig
     from ports.source import VideoKey
     from adapters.storage.store import JsonFileStore
     from adapters.storage.workspace import Workspace

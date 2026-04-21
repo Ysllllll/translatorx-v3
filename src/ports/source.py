@@ -37,8 +37,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from application.translate import TranslationContext
-
-from adapters.storage.store import Store
+    from adapters.storage.store import Store
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +158,7 @@ class Processor(Protocol[In_contra, Out_co]):
         upstream: AsyncIterator[In_contra],
         *,
         ctx: "TranslationContext",
-        store: Store,
+        store: "Store",
         video_key: VideoKey,
     ) -> AsyncIterator[Out_co]:
         """Transform ``upstream`` records; see class docstring for contract."""

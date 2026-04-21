@@ -34,7 +34,7 @@ import httpx
 from domain.model import Segment
 from api.app import App
 from ports.source import Priority
-from application.observability.errors import ErrorInfo
+from ports.errors import ErrorInfo
 
 
 LLM_BASE_URL = os.environ.get("TRX_LLM_BASE_URL", "http://localhost:26592/v1")

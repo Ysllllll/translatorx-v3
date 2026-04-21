@@ -14,12 +14,12 @@ from application.translate import Checker, StaticTerms, TranslationContext
 from domain.model import SentenceRecord
 from domain.model.usage import CompletionResult
 
-from adapters.processors import TranslateProcessor
+from application.processors import TranslateProcessor
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
 from application.orchestrator.video import VideoOrchestrator
 from ports.source import VideoKey
-from application.observability.errors import ErrorInfo
+from ports.errors import ErrorInfo
 
 
 # ---------------------------------------------------------------------------

@@ -25,7 +25,7 @@ from application.translate import StaticTerms
 from domain.model import SentenceRecord
 from domain.model.usage import CompletionResult
 
-from adapters.processors import SummaryProcessor
+from application.processors import SummaryProcessor
 from ports.source import VideoKey
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace

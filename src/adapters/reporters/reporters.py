@@ -27,7 +27,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
-from application.observability.errors import ErrorInfo
+from ports.errors import ErrorInfo
 
 if TYPE_CHECKING:
     from domain.model import SentenceRecord

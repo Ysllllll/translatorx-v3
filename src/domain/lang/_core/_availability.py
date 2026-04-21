@@ -28,3 +28,12 @@ def kiwi_is_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+def langdetect_is_available() -> bool:
+    try:
+        import langdetect  # noqa: F401
+
+        return True
+    except ImportError:
+        return False

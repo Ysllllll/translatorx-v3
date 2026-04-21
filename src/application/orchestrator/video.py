@@ -35,7 +35,7 @@ from typing import AsyncIterator, Sequence
 from application.translate import TranslationContext
 from domain.model import SentenceRecord, Segment
 
-from application.observability.errors import ErrorInfo, ErrorReporter
+from ports.errors import ErrorInfo, ErrorReporter
 from ports.source import Priority, Processor, Source, VideoKey
 from adapters.sources.push import PushQueueSource
 from adapters.storage.store import Store

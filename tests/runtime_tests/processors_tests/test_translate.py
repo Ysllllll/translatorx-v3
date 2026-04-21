@@ -28,12 +28,12 @@ from application.translate import Checker, ContextWindow, StaticTerms, Translati
 from domain.model import SentenceRecord
 from domain.model.usage import CompletionResult
 
-from adapters.processors import TranslateProcessor
+from application.processors import TranslateProcessor
 from ports.source import VideoKey
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
 
-from adapters.processors.prefix import EN_ZH_PREFIX_RULES, TranslateNodeConfig
+from application.processors.prefix import EN_ZH_PREFIX_RULES, TranslateNodeConfig
 
 
 # ---------------------------------------------------------------------------

@@ -34,7 +34,7 @@ from .align import fill_words, align_segments, distribute_words
 
 if TYPE_CHECKING:
     from domain.lang._core._base_ops import _BaseOps
-    from adapters.preprocess._protocol import ApplyFn
+    from ports.apply_fn import ApplyFn
 
 
 def _extract(

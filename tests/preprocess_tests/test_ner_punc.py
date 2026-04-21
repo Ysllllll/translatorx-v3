@@ -60,7 +60,7 @@ class TestNerPuncRestorer:
     def test_applyfn_conformance(self) -> None:
         """NerPuncRestorer should conform to the ApplyFn protocol."""
         from adapters.preprocess import NerPuncRestorer
-        from adapters.preprocess._protocol import ApplyFn
+        from ports.apply_fn import ApplyFn
 
         restorer = NerPuncRestorer.get_instance()
         # Structural check: callable with correct signature

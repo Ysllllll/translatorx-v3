@@ -56,7 +56,7 @@ from application.translate import (
     translate_with_verify,
 )
 from domain.model import SentenceRecord
-from adapters.processors.prefix import PrefixHandler, TranslateNodeConfig
+from application.processors.prefix import PrefixHandler, TranslateNodeConfig
 
 from ports.processor import ProcessorBase
 

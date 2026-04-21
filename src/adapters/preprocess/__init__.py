@@ -15,7 +15,7 @@ from adapters.preprocess._availability import (
 )
 from adapters.preprocess._chunk import LlmChunker
 from adapters.preprocess._llm_punc import LlmPuncRestorer
-from adapters.preprocess._protocol import ApplyFn
+from ports.apply_fn import ApplyFn
 from adapters.preprocess._remote_punc import RemotePuncRestorer
 
 # Conditional imports for heavy optional deps.

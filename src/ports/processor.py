@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, AsyncIterator, Generic, TypeVar
 
 from domain.model import SentenceRecord
 
-from application.observability.errors import ErrorCategory, ErrorInfo
+from .errors import ErrorCategory, ErrorInfo
 
 if TYPE_CHECKING:
     from application.translate import TranslationContext

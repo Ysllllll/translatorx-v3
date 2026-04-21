@@ -17,7 +17,7 @@ from .context import (
 )
 from .prompts import get_default_system_prompt, register_default_prompt
 from .providers import OneShotTerms, PreloadableTerms
-from .retries import (
+from ports.retries import (
     AttemptOutcome,
     OnFailure,
     ValidateResult,

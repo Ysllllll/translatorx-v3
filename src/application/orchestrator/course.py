@@ -28,7 +28,7 @@ from typing import Awaitable, Callable, Sequence
 from application.translate import TranslationContext
 from domain.model import SentenceRecord
 
-from application.observability.errors import ErrorInfo, ErrorReporter
+from ports.errors import ErrorInfo, ErrorReporter
 from application.orchestrator.video import VideoOrchestrator, VideoResult
 from ports.source import Processor, Source
 from adapters.storage.store import Store

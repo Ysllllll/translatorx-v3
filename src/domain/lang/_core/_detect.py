@@ -23,7 +23,7 @@ def detect_language(text: str) -> str:
     Raises :class:`ValueError` if the detected language is not in the
     supported set (zh/en/ru/es/ja/ko/fr/de/pt/vi).
     """
-    from adapters.preprocess._availability import langdetect_is_available
+    from domain.lang._core._availability import langdetect_is_available
 
     if langdetect_is_available():
         return _detect_via_langdetect(text)

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from .context import ContextWindow, TranslationContext
 from .prompts import get_default_system_prompt
 from ports.engine import LLMEngine, Message
-from .retries import retry_until_valid
+from ports.retries import retry_until_valid
 from application.checker import CheckReport, Checker
 
 

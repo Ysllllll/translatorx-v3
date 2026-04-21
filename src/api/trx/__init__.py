@@ -1,7 +1,8 @@
-"""trx — TranslatorX unified API.
+"""trx — TranslatorX unified API (slim facade).
 
-Convenience facade that re-exports commonly used types from lower-level
-packages and provides factory functions to reduce boilerplate.
+Three factory helpers for common cases, plus a handful of core type
+re-exports for ergonomics. For everything else import directly from
+``domain``, ``ports``, ``adapters``, ``application``, or ``api.app``.
 
 Quick start::
 
@@ -9,11 +10,6 @@ Quick start::
 
     engine = trx.create_engine(model="Qwen/Qwen3-32B", base_url="http://localhost:26592/v1")
     result = await trx.translate_srt(srt_content, engine, src="en", tgt="zh")
-    for seg in result:
-        print(f"[{seg.start:.1f}-{seg.end:.1f}] {seg.text}")
-
-The lower-level packages (``lang_ops``, ``subtitle``, ``llm_ops``,
-``checker``, ``runtime``) remain fully accessible for advanced use.
 """
 
 from __future__ import annotations
@@ -21,83 +17,21 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-# Model types
-from domain.model import Segment, SentenceRecord, Word
-
-# Subtitle
-from domain.subtitle import Subtitle, SubtitleStream
-from adapters.parsers import parse_srt, read_srt, parse_whisperx, read_whisperx
-
-# LangOps
-from domain.lang import LangOps, TextPipeline
-
-# LLM
-from application.translate import (
-    ContextWindow,
-    EngineConfig,
-    LLMEngine,
-    OneShotTerms,
-    OpenAICompatEngine,
-    PreloadableTerms,
-    StaticTerms,
-    TermsAgent,
-    TermsProvider,
-    TranslateResult,
-    TranslationContext,
-    translate_with_verify,
-)
-
-# Checker
-from application.checker import (
-    CheckReport,
-    Checker,
-    Severity,
-    default_checker,
-)
-
-# Runtime (new orchestration layer)
-from adapters.processors import (
-    SummaryProcessor,
-    TranslateProcessor,
-)
-from adapters.processors.prefix import (
-    EN_ZH_PREFIX_RULES,
-    PrefixRule,
-    TranslateNodeConfig,
-)
-from adapters.sources import (
-    PushQueueSource,
-    SrtSource,
-    WhisperXSource,
-)
+from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
+from application.processors.translate import TranslateProcessor
+from application.processors.prefix import TranslateNodeConfig
+from adapters.sources.srt import SrtSource
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
-from application.config import AppConfig
-from application.orchestrator.course import (
-    CourseOrchestrator,
-    CourseResult,
-    VideoSpec,
-)
-from application.orchestrator.video import (
-    StreamingOrchestrator,
-    VideoOrchestrator,
-    VideoResult,
-)
+from application.checker import default_checker
+from application.orchestrator.video import VideoOrchestrator
+from application.translate.context import StaticTerms, TermsProvider, TranslationContext
+from domain.model import SentenceRecord, Segment, Word
+from domain.subtitle import Subtitle
+from ports.engine import LLMEngine
 from ports.source import VideoKey
 
-# App (top-level facade)
-from api.app import (
-    App,
-    CourseBuilder,
-    LiveStreamHandle,
-    StreamBuilder,
-    VideoBuilder,
-)
-
-
-# ---------------------------------------------------------------------------
-# Factory functions
-# ---------------------------------------------------------------------------
+from api.app import App
 
 
 def create_engine(
@@ -169,11 +103,7 @@ async def translate_srt(
     course: str = "default",
     video: str = "srt",
 ) -> list[SentenceRecord]:
-    """Translate SRT content end-to-end in one call.
-
-    Writes to an ephemeral :class:`Workspace` unless ``workspace_root`` is
-    supplied. Returns the translated records in source order.
-    """
+    """Translate SRT content end-to-end in one call."""
     with TemporaryDirectory() as tmp:
         srt_path = Path(tmp) / "in.srt"
         srt_path.write_text(srt_content, encoding="utf-8")
@@ -198,64 +128,14 @@ async def translate_srt(
 
 
 __all__ = [
-    # Factory functions
     "create_engine",
     "create_context",
     "translate_srt",
-    # Model types
+    # Core types for convenience
+    "App",
     "Word",
     "Segment",
     "SentenceRecord",
-    # Subtitle
     "Subtitle",
-    "SubtitleStream",
-    "parse_srt",
-    "read_srt",
-    "parse_whisperx",
-    "read_whisperx",
-    # LangOps
-    "LangOps",
-    "TextPipeline",
-    # LLM
     "LLMEngine",
-    "OpenAICompatEngine",
-    "EngineConfig",
-    "TranslationContext",
-    "StaticTerms",
-    "PreloadableTerms",
-    "OneShotTerms",
-    "TermsProvider",
-    "TermsAgent",
-    "ContextWindow",
-    "TranslateResult",
-    "translate_with_verify",
-    # Checker
-    "Checker",
-    "CheckReport",
-    "Severity",
-    "default_checker",
-    # Runtime
-    "App",
-    "AppConfig",
-    "VideoBuilder",
-    "CourseBuilder",
-    "StreamBuilder",
-    "LiveStreamHandle",
-    "SummaryProcessor",
-    "TranslateProcessor",
-    "TranslateNodeConfig",
-    "PrefixRule",
-    "EN_ZH_PREFIX_RULES",
-    "VideoOrchestrator",
-    "VideoResult",
-    "CourseOrchestrator",
-    "CourseResult",
-    "VideoSpec",
-    "StreamingOrchestrator",
-    "VideoKey",
-    "SrtSource",
-    "WhisperXSource",
-    "PushQueueSource",
-    "Workspace",
-    "JsonFileStore",
 ]

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from application.translate import LLMEngine
 
-from application.translate.retries import OnFailure, resolve_on_failure, retry_until_valid
+from ports.retries import OnFailure, resolve_on_failure, retry_until_valid
 
 logger = logging.getLogger(__name__)
 

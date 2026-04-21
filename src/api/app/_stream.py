@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, AsyncIterator
 from domain.model import SentenceRecord, Segment
 
 from application.orchestrator.video import StreamingOrchestrator
-from adapters.processors.translate import TranslateProcessor
+from application.processors.translate import TranslateProcessor
 from ports.source import Priority, VideoKey
 
 if TYPE_CHECKING:
     from api.app._app import App
-    from application.observability.errors import ErrorReporter
+    from ports.errors import ErrorReporter
 
 
 @dataclass(frozen=True)

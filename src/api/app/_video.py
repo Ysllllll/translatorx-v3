@@ -9,15 +9,15 @@ from typing import TYPE_CHECKING, Any
 from domain.model import SentenceRecord, Segment
 
 from application.orchestrator.video import VideoOrchestrator, VideoResult
-from adapters.processors.summary import SummaryProcessor
-from adapters.processors.translate import TranslateProcessor
+from application.processors.summary import SummaryProcessor
+from application.processors.translate import TranslateProcessor
 from ports.source import Source, VideoKey
 from adapters.sources.srt import SrtSource
 from adapters.sources.whisperx import WhisperXSource
 
 if TYPE_CHECKING:
     from api.app._app import App
-    from application.observability.errors import ErrorReporter
+    from ports.errors import ErrorReporter
 
 
 @dataclass(frozen=True)
