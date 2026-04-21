@@ -144,6 +144,10 @@ class App:
             return LlmChunker(
                 engine,
                 chunk_len=cfg.chunk_len,
+                max_depth=cfg.chunk_max_depth,
+                max_retries=cfg.chunk_max_retries,
+                on_failure=cfg.chunk_on_failure,
+                split_parts=cfg.chunk_split_parts,
                 max_concurrent=cfg.max_concurrent,
             )
         if cfg.chunk_mode == "spacy_llm":
@@ -155,6 +159,10 @@ class App:
             llm = LlmChunker(
                 engine,
                 chunk_len=cfg.chunk_len,
+                max_depth=cfg.chunk_max_depth,
+                max_retries=cfg.chunk_max_retries,
+                on_failure=cfg.chunk_on_failure,
+                split_parts=cfg.chunk_split_parts,
                 max_concurrent=cfg.max_concurrent,
             )
             return SpacyLlmChunker(splitter, llm, chunk_len=cfg.chunk_len)

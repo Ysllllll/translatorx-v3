@@ -107,12 +107,7 @@ class TestVideoBuilder:
         srt = tmp_path / "lec.srt"
         _write_srt(srt, ["Hello world."])
 
-        result = await (
-            app.video(course="c1", video="lec")
-            .source(srt, language="en", kind="srt")
-            .translate(src="en", tgt="zh")
-            .run()
-        )
+        result = await app.video(course="c1", video="lec").source(srt, language="en", kind="srt").translate(src="en", tgt="zh").run()
         assert len(result.records) == 1
         assert result.records[0].translations["zh"] == "[Hello world.]"
 
@@ -138,11 +133,7 @@ class TestCourseBuilder:
         _write_srt(b, ["Bravo."])
 
         result = await (
-            app.course(course="c1")
-            .add_video("a", a, language="en")
-            .add_video("b", b, language="en")
-            .translate(src="en", tgt="zh")
-            .run()
+            app.course(course="c1").add_video("a", a, language="en").add_video("b", b, language="en").translate(src="en", tgt="zh").run()
         )
         assert len(result.succeeded) == 2
 
@@ -187,9 +178,7 @@ class TestBuilderEnhancements:
         _write_srt(srt, ["Hi."])
 
         # No kind= — should infer "srt" from .srt suffix.
-        result = await (
-            app.video(course="c1", video="auto").source(srt, language="en").translate(src="en", tgt="zh").run()
-        )
+        result = await app.video(course="c1", video="auto").source(srt, language="en").translate(src="en", tgt="zh").run()
         assert result.records[0].translations["zh"] == "[Hi.]"
 
     def test_source_kind_rejects_unknown_suffix(self, app: App, tmp_path: Path):
@@ -235,9 +224,7 @@ class TestStreamBuilder:
 
         from model import Segment
 
-        async with (
-            app.stream(course="c1", video="live02", language="en").translate(src="en", tgt="zh").start()
-        ) as handle:
+        async with app.stream(course="c1", video="live02", language="en").translate(src="en", tgt="zh").start() as handle:
             await handle.feed(Segment(start=0.0, end=1.0, text="Ping."))
             # Note: close called on __aexit__; iterate records afterwards.
             collected = []
@@ -512,6 +499,30 @@ class TestPreprocessIntegration:
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         chunker = app.chunker()
         assert chunker._chunk_len == 120
+
+    def test_chunk_advanced_options_propagated(self, tmp_path: Path, monkeypatch):
+        """max_depth / max_retries / on_failure / split_parts flow from config → LlmChunker."""
+        app = App.from_dict(
+            {
+                "engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}},
+                "store": {"root": (tmp_path / "ws").as_posix()},
+                "preprocess": {
+                    "chunk_mode": "llm",
+                    "chunk_len": 60,
+                    "chunk_max_depth": 6,
+                    "chunk_max_retries": 5,
+                    "chunk_on_failure": "keep",
+                    "chunk_split_parts": 3,
+                },
+            }
+        )
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        chunker = app.chunker()
+        assert chunker._max_depth == 6
+        assert chunker._max_retries == 5
+        assert chunker._on_failure == "keep"
+        assert chunker._split_parts == 3
 
     @pytest.mark.asyncio
     async def test_video_run_with_llm_punc(self, tmp_path: Path, monkeypatch):

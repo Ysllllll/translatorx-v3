@@ -127,6 +127,10 @@ class PreprocessConfig(BaseModel):
     chunk_mode: Literal["none", "spacy", "llm", "spacy_llm"] = "none"
     chunk_engine: str = "default"
     chunk_len: int = 90
+    chunk_max_depth: int = 4
+    chunk_max_retries: int = 2
+    chunk_on_failure: Literal["rule", "keep", "raise"] = "rule"
+    chunk_split_parts: int = 2
     merge_under: int | None = None
     max_len: int | None = None
 
