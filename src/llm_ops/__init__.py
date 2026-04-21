@@ -27,6 +27,7 @@ from .context import (
 from .protocol import LLMEngine, Message
 from .prompts import get_default_system_prompt, register_default_prompt
 from .providers import OneShotTerms, PreloadableTerms
+from .retries import AttemptOutcome, ValidateResult, retry_until_valid
 from .translate import TranslateResult, translate_with_verify
 from checker import (
     CheckReport,
@@ -61,6 +62,10 @@ __all__ = [
     # Translate
     "TranslateResult",
     "translate_with_verify",
+    # Retries
+    "retry_until_valid",
+    "AttemptOutcome",
+    "ValidateResult",
     # Prompt defaults
     "get_default_system_prompt",
     "register_default_prompt",
