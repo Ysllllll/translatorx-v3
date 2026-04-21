@@ -79,7 +79,10 @@ async def retry_until_valid(
         rejects a result.
     on_exception:
         Invoked with ``(attempt_idx, exc)`` whenever ``call`` raises.
-        The exception is swallowed and counted as a failed attempt.
+        If supplied, the exception is swallowed and counted as a failed
+        attempt. If ``None`` (default), exceptions propagate out of
+        ``retry_until_valid`` — callers who want silent retry on errors
+        must explicitly opt in by supplying this handler.
 
     Returns
     -------
@@ -99,9 +102,10 @@ async def retry_until_valid(
         try:
             raw = await call(i)
         except Exception as exc:  # noqa: BLE001 — intentional catch-all per docstring
+            if on_exception is None:
+                raise
             last_reason = f"exception: {exc!r}"
-            if on_exception is not None:
-                on_exception(i, exc)
+            on_exception(i, exc)
             continue
 
         accepted, value, reason = validate(raw)

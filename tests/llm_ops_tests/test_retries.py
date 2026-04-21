@@ -106,11 +106,29 @@ class TestExceptionHandling:
         def _validate(x):
             return True, x, ""  # never reached
 
-        outcome = await retry_until_valid(_call, validate=_validate, max_retries=1)
+        outcome = await retry_until_valid(
+            _call,
+            validate=_validate,
+            max_retries=1,
+            on_exception=lambda _i, _e: None,  # opt-in to swallow
+        )
         assert outcome.accepted is False
         assert outcome.attempts == 2
         assert outcome.last_reason.startswith("exception:")
         assert "boom-1" in outcome.last_reason
+
+    @pytest.mark.asyncio
+    async def test_exception_propagates_when_no_handler(self) -> None:
+        """Default behavior: without on_exception, exceptions propagate."""
+
+        async def _call(_i: int):
+            raise RuntimeError("boom")
+
+        def _validate(x):
+            return True, x, ""
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await retry_until_valid(_call, validate=_validate, max_retries=3)
 
 
 class TestPerAttemptStrategy:

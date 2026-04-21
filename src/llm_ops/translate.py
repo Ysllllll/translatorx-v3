@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from .context import ContextWindow, TranslationContext
 from .prompts import get_default_system_prompt
 from .protocol import LLMEngine, Message
+from .retries import retry_until_valid
 from checker import CheckReport, Checker
 
 
@@ -180,43 +181,52 @@ async def translate_with_verify(
 
     context_messages = window.build_messages(effective_pairs)
 
-    last_translation = ""
-    last_report = CheckReport.ok()
-
-    for attempt in range(max_retries + 1):
-        # Pick prompt builder for this degradation level.
-        # Level 3+ uses the bare fallback (single user message).
+    def _messages_for_attempt(attempt: int) -> list[Message]:
+        """Return the message list used at a given degradation level."""
         if attempt >= len(_PROMPT_LEVELS):
-            messages = _build_messages_bare(context.target_lang, source)
-        else:
-            builder = _PROMPT_LEVELS[attempt]
-            # Rebuild context messages only for level 0 (others don't use them
-            # or have them embedded in system prompt).
-            if attempt > 0 and attempt == 0:  # no-op, kept for clarity
-                context_messages = window.build_messages(effective_pairs)
-            messages = builder(resolved_system_prompt, context_messages, source)
+            return _build_messages_bare(context.target_lang, source)
+        builder = _PROMPT_LEVELS[attempt]
+        return builder(resolved_system_prompt, context_messages, source)
 
+    # Track the last (translation, report) so we can fall back on exhaustion.
+    last_seen: dict[str, object] = {"translation": "", "report": CheckReport.ok()}
+
+    async def _call(attempt: int) -> tuple[str, CheckReport]:
+        messages = _messages_for_attempt(attempt)
         result = await engine.complete(messages)
         translation = result.text.strip()
-
         report = checker.check(source, translation)
-        last_translation = translation
-        last_report = report
+        last_seen["translation"] = translation
+        last_seen["report"] = report
+        return translation, report
 
+    def _validate(pair: tuple[str, CheckReport]):
+        translation, report = pair
         if report.passed:
-            window.add(source, translation)
-            return TranslateResult(
-                translation=translation,
-                report=report,
-                attempts=attempt + 1,
-                accepted=True,
-            )
+            return True, (translation, report), ""
+        return False, None, "checker rejected"
 
-    # Exhausted retries — accept without adding to history
+    outcome = await retry_until_valid(
+        _call,
+        validate=_validate,
+        max_retries=max_retries,
+    )
+
+    if outcome.accepted:
+        translation, report = outcome.value  # type: ignore[misc]
+        window.add(source, translation)
+        return TranslateResult(
+            translation=translation,
+            report=report,
+            attempts=outcome.attempts,
+            accepted=True,
+        )
+
+    # Exhausted retries — return the last seen translation without adding to history.
     return TranslateResult(
-        translation=last_translation,
-        report=last_report,
-        attempts=max_retries + 1,
+        translation=last_seen["translation"],  # type: ignore[arg-type]
+        report=last_seen["report"],  # type: ignore[arg-type]
+        attempts=outcome.attempts,
         accepted=False,
     )
 
