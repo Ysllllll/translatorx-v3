@@ -656,8 +656,9 @@ class TestChineseAutoFill:
         ]
         result = Subtitle(segments, _ops).sentences().build()
         assert [s.text for s in result] == ["你好世界。", "今天天气好。"]
-        assert len(result[0].words) >= 1
-        assert len(result[1].words) >= 1
+        # jieba splits each Chinese sentence into two tokens.
+        assert [w.word for w in result[0].words] == ["你好", "世界。"]
+        assert [w.word for w in result[1].words] == ["今天天气", "好。"]
 
 
 # ---------------------------------------------------------------------------

@@ -180,8 +180,12 @@ class TestKoreanSentences:
 
     def test_words_preserved(self) -> None:
         result = Subtitle(_short_segments(), _ops).sentences().build()
-        for seg in result:
-            assert len(seg.words) >= 1
+        actual = [(s.text, [w.word for w in s.words]) for s in result]
+        expected = [
+            ("안녕하세요.", ["안녕하세요", "."]),
+            ("반갑습니다!", ["반갑습니다", "!"]),
+        ]
+        assert actual == expected
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +196,9 @@ class TestKoreanSentences:
 class TestKoreanClauses:
     def test_clause_split(self) -> None:
         result = Subtitle(_clause_segments(), _ops).clauses().build()
-        assert len(result) >= 3  # at least comma + semicolon splits
+        actual = [s.text for s in result]
+        expected = ["사과,", "바나나,", "오렌지는 과일이고; 우유,", "빵은 아침식사입니다."]
+        assert actual == expected
 
     def test_clause_timing(self) -> None:
         result = Subtitle(_clause_segments(), _ops).clauses().build()
@@ -201,8 +207,14 @@ class TestKoreanClauses:
 
     def test_sentences_then_clauses(self) -> None:
         result = Subtitle(_news_segments(), _ops).sentences().clauses().build()
-        # More clauses than sentences
-        assert len(result) >= 3
+        # 3 sentences without internal clause separators → 3 chunks.
+        actual = [s.text for s in result]
+        expected = [
+            "최근 인공지능 기술이 빠르게 발전하고 있습니다.",
+            "전문가들은 이 추세가 계속될 것이라고 전망합니다.",
+            "그러나우려의 목소리도 있습니다.",
+        ]
+        assert actual == expected
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +256,16 @@ class TestKoreanMerge:
 
     def test_merge_words_timing(self) -> None:
         result = Subtitle(_clause_segments(), _ops).clauses().merge(30).build()
-        for seg in result:
-            assert len(seg.words) >= 1
-            assert seg.start <= seg.end
+        # Single merged segment containing every word in original order.
+        actual = [(s.text, [w.word for w in s.words], s.start <= s.end) for s in result]
+        expected = [
+            (
+                "사과, 바나나, 오렌지는 과일이고; 우유, 빵은 아침식사입니다.",
+                ["사과", ",", "바나나", ",", "오렌지는", "과일이고", ";", "우유", ",", "빵은", "아침식사입니다", "."],
+                True,
+            )
+        ]
+        assert actual == expected
 
 
 # ---------------------------------------------------------------------------
@@ -257,11 +276,13 @@ class TestKoreanMerge:
 class TestKoreanRecords:
     def test_records_structure(self) -> None:
         records = Subtitle(_news_segments(), _ops).records()
-        assert len(records) >= 1
-        for rec in records:
-            assert rec.src_text
-            assert rec.start <= rec.end
-            assert len(rec.segments) >= 1
+        actual = [(r.src_text, r.start <= r.end, [s.text for s in r.segments]) for r in records]
+        expected = [
+            ("최근 인공지능 기술이 빠르게 발전하고 있습니다.", True, ["최근 인공지능 기술이 빠르게 발전하고 있습니다."]),
+            ("전문가들은 이 추세가 계속될 것이라고 전망합니다.", True, ["전문가들은 이 추세가 계속될 것이라고 전망합니다."]),
+            ("그러나우려의 목소리도 있습니다.", True, ["그러나우려의 목소리도 있습니다."]),
+        ]
+        assert actual == expected
 
     def test_records_with_split(self) -> None:
         records = Subtitle(_news_segments(), _ops).sentences().clauses().split(12).records()
@@ -278,8 +299,10 @@ class TestKoreanRecords:
 class TestKoreanSpeaker:
     def test_speaker_change_creates_boundary(self) -> None:
         result = Subtitle(_multi_speaker_segments(), _ops, split_by_speaker=True).sentences().build()
-        # Speaker change should create at least 2 groups
-        assert len(result) >= 2
+        # Speaker change splits the input into exactly 2 sentence groups.
+        actual = [s.text for s in result]
+        expected = ["어떻게생각하세요?", "아주좋다고생각합니다!"]
+        assert actual == expected
 
     def test_same_speaker_no_extra_splits(self) -> None:
         single = [
@@ -312,9 +335,13 @@ class TestKoreanStream:
         for seg in segs:
             all_done.extend(stream.feed(seg))
         all_done.extend(stream.flush())
-        assert len(all_done) >= 1
-        joined = " ".join(s.text for s in all_done)
-        assert "인공지능" in joined
+        actual = [s.text for s in all_done]
+        expected = [
+            "최근 인공지능 기술이 빠르게 발전하고 있습니다.",
+            "전문가들은 이 추세가 계속될 것이라고 전망합니다.",
+            "그러나우려의 목소리도 있습니다.",
+        ]
+        assert actual == expected
 
     def test_stream_flush_empty(self) -> None:
         stream = Subtitle.stream(_ops)

@@ -35,7 +35,11 @@ def test_read_first_10_srt_files(srt_files: list[str]) -> None:
     """Read the first 10 SRT files and verify they produce valid Segments."""
     for path in srt_files:
         segments = read_srt(path)
-        assert len(segments) > 0, f"No segments parsed from {path}"
+        # Each fixture SRT must yield at least one segment (real-file content
+        # varies, so we assert a lower bound rather than an exact count).
+        actual_count = len(segments)
+        expected_min = 1
+        assert actual_count >= expected_min, f"{path}: expected ≥{expected_min} segments, got {actual_count}"
 
         for seg in segments:
             assert seg.start >= 0, f"Negative start time in {path}"

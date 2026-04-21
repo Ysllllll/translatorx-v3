@@ -104,4 +104,7 @@ class TestSrtSourceBackwardCompat:
     async def test_still_works_without_store(self, srt_path: Path) -> None:
         src = SrtSource(srt_path, language="en")
         records = await _drain(src.read())
-        assert len(records) >= 1
+        # SAMPLE_SRT has two cues without terminators → merged into one record.
+        actual_texts = [r.src_text for r in records]
+        expected_texts = ["Hello world How are you"]
+        assert actual_texts == expected_texts

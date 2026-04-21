@@ -46,10 +46,14 @@ def test_transform_chunk_scope_post_sentence() -> None:
 
     sub = Subtitle(segs, language="en").sentences().transform(split_fn)
     records = sub.records()
-    assert len(records) >= 1
-    # Each sentence was split into individual words
-    for r in records:
-        assert len(r.segments) >= 1
+    actual_src_texts = [r.src_text for r in records]
+    expected_src_texts = ["hello world.", "foo bar."]
+    assert actual_src_texts == expected_src_texts
+    # split_fn("hello world.") → ["hello", "world."]; transform places each
+    # token in its own sub-segment within the parent record.
+    actual_segments_per_record = [len(r.segments) for r in records]
+    expected_segments_per_record = [2, 2]
+    assert actual_segments_per_record == expected_segments_per_record
 
 
 def test_transform_chunk_scope_with_cache() -> None:
@@ -111,10 +115,9 @@ def test_transform_joined_scope_post_sentence() -> None:
     sub = sub.transform(punc, scope="joined")
     records = sub.records()
 
-    # fn received full sentence texts, not individual chunks
-    assert len(received_texts) >= 1
-    for t in received_texts:
-        assert t  # non-empty
+    # fn received the joined text of each sentence pipeline (one entry per
+    # sentence), not individual chunks.
+    assert received_texts == ["hello world.", "foo bar."]
 
 
 def test_transform_joined_scope_with_cache() -> None:

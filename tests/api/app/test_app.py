@@ -294,7 +294,9 @@ class TestNewAPIFeatures:
             .translate(tgt="zh")
             .run()
         )
-        assert len(result.records) >= 1
+        actual_texts = [r.src_text for r in result.records]
+        expected_texts = ["Hello world.", "This is a test."]
+        assert actual_texts == expected_texts
 
     def test_scan_dir(self, app: App, tmp_path: Path):
         """scan_dir() should discover SRT files and add them as videos."""
@@ -404,7 +406,9 @@ class TestNewAPIFeatures:
 
         # Should not raise — src inferred from stream's language="en"
         handle = app.stream(course="c1", video="live", language="en").translate(tgt="zh").start()
-        assert handle is not None
+        from api.app import LiveStreamHandle
+
+        assert isinstance(handle, LiveStreamHandle)
 
 
 class TestPreprocessIntegration:
@@ -427,10 +431,9 @@ class TestPreprocessIntegration:
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         restorer = app.punc_restorer()
-        assert restorer is not None
         from adapters.preprocess import LlmPuncRestorer
 
-        assert isinstance(restorer, LlmPuncRestorer)
+        assert type(restorer) is LlmPuncRestorer
 
     def test_punc_restorer_remote_requires_endpoint(self, tmp_path: Path):
         app = App.from_dict(
@@ -452,10 +455,9 @@ class TestPreprocessIntegration:
             }
         )
         restorer = app.punc_restorer()
-        assert restorer is not None
         from adapters.preprocess import RemotePuncRestorer
 
-        assert isinstance(restorer, RemotePuncRestorer)
+        assert type(restorer) is RemotePuncRestorer
 
     def test_chunker_llm(self, tmp_path: Path, monkeypatch):
         app = App.from_dict(
@@ -468,10 +470,9 @@ class TestPreprocessIntegration:
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         chunker = app.chunker()
-        assert chunker is not None
         from adapters.preprocess import LlmChunker
 
-        assert isinstance(chunker, LlmChunker)
+        assert type(chunker) is LlmChunker
 
     def test_punc_threshold_propagated(self, tmp_path: Path, monkeypatch):
         """punc_threshold in config reaches the LlmPuncRestorer instance."""
@@ -543,7 +544,11 @@ class TestPreprocessIntegration:
         _write_srt(srt, ["hello world"])
 
         result = await app.video(course="c1", video="test").source(srt, language="en").translate(tgt="zh").run()
-        assert len(result.records) >= 1
+        # Fake punc engine wraps text in [...]; result must be exactly one
+        # record echoing the wrapped source.
+        actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
+        expected = [("[hello world]", "[[hello world]]")]
+        assert actual == expected
 
     @pytest.mark.asyncio
     async def test_video_run_with_llm_chunk(self, tmp_path: Path, monkeypatch):
@@ -563,8 +568,16 @@ class TestPreprocessIntegration:
         _write_srt(srt, ["This is a long sentence that needs chunking"])
 
         result = await app.video(course="c1", video="test").source(srt, language="en").translate(tgt="zh").run()
-        # Should have records regardless of how chunking split them
-        assert len(result.records) >= 1
+        # Fake LLM chunker leaves text intact (returns single chunk per item),
+        # so we expect one record with the original source text.
+        actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
+        expected = [
+            (
+                "This is a long sentence that needs chunking",
+                "[This is a long sentence that needs chunking]",
+            )
+        ]
+        assert actual == expected
 
     def test_punc_position_default_global(self, app: App):
         """Default punc_position is 'global'."""
@@ -592,10 +605,9 @@ class TestPreprocessIntegration:
             }
         )
         chunker = app.chunker()
-        assert chunker is not None
         from adapters.preprocess import SpacySplitter
 
-        assert isinstance(chunker, SpacySplitter)
+        assert type(chunker) is SpacySplitter
 
     @pytest.mark.asyncio
     async def test_video_run_with_punc_position_sentence(self, tmp_path: Path, monkeypatch):
@@ -615,7 +627,10 @@ class TestPreprocessIntegration:
         _write_srt(srt, ["hello world"])
 
         result = await app.video(course="c1", video="test").source(srt, language="en").translate(tgt="zh").run()
-        assert len(result.records) >= 1
+        # punc_position='sentence' wraps once → src "[hello world]".
+        actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
+        expected = [("[hello world]", "[[hello world]]")]
+        assert actual == expected
 
     @pytest.mark.asyncio
     async def test_video_run_with_punc_position_both(self, tmp_path: Path, monkeypatch):
@@ -635,4 +650,7 @@ class TestPreprocessIntegration:
         _write_srt(srt, ["hello world"])
 
         result = await app.video(course="c1", video="test").source(srt, language="en").translate(tgt="zh").run()
-        assert len(result.records) >= 1
+        # punc_position='both' wraps twice → src "[[hello world]]".
+        actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
+        expected = [("[[hello world]]", "[[[hello world]]]")]
+        assert actual == expected

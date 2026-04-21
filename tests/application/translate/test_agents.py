@@ -105,7 +105,10 @@ class TestTermsAgent:
         big = "x" * 1000
         await agent.extract([big])
         user_content = engine.calls[0][1]["content"]
-        assert len(user_content) <= 50
+        # Agent must enforce the configured truncation budget exactly.
+        actual_len = len(user_content)
+        max_len = 50
+        assert actual_len <= max_len, f"expected ≤{max_len} chars after truncation, got {actual_len}"
 
     @pytest.mark.asyncio
     async def test_extract_propagates_engine_errors(self):

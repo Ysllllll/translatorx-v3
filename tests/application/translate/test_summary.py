@@ -57,7 +57,7 @@ async def test_window_triggers_merge_and_records_snapshot():
     agent = IncrementalSummaryAgent(engine, "en", "zh", window_words=5)
     state = IncrementalSummaryState()
     state = await agent.feed(state, "one two three four five six")
-    assert state.current is not None
+    assert state.current is not None, "window should have triggered a merge that populates state.current"
     assert state.current.version == 1
     assert state.current.title == "Intro"
     assert state.current.terms == {"gradient": "梯度"}
@@ -91,7 +91,7 @@ async def test_flush_forces_merge_even_under_window():
     state = await agent.feed(state, "only a few words")
     assert state.current is None
     state = await agent.flush(state)
-    assert state.current is not None
+    assert state.current is not None, "flush() must force a merge that produces state.current"
     assert state.completed is True
 
 

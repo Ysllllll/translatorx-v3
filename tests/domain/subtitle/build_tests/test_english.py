@@ -534,9 +534,8 @@ class TestEnglishTransform:
             batch_size=2,
             workers=1,
         ).build()
-        # Each batch should have at most 2 texts
-        assert all(b <= 2 for b in received_batches)
-        assert len(received_batches) >= 1
+        # 5 sentences batched into [2, 2, 1] with batch_size=2
+        assert received_batches == [2, 2, 1]
 
     def test_transform_batch_size_zero(self) -> None:
         """batch_size=0 passes all texts in one call."""
@@ -586,10 +585,11 @@ class TestEnglishTransform:
         # Count how many sentences are longer than 30
         long_count = sum(1 for s in all_texts if _ops.length(s.text) > 30)
         assert call_count == long_count
-        # Short chunks are unchanged, long chunks are uppercased
-        for seg in result:
-            original = next((s for s in all_texts if s.text == seg.text or s.text.upper() == seg.text), None)
-            assert original is not None
+        # Each output text matches either the original (skipped, length≤30)
+        # or its uppercased form (transformed). Build the explicit mapping.
+        actual_texts = [seg.text for seg in result]
+        expected_texts = [s.text if _ops.length(s.text) <= 30 else s.text.upper() for s in all_texts]
+        assert actual_texts == expected_texts
 
 
 # ---------------------------------------------------------------------------
@@ -627,9 +627,10 @@ class TestEnglishRecords:
 
     def test_records_sub_segments_have_words(self) -> None:
         records = Subtitle(_asr_interview_segments(), _ops).sentences().clauses().split(20).records()
-        for rec in records:
-            for seg in rec.segments:
-                assert len(seg.words) >= 1, f"Sub-segment {seg.text!r} in {rec.src_text!r} has no words"
+        # Every sub-segment must have at least one word — the failure list
+        # makes "expected = []" actionable.
+        actual_empty = [(rec.src_text, seg.text) for rec in records for seg in rec.segments if len(seg.words) == 0]
+        assert actual_empty == []
 
 
 # ---------------------------------------------------------------------------
@@ -649,8 +650,10 @@ class TestEnglishAutoFill:
             "Hello world.",
             "How are you?",
         ]
-        # Words interpolated
-        assert len(result[0].words) >= 1
+        # Words interpolated evenly across the segment timing.
+        actual_words_0 = [w.word for w in result[0].words]
+        expected_words_0 = ["Hello", "world."]
+        assert actual_words_0 == expected_words_0
         assert result[0].start >= 0.0
         assert result[1].end <= 5.0
 
@@ -671,7 +674,10 @@ class TestEnglishAutoFill:
         result = Subtitle(segments, _ops).sentences().build()
         assert len(result) == 2
         assert result[0].words[0].word == "Hello"
-        assert len(result[1].words) >= 1
+        # 2nd segment had no words → fill_words interpolates "How", "are", "you?"
+        actual_words_1 = [w.word for w in result[1].words]
+        expected_words_1 = ["How", "are", "you?"]
+        assert actual_words_1 == expected_words_1
 
 
 # ---------------------------------------------------------------------------
@@ -754,13 +760,11 @@ class TestEnglishStream:
             )
         )
         # "Today we're here." is now confirmed
-        assert len(done2) >= 1
-        assert any("here." in s.text for s in done2)
+        assert [s.text for s in done2] == ["Today we're here."]
 
         # Flush remainder
         rest = stream.flush()
-        assert len(rest) >= 1
-        assert any("Thank you!" in s.text for s in rest)
+        assert [s.text for s in rest] == ["Thank you!"]
 
     def test_stream_flush_empty(self) -> None:
         stream = Subtitle.stream(_ops)

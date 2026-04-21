@@ -285,13 +285,24 @@ class TestKeywordRule:
 
     def test_forbidden_term_fails(self):
         rule = self._rule(forbidden_terms=["请翻译", "```"])
-        assert len(rule.check("Hello", "请翻译这段话")) > 0
-        assert len(rule.check("Hello", "```json```")) > 0
+        issues_a = rule.check("Hello", "请翻译这段话")
+        assert len(issues_a) == 1
+        assert issues_a[0].rule == "keyword_forbidden"
+        assert "请翻译" in issues_a[0].message
+
+        issues_b = rule.check("Hello", "```json```")
+        assert len(issues_b) == 1
+        assert issues_b[0].rule == "keyword_forbidden"
+        assert "```" in issues_b[0].message
+
         assert rule.check("Hello", "你好") == []
 
     def test_forbidden_case_insensitive(self):
         rule = self._rule(forbidden_terms=["TRANSLATE"])
-        assert len(rule.check("test", "please translate this")) > 0
+        issues = rule.check("test", "please translate this")
+        assert len(issues) == 1
+        assert issues[0].rule == "keyword_forbidden"
+        assert "TRANSLATE" in issues[0].message
 
     def test_keyword_pair_passes_when_consistent(self):
         rule = self._rule(
@@ -308,7 +319,7 @@ class TestKeywordRule:
             ]
         )
         issues = rule.check("Hello world", "翻译结果：你好世界")
-        assert len(issues) > 0
+        assert len(issues) == 1
         assert issues[0].rule == "keyword_inconsistency"
 
     def test_keyword_pair_no_target_match_passes(self):
@@ -322,8 +333,14 @@ class TestKeywordRule:
                 (["subtitle"], ["字幕"]),
             ]
         )
-        assert len(rule.check("Hello", "英文翻译")) > 0
-        assert len(rule.check("Hello", "字幕翻译")) > 0
+        issues_a = rule.check("Hello", "英文翻译")
+        assert len(issues_a) == 1
+        assert issues_a[0].rule == "keyword_inconsistency"
+
+        issues_b = rule.check("Hello", "字幕翻译")
+        assert len(issues_b) == 1
+        assert issues_b[0].rule == "keyword_inconsistency"
+
         assert rule.check("Hello", "你好") == []
 
     def test_name_property(self):
@@ -574,18 +591,28 @@ _ALL_LANGS = ["zh", "en", "ja", "ko", "ru", "es", "fr", "de", "pt", "vi"]
 class TestCheckerData:
     @pytest.mark.parametrize("lang", _ALL_LANGS)
     def test_forbidden_terms_defined(self, lang):
+        # Profile contents evolve with the product; we only require at least
+        # one curated forbidden term per language.
         profile = get_profile(lang)
-        assert len(profile.forbidden_terms) > 0, f"no forbidden terms for {lang}"
+        actual_count = len(profile.forbidden_terms)
+        expected_min = 1
+        assert actual_count >= expected_min, f"{lang}: expected ≥{expected_min} forbidden terms, got {actual_count}"
 
     @pytest.mark.parametrize("lang", _ALL_LANGS)
     def test_hallucination_starts_defined(self, lang):
+        # Profile contents evolve with the product; we only require at least
+        # one curated hallucination prefix per language.
         profile = get_profile(lang)
-        assert len(profile.hallucination_starts) > 0, f"no hallucination patterns for {lang}"
+        actual_count = len(profile.hallucination_starts)
+        expected_min = 1
+        assert actual_count >= expected_min, f"{lang}: expected ≥{expected_min} hallucination patterns, got {actual_count}"
 
     @pytest.mark.parametrize("lang", _ALL_LANGS)
     def test_question_marks_defined(self, lang):
         profile = get_profile(lang)
-        assert len(profile.question_marks) > 0, f"no question marks for {lang}"
+        actual_count = len(profile.question_marks)
+        expected_min = 1
+        assert actual_count >= expected_min, f"{lang}: expected ≥{expected_min} question mark variants, got {actual_count}"
         assert "?" in profile.question_marks or "？" in profile.question_marks
 
     @pytest.mark.parametrize("lang", _ALL_LANGS)
@@ -611,7 +638,12 @@ class TestCheckerData:
             tgt_words = tgt.concept_words.get(concept)
             if tgt_words:
                 pairs.append((src_words, tgt_words))
-        assert len(pairs) > 0
+        # Concept overlap between en and zh evolves with the product; we
+        # only require at least one shared concept and the canonical
+        # "translate" → "翻译" pair to be present.
+        actual_count = len(pairs)
+        expected_min = 1
+        assert actual_count >= expected_min, f"expected ≥{expected_min} keyword pairs, got {actual_count}"
         translate_pair = [p for p in pairs if "translate" in p[0]]
         assert len(translate_pair) == 1
         assert "翻译" in translate_pair[0][1]

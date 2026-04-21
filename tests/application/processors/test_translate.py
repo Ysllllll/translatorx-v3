@@ -367,8 +367,9 @@ class TestRefinements:
             yield _rec(0, "ok, let's go")
 
         out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
-        # prefix readded → starts with 好的，
-        assert out[0].translations["zh"].startswith("好的，")
+        # prefix readded → translation must start with the canonical "好的，"
+        actual_prefix = out[0].translations["zh"][: len("好的，")]
+        assert actual_prefix == "好的，"
 
 
 # ---------------------------------------------------------------------------

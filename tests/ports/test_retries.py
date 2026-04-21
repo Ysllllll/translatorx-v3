@@ -114,8 +114,7 @@ class TestExceptionHandling:
         )
         assert outcome.accepted is False
         assert outcome.attempts == 2
-        assert outcome.last_reason.startswith("exception:")
-        assert "boom-1" in outcome.last_reason
+        assert outcome.last_reason == "exception: RuntimeError('boom-1')"
 
     @pytest.mark.asyncio
     async def test_exception_propagates_when_no_handler(self) -> None:

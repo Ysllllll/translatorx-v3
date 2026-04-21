@@ -286,9 +286,9 @@ class TestPathFor:
         ws = Workspace(tmp_path, "c")
         long_stem = "A" * 100 + " [LUU0EuDKgKo]"
         p = ws.get_subdir("_test_trunc").path_for(long_stem, suffix=".mp4")
-        # id preserved; body truncated
-        assert p.stem.endswith("[LUU0EuDKgKo]")
-        assert len(p.stem) <= 30
+        # body truncated to fit truncate_stem=30 while preserving id suffix
+        assert p.stem == "AAAAAAAAAAAAAAAA [LUU0EuDKgKo]"
+        assert len(p.stem) == 30
 
     def test_strip_id_on_write(self, tmp_path: Path) -> None:
         register_subdir(
@@ -329,9 +329,9 @@ class TestVideosAndRoutes:
 
     def test_routes_single_video(self, seeded_ws: Workspace) -> None:
         r = seeded_ws.routes("lec01")
-        assert r["home"] is not None
-        assert r["audio"] is not None
-        assert r["subtitle"] is not None
+        assert r["home"].name == "lec01.mp4"
+        assert r["audio"].name == "lec01.wav"
+        assert r["subtitle"].name == "lec01.srt"
         assert r["translation"] is None  # not created yet
 
     def test_routes_covers_all_subdirs(self, seeded_ws: Workspace) -> None:

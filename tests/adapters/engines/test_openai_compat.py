@@ -104,7 +104,7 @@ class TestOpenAICompatEngine:
     def test_base_url_with_v1(self):
         cfg = EngineConfig(model="test", base_url="http://localhost:8000/v1")
         engine = OpenAICompatEngine(cfg)
-        assert "v1" in str(engine._client.base_url)
+        assert str(engine._client.base_url) == "http://localhost:8000/v1/"
 
     def test_model_property(self):
         cfg = EngineConfig(model="Qwen/Qwen3-32B", base_url="http://localhost:8000")
@@ -136,7 +136,12 @@ class TestOpenAICompatEngineLive:
         )
         engine = OpenAICompatEngine(cfg)
         result = await engine.complete([{"role": "user", "content": "Say hello in Chinese"}])
-        assert len(result.text) > 0
+        # Live LLM call — we cannot pin the exact text, so we assert
+        # non-empty content and the expected model echoes back when usage
+        # metadata is available.
+        actual_len = len(result.text)
+        expected_min_len = 1
+        assert actual_len >= expected_min_len, f"expected non-empty completion text, got {actual_len} chars"
         assert result.usage is None or result.usage.model == "Qwen/Qwen3-32B"
 
     @pytest.mark.asyncio
@@ -151,4 +156,8 @@ class TestOpenAICompatEngineLive:
         chunks = []
         async for chunk in engine.stream([{"role": "user", "content": "Say hello"}]):
             chunks.append(chunk)
-        assert len(chunks) > 0
+        # Live streaming LLM call — exact chunk count is non-deterministic;
+        # at minimum we expect one chunk back.
+        actual_chunks = len(chunks)
+        expected_min_chunks = 1
+        assert actual_chunks >= expected_min_chunks, f"expected ≥{expected_min_chunks} stream chunks, got {actual_chunks}"

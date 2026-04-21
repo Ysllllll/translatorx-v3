@@ -46,9 +46,11 @@ class TestSrtSource:
         source = SrtSource(srt, language="en")
         records = await _drain(source.read())
 
-        assert len(records) >= 2
+        actual_texts = [r.src_text for r in records]
+        expected_texts = ["Hello world.", "This is a test.", "Goodbye for now."]
+        assert actual_texts == expected_texts
         ids = [r.extra["id"] for r in records]
-        assert ids == list(range(len(records)))
+        assert ids == [0, 1, 2]
         # All sentences end with terminators
         assert all(r.src_text.strip().endswith((".", "?", "!")) for r in records)
 
@@ -92,9 +94,13 @@ class TestWhisperXSource:
         source = WhisperXSource(path, language="en")
         records = await _drain(source.read())
 
-        assert len(records) >= 1
+        # Six sanitized words contain no inter-sentence whitespace, so the
+        # source emits exactly one merged record.
+        actual_texts = [r.src_text for r in records]
+        expected_texts = ["Helloworld.Thisisatest."]
+        assert actual_texts == expected_texts
         ids = [r.extra["id"] for r in records]
-        assert ids == list(range(len(records)))
+        assert ids == [0]
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +125,10 @@ class TestPushQueueSource:
 
         records = await _drain(src.read())
 
-        assert len(records) >= 2
-        assert [r.extra["id"] for r in records] == list(range(len(records)))
+        actual_texts = [r.src_text for r in records]
+        expected_texts = ["Hello world.", "This is a test.", "Goodbye."]
+        assert actual_texts == expected_texts
+        assert [r.extra["id"] for r in records] == [0, 1, 2]
 
     @pytest.mark.asyncio
     async def test_feed_after_close_raises(self):

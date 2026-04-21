@@ -8,7 +8,9 @@ from adapters.parsers.srt import sanitize_srt, parse_srt
 class TestBOM:
     def test_strip_utf8_bom(self):
         raw = "\ufeff1\n00:00:00,000 --> 00:00:01,000\nHello"
-        assert not sanitize_srt(raw).startswith("\ufeff")
+        actual = sanitize_srt(raw)
+        expected = "1\n00:00:00,000 --> 00:00:01,000\nHello"
+        assert actual == expected
 
     def test_mid_text_bom_removed(self):
         raw = "1\n00:00:00,000 --> 00:00:01,000\nHe\ufeffllo"

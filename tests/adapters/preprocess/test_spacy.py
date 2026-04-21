@@ -25,9 +25,7 @@ class TestSpacySplitter:
 
         splitter = SpacySplitter.get_instance()
         result = splitter(["Hello world. This is a test. How are you?"])
-        assert len(result) == 1
-        sentences = result[0]
-        assert len(sentences) >= 2  # At least 2 sentences
+        assert result == [["Hello world.", "This is a test.", "How are you?"]]
 
     def test_empty_input(self) -> None:
         from adapters.preprocess import SpacySplitter

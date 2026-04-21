@@ -73,10 +73,11 @@ class BuilderTestBase:
         r0 = sub.build()
         r1 = s1.build()
         r2 = s2.build()
-        # All three return valid results independently
-        assert len(r0) >= 1
-        assert len(r1) >= 1
-        assert len(r2) >= 1
+        # All three pipelines independently round-trip the single input
+        # segment (no sentence/clause boundary inside "Hello.").
+        assert [s.text for s in r0] == ["Hello."]
+        assert [s.text for s in r1] == ["Hello."]
+        assert [s.text for s in r2] == ["Hello."]
         # Original didn't change
         assert r0[0].text == "Hello."
 
@@ -90,8 +91,9 @@ class BuilderTestBase:
         """Every output segment has at least one word."""
         seg = S("Hello.", 0.0, 1.0, words=[W("Hello.", 0.0, 1.0)])
         result = Subtitle([seg], self.ops()).sentences().build()
-        for s in result:
-            assert len(s.words) >= 1, f"Segment {s.text!r} has no words"
+        actual = [(s.text, [w.word for w in s.words]) for s in result]
+        expected = [("Hello.", ["Hello."])]
+        assert actual == expected
 
     def test_timing_monotonic(self) -> None:
         """Output segment timings are non-decreasing."""
@@ -104,8 +106,9 @@ class BuilderTestBase:
         """Each SentenceRecord has valid src_text, timing, and segments."""
         seg = S("Hello.", 0.0, 1.0, words=[W("Hello.", 0.0, 1.0)])
         records = Subtitle([seg], self.ops()).records()
-        for rec in records:
-            assert isinstance(rec, SentenceRecord)
-            assert rec.src_text
-            assert rec.start <= rec.end
-            assert len(rec.segments) >= 1
+        assert len(records) == 1
+        rec = records[0]
+        assert isinstance(rec, SentenceRecord)
+        assert rec.src_text == "Hello."
+        assert rec.start == 0.0 and rec.end == 1.0
+        assert [s.text for s in rec.segments] == ["Hello."]

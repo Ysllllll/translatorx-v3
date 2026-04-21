@@ -146,9 +146,9 @@ class TestWindowTrigger:
         _ = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
 
         data = await store.load_video("v1")
-        assert data is not None
+        assert data is not None, "store.load_video('v1') must return persisted state"
         summary = data.get("summary")
-        assert summary is not None
+        assert summary is not None, "summary section must be present in store after merge"
         assert summary["current"]["title"] == "Intro"
         assert summary["current"]["terms"] == {"LLM": "大模型"}
         assert summary["completed"] is True  # flush in finally
@@ -201,6 +201,6 @@ class TestWarmStart:
         # Fresh start → LLM was called.
         assert engine.calls == 1
         data = await store.load_video("v1")
-        assert data is not None
+        assert data is not None, "store.load_video('v1') must return persisted state"
         # Fingerprint was updated to current.
         assert data["meta"]["_fingerprints"]["summary"] == proc.fingerprint()

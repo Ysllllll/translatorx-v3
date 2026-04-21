@@ -129,7 +129,8 @@ class TestRerunCacheHit:
         assert len(r2.records) == 3
         assert eng2.calls == [], "second run must hit cache, no LLM calls"
         for rec in r2.records:
-            assert rec.translations.get("zh", "").startswith("[zh]")
+            actual_prefix = rec.translations.get("zh", "")[: len("[zh]")]
+            assert actual_prefix == "[zh]"
 
 
 # ---------------------------------------------------------------------------
@@ -167,11 +168,16 @@ class TestPartialFailureResume:
         _bind(app2, eng2)
         r2 = await app2.video(course="c", video="mix").source(srt, language="en").translate(src="en", tgt="zh").run()
         assert len(r2.records) == 3
-        assert all(r.translations["zh"].startswith("[zh]") for r in r2.records)
+        for r in r2.records:
+            actual_prefix = r.translations["zh"][: len("[zh]")]
+            assert actual_prefix == "[zh]"
         # Engine called only for records not previously persisted (BAD + Bravo)
         # — Alpha must NOT trigger a new call.
         assert "Alpha." not in eng2.calls
-        assert len(eng2.calls) <= 2
+        # At most BAD and Bravo are retranslated; Alpha is served from cache.
+        actual_calls = len(eng2.calls)
+        max_expected = 2
+        assert actual_calls <= max_expected, f"expected ≤{max_expected} retried calls, got {actual_calls}"
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +249,9 @@ class TestStreamE2E:
         await consumer
 
         assert len(collected) == 2
-        assert all(r.translations["zh"].startswith("[zh]") for r in collected)
+        for r in collected:
+            actual_prefix = r.translations["zh"][: len("[zh]")]
+            assert actual_prefix == "[zh]"
 
         # Store on disk should have both records
         store_file = ws / "c" / "zzz_translation" / "live.json"

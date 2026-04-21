@@ -77,7 +77,7 @@ class TestRegister:
         )
         try:
             after = get_default_system_prompt(ctx)
-            assert after.startswith("日译中专家。")
+            assert after[: len("日译中专家。")] == "日译中专家。"
         finally:
             # Clean up to avoid cross-test pollution.
             from application.translate.prompts import _REGISTRY  # type: ignore[attr-defined]

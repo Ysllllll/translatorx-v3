@@ -315,8 +315,10 @@ class TestSanitizeWhisperx:
             {"word": "7?s", "start": 1188.105, "end": 1188.125, "score": 0.0},
         ]
         result = sanitize_whisperx(ws)
-        # Should collapse the repeating "7?s iPhone" pattern
-        assert len(result) <= 4, f"Expected collapse, got {len(result)} words"
+        # Repeating "7?s iPhone" pattern collapses to ['7?s', 'iPhone', '7?s']
+        actual_words = [w.word for w in result]
+        expected_words = ["7?s", "iPhone", "7?s"]
+        assert actual_words == expected_words
 
     def test_speaker_preserved(self):
         ws = [{"word": "Hello", "start": 0, "end": 0.5, "score": 0.9, "speaker": "SPEAKER_01"}]

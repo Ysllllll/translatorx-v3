@@ -129,7 +129,8 @@ class TestStreamingOrchestrator:
         # treated as continuations within the streaming state machine,
         # so ``H.`` flushes before ``N1.``.
         texts = [r.src_text for r in received]
-        assert texts[0].startswith("H.")
+        actual_first = texts[0][: len("H.")]
+        assert actual_first == "H."
         assert any("N1." in t for t in texts)
 
     @pytest.mark.asyncio
