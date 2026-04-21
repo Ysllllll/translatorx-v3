@@ -23,6 +23,7 @@ import logging
 
 from .agents import TermsAgent, TermsAgentResult
 from .protocol import LLMEngine
+from .retries import retry_until_valid
 
 logger = logging.getLogger(__name__)
 
@@ -224,17 +225,32 @@ async def _run_with_retries(
     max_retries: int,
 ) -> TermsAgentResult:
     """Run ``agent.extract`` with retries; fall back to empty on total failure."""
-    last_exc: Exception | None = None
-    for attempt in range(max_retries + 1):
-        try:
-            return await agent.extract(texts)
-        except Exception as exc:  # pragma: no cover - exercised in tests
-            last_exc = exc
-            logger.warning(
-                "TermsAgent attempt %d/%d failed: %s",
-                attempt + 1,
-                max_retries + 1,
-                exc,
-            )
-    logger.warning("TermsAgent: all retries exhausted, falling back to empty terms (%s)", last_exc)
+
+    async def _call(_attempt: int) -> TermsAgentResult:
+        return await agent.extract(texts)
+
+    def _validate(result: TermsAgentResult):
+        # No validation beyond "did not raise" — accept every successful return.
+        return True, result, ""
+
+    def _on_exception(attempt: int, exc: Exception) -> None:
+        logger.warning(
+            "TermsAgent attempt %d/%d failed: %s",
+            attempt + 1,
+            max_retries + 1,
+            exc,
+        )
+
+    outcome = await retry_until_valid(
+        _call,
+        validate=_validate,
+        max_retries=max_retries,
+        on_exception=_on_exception,
+    )
+    if outcome.accepted:
+        return outcome.value  # type: ignore[return-value]
+    logger.warning(
+        "TermsAgent: all retries exhausted, falling back to empty terms (%s)",
+        outcome.last_reason,
+    )
     return TermsAgentResult.empty()
