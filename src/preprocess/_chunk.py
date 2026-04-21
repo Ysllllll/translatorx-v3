@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from lang_ops._core._base_ops import _BaseOps
     from llm_ops import LLMEngine
 
+from llm_ops.retries import retry_until_valid
+
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT_TEMPLATE = (
@@ -211,51 +213,52 @@ class LlmChunker:
             {"role": "system", "content": self._system_prompt},
             {"role": "user", "content": text},
         ]
-        attempts = self._max_retries + 1
-        last_reason = ""
-        for attempt in range(1, attempts + 1):
-            try:
-                completion = await self._engine.complete(messages)
-            except Exception as exc:
-                last_reason = f"engine error: {exc}"
-                logger.debug(
-                    "LLM chunk call failed (attempt %d/%d) for text: %s",
-                    attempt,
-                    attempts,
-                    text[:60],
-                )
-                continue
 
+        async def _call(_attempt: int):
+            return await self._engine.complete(messages)
+
+        def _validate(completion):
             raw = completion.text.strip()
             lines = [_STRIP_LEADING_NUM.sub("", line).strip() for line in raw.splitlines() if line.strip()]
-
             if len(lines) != self._split_parts:
-                last_reason = f"expected {self._split_parts} lines, got {len(lines)}"
-                logger.debug(
-                    "LLM chunk returned %d lines (expected %d, attempt %d/%d): %s",
-                    len(lines),
-                    self._split_parts,
-                    attempt,
-                    attempts,
-                    raw[:120],
-                )
-                continue
-
+                return False, None, f"expected {self._split_parts} lines, got {len(lines)}"
             if not _chunks_match_source(lines, text):
-                last_reason = "reconstruction mismatch"
-                logger.debug(
-                    "LLM chunk output does not match source (attempt %d/%d): %r → %r",
-                    attempt,
-                    attempts,
-                    text[:80],
-                    lines,
-                )
-                continue
+                return False, None, "reconstruction mismatch"
+            return True, lines, ""
 
-            return lines
+        def _on_reject(attempt: int, reason: str) -> None:
+            logger.debug(
+                "LLM chunk rejected (attempt %d/%d, %s) for text: %s",
+                attempt + 1,
+                self._max_retries + 1,
+                reason,
+                text[:80],
+            )
 
-        logger.debug("LLM chunk giving up after %d attempts (%s)", attempts, last_reason)
-        return None
+        def _on_exception(attempt: int, exc: Exception) -> None:
+            logger.debug(
+                "LLM chunk call failed (attempt %d/%d, %r) for text: %s",
+                attempt + 1,
+                self._max_retries + 1,
+                exc,
+                text[:60],
+            )
+
+        outcome = await retry_until_valid(
+            _call,
+            validate=_validate,
+            max_retries=self._max_retries,
+            on_reject=_on_reject,
+            on_exception=_on_exception,
+        )
+        if not outcome.accepted:
+            logger.debug(
+                "LLM chunk giving up after %d attempts (%s)",
+                outcome.attempts,
+                outcome.last_reason,
+            )
+            return None
+        return outcome.value
 
     def _rule_split(self, text: str) -> list[str]:
         """Fall back to rule-based split at word boundaries."""
