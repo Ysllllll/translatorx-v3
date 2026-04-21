@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from llm_ops import LLMEngine
 
+from llm_ops.retries import retry_until_valid
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,6 +49,10 @@ class LlmPuncRestorer:
         restorer = LlmPuncRestorer(engine)
         results = restorer(["hello world this is a test"])
         # → [["Hello world, this is a test."]]
+
+    ``max_retries`` follows the codebase-wide convention: total attempts
+    equal ``max_retries + 1``.  On total failure the original text is
+    returned unchanged.
     """
 
     def __init__(
@@ -55,8 +61,10 @@ class LlmPuncRestorer:
         *,
         threshold: int = 0,
         max_concurrent: int = 8,
-        max_retries: int = 3,
+        max_retries: int = 2,
     ) -> None:
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
         self._engine = engine
         self._threshold = threshold
         self._max_concurrent = max_concurrent
@@ -84,26 +92,42 @@ class LlmPuncRestorer:
         async def _restore(text: str) -> list[str]:
             if not text.strip() or len(text) < self._threshold:
                 return [text]
-            for attempt in range(1, self._max_retries + 1):
+
+            messages = [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ]
+
+            async def _call(_attempt: int) -> str:
                 async with sem:
-                    messages = [
-                        {"role": "system", "content": _SYSTEM_PROMPT},
-                        {"role": "user", "content": text},
-                    ]
                     completion = await self._engine.complete(messages)
-                    restored = completion.text.strip()
-                    if _punc_content_matches(text, restored):
-                        return [restored]
-                    logger.warning(
-                        "LLM punc changed word content (attempt %d/%d), retrying: %r → %r",
-                        attempt,
-                        self._max_retries,
-                        text[:80],
-                        restored[:80],
-                    )
+                return completion.text.strip()
+
+            def _validate(restored: str):
+                if _punc_content_matches(text, restored):
+                    return True, restored, ""
+                return False, None, "word content changed"
+
+            def _on_reject(attempt: int, reason: str) -> None:
+                logger.warning(
+                    "LLM punc %s (attempt %d/%d), retrying: %r",
+                    reason,
+                    attempt + 1,
+                    self._max_retries + 1,
+                    text[:80],
+                )
+
+            outcome = await retry_until_valid(
+                _call,
+                validate=_validate,
+                max_retries=self._max_retries,
+                on_reject=_on_reject,
+            )
+            if outcome.accepted:
+                return [outcome.value]  # type: ignore[list-item]
             logger.warning(
                 "LLM punc failed all %d attempts, keeping original: %r",
-                self._max_retries,
+                outcome.attempts,
                 text[:80],
             )
             return [text]
