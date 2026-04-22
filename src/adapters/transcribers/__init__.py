@@ -6,6 +6,12 @@ from ports.transcriber import TranscribeOptions, Transcriber, TranscriptionResul
 
 from .http_remote import HttpRemoteConfig, HttpRemoteTranscriber
 from .openai_api import OpenAiTranscriber, OpenAiTranscriberConfig
+from .registry import (
+    DEFAULT_REGISTRY,
+    TranscriberBackendRegistry,
+    create,
+    register,
+)
 from .whisperx import WhisperXConfig, WhisperXTranscriber, whisperx_is_available
 
 __all__ = [
@@ -19,4 +25,8 @@ __all__ = [
     "WhisperXConfig",
     "WhisperXTranscriber",
     "whisperx_is_available",
+    "DEFAULT_REGISTRY",
+    "TranscriberBackendRegistry",
+    "create",
+    "register",
 ]

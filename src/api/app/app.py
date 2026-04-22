@@ -190,6 +190,80 @@ class App:
             return SpacyLlmChunker(splitter, llm, chunk_len=cfg.chunk_len, ops=ops)
         raise ValueError(f"unknown chunk_mode: {cfg.chunk_mode!r}")
 
+    # -- stage factories (Stage 6/8 — transcribe / tts) -----------------
+
+    def transcriber(self):
+        """Build a :class:`Transcriber` from ``config.transcriber``.
+
+        Returns ``None`` when ``library`` is unset.
+        """
+        cfg = self._config.transcriber
+        if not cfg.library:
+            return None
+        from adapters.transcribers import create as create_transcriber
+
+        spec: dict[str, object] = {"library": cfg.library}
+        if cfg.model:
+            spec["model"] = cfg.model
+        if cfg.base_url:
+            spec["base_url"] = cfg.base_url
+        if cfg.api_key:
+            spec["api_key"] = cfg.api_key
+        if cfg.language:
+            spec["language"] = cfg.language
+        for k, v in cfg.extra.items():
+            spec.setdefault(k, v)
+        passthrough = cfg.model_dump(exclude={"library", "model", "base_url", "api_key", "language", "word_timestamps", "extra"})
+        for k, v in passthrough.items():
+            spec.setdefault(k, v)
+        return create_transcriber(spec)
+
+    def tts_backend(self):
+        """Build a :class:`TTS` backend from ``config.tts``.
+
+        Returns ``None`` when ``library`` is unset.
+        """
+        cfg = self._config.tts
+        if not cfg.library:
+            return None
+        from adapters.tts import create as create_tts
+
+        spec: dict[str, object] = {"library": cfg.library}
+        if cfg.api_key:
+            spec["api_key"] = cfg.api_key
+        if cfg.base_url:
+            spec["base_url"] = cfg.base_url
+        for k, v in cfg.extra.items():
+            spec.setdefault(k, v)
+        passthrough = cfg.model_dump(
+            exclude={
+                "library",
+                "default_voice",
+                "format",
+                "rate",
+                "api_key",
+                "base_url",
+                "speaker_map",
+                "gender_map",
+                "extra",
+            }
+        )
+        for k, v in passthrough.items():
+            spec.setdefault(k, v)
+        return create_tts(spec)
+
+    def voice_picker(self, language: str):
+        """Build a :class:`VoicePicker` for *language* from ``config.tts``."""
+        from ports.tts import VoicePicker
+
+        cfg = self._config.tts
+        return VoicePicker(
+            language=language,
+            default_voice=cfg.default_voice or None,
+            speaker_map=dict(cfg.speaker_map),
+            gender_map=dict(cfg.gender_map),
+        )
+
     # -- builders --------------------------------------------------------
 
     def video(self, *, course: str, video: str) -> "VideoBuilder":

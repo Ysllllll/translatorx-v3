@@ -218,15 +218,22 @@ class TaskManager:
             async with self._rm.acquire_video_slot(principal.user_id, principal.tier):
                 last: VideoResult | None = None
                 for tgt_lang in task.tgt:
-                    builder = app.video(course=task.course, video=task.video).source(source_path, language=task.src, kind=source_kind)
-                    # Attach stages per request. Only translate / summary are
-                    # wired into VideoBuilder at this point; align / tts are
-                    # available via the AlignProcessor / TTSProcessor ports
-                    # but not yet as Builder methods. We attach summary when
-                    # requested; other stages pass through via translate.
+                    builder = app.video(course=task.course, video=task.video)
+                    if "transcribe" in task.stages:
+                        builder = builder.transcribe(audio=source_path, language=task.src)
+                    else:
+                        builder = builder.source(source_path, language=task.src, kind=source_kind)
                     if "summary" in task.stages:
                         builder = builder.summary(engine=engine_name)
-                    builder = builder.translate(src=task.src, tgt=tgt_lang, engine=engine_name)
+                    if "translate" in task.stages:
+                        builder = builder.translate(src=task.src, tgt=tgt_lang, engine=engine_name)
+                    else:
+                        # translate is mandatory for a video task — auto-add.
+                        builder = builder.translate(src=task.src, tgt=tgt_lang, engine=engine_name)
+                    if "align" in task.stages:
+                        builder = builder.align(engine=engine_name)
+                    if "tts" in task.stages:
+                        builder = builder.tts()
                     if hasattr(builder, "with_progress"):
                         builder = builder.with_progress(on_progress)
                     last = await builder.run()

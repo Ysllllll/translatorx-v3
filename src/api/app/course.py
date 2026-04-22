@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 from domain.model import SentenceRecord
 
 from application.orchestrator.course import CourseOrchestrator, CourseResult, VideoSpec
+from application.processors.align import AlignProcessor
 from application.processors.summary import SummaryProcessor
 from application.processors.translate import TranslateProcessor
+from application.processors.tts import TTSProcessor
 from ports.source import Source, VideoKey
 from adapters.sources.srt import SrtSource
 from adapters.sources.whisperx import WhisperXSource
@@ -32,6 +34,21 @@ class _TranslateStage:
 class _SummaryStage:
     engine_name: str = "default"
     window_words: int = 4500
+
+
+@dataclass(frozen=True)
+class _AlignStage:
+    engine_name: str = "default"
+    max_retries: int = 2
+    tolerate_ratio: float = 0.1
+
+
+@dataclass(frozen=True)
+class _TTSStage:
+    library: str | None = None
+    voice: str | None = None
+    format: str | None = None
+    rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +96,8 @@ class CourseBuilder:
     _videos: tuple[_CourseVideoEntry, ...] = field(default_factory=tuple)
     _translate: _TranslateStage | None = None
     _summary: _SummaryStage | None = None
+    _align: _AlignStage | None = None
+    _tts: _TTSStage | None = None
     _error_reporter: ErrorReporter | None = None
 
     def add_video(
@@ -155,6 +174,37 @@ class CourseBuilder:
             _summary=_SummaryStage(engine_name=engine, window_words=window_words),
         )
 
+    def align(
+        self,
+        *,
+        engine: str = "default",
+        max_retries: int = 2,
+        tolerate_ratio: float = 0.1,
+    ) -> CourseBuilder:
+        """Attach an :class:`AlignProcessor` after translate for every video."""
+        return replace(
+            self,
+            _align=_AlignStage(
+                engine_name=engine,
+                max_retries=max_retries,
+                tolerate_ratio=tolerate_ratio,
+            ),
+        )
+
+    def tts(
+        self,
+        *,
+        library: str | None = None,
+        voice: str | None = None,
+        format: str | None = None,
+        rate: float | None = None,
+    ) -> CourseBuilder:
+        """Attach a :class:`TTSProcessor` as the final stage for every video."""
+        return replace(
+            self,
+            _tts=_TTSStage(library=library, voice=voice, format=format, rate=rate),
+        )
+
     def with_error_reporter(self, reporter: "ErrorReporter") -> CourseBuilder:
         return replace(self, _error_reporter=reporter)
 
@@ -211,6 +261,32 @@ class CourseBuilder:
                         flush_every=self.app.config.runtime.flush_every,
                     )
                 )
+                if self._align is not None:
+                    align_engine = self.app.engine(self._align.engine_name)
+                    procs.append(
+                        AlignProcessor(
+                            align_engine,
+                            max_retries=self._align.max_retries,
+                            tolerate_ratio=self._align.tolerate_ratio,
+                            flush_every=self.app.config.runtime.flush_every,
+                        )
+                    )
+                if self._tts is not None:
+                    backend = self.app.tts_backend()
+                    if backend is None:
+                        raise ValueError("CourseBuilder.tts() requires config.tts.library to be set")
+                    voice_picker = self.app.voice_picker(_tgt)
+                    tts_cfg = self.app.config.tts
+                    procs.append(
+                        TTSProcessor(
+                            backend,
+                            voice_picker=voice_picker,
+                            default_voice=self._tts.voice or tts_cfg.default_voice or None,
+                            format=self._tts.format or tts_cfg.format,
+                            rate=self._tts.rate if self._tts.rate is not None else tts_cfg.rate,
+                            flush_every=self.app.config.runtime.flush_every,
+                        )
+                    )
                 return procs
 
             specs: list[VideoSpec] = []
