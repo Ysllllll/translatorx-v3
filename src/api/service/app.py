@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 
 from api.service.auth import Principal
-from api.service.routers import health, streams, videos
+from api.service.routers import health, streams, usage, videos
 from api.service.tasks import TaskManager
 from application.resources import DEFAULT_TIERS, InMemoryResourceManager, UserTier
 
@@ -101,6 +101,7 @@ def create_app(
     api.include_router(health.router)
     api.include_router(videos.router)
     api.include_router(streams.router)
+    api.include_router(usage.router)
     return api
 
 

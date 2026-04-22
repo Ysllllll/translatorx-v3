@@ -260,6 +260,28 @@ class InMemoryResourceManager:
                 by_model=dict(entry.by_model),
             )
 
+    async def list_daily_ledgers(self, *, limit: int = 100) -> list[UsageSnapshot]:
+        """Return today's ledger for every user (admin / summary endpoint)."""
+        today = _today_utc()
+        snapshots: list[UsageSnapshot] = []
+        async with self._ledger_lock:
+            for (uid, day), entry in self._ledger.items():
+                if day != today:
+                    continue
+                snapshots.append(
+                    UsageSnapshot(
+                        user_id=uid,
+                        period_start=today,
+                        cost_usd=entry.cost_usd,
+                        prompt_tokens=entry.prompt_tokens,
+                        completion_tokens=entry.completion_tokens,
+                        requests=entry.requests,
+                        by_model=dict(entry.by_model),
+                    )
+                )
+        snapshots.sort(key=lambda s: s.cost_usd, reverse=True)
+        return snapshots[:limit]
+
 
 # ---------------------------------------------------------------------------
 # Internals

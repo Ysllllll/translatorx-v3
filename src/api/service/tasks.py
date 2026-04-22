@@ -216,6 +216,10 @@ class TaskManager:
 
         try:
             async with self._rm.acquire_video_slot(principal.user_id, principal.tier):
+
+                async def _usage_sink(usage, _uid=principal.user_id) -> None:
+                    await self._rm.record_usage(_uid, usage)
+
                 last: VideoResult | None = None
                 for tgt_lang in task.tgt:
                     builder = app.video(course=task.course, video=task.video)
@@ -236,6 +240,8 @@ class TaskManager:
                         builder = builder.tts()
                     if hasattr(builder, "with_progress"):
                         builder = builder.with_progress(on_progress)
+                    if hasattr(builder, "with_usage_sink"):
+                        builder = builder.with_usage_sink(_usage_sink)
                     last = await builder.run()
                 task.result = last
                 task.elapsed_s = getattr(last, "elapsed_s", None)

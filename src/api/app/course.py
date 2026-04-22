@@ -99,6 +99,7 @@ class CourseBuilder:
     _align: _AlignStage | None = None
     _tts: _TTSStage | None = None
     _error_reporter: ErrorReporter | None = None
+    _usage_sink: Any = None
 
     def add_video(
         self,
@@ -208,6 +209,17 @@ class CourseBuilder:
     def with_error_reporter(self, reporter: "ErrorReporter") -> CourseBuilder:
         return replace(self, _error_reporter=reporter)
 
+    def with_usage_sink(self, sink: Any) -> CourseBuilder:
+        """Route every engine :class:`Usage` through ``sink`` (async callable)."""
+        return replace(self, _usage_sink=sink)
+
+    def _meter(self, engine: Any) -> Any:
+        if self._usage_sink is None:
+            return engine
+        from application.engines import MeteringEngine
+
+        return MeteringEngine(engine, self._usage_sink)
+
     async def run(self) -> CourseResult:
         if not self._videos:
             raise ValueError("CourseBuilder.run() requires at least one .add_video() or .scan_dir()")
@@ -232,7 +244,7 @@ class CourseBuilder:
         result: CourseResult | None = None
 
         for tgt_lang in t.tgt:
-            engine = self.app.engine(t.engine_name)
+            engine = self._meter(self.app.engine(t.engine_name))
             ctx = self.app.context(src_lang, tgt_lang)
             checker = self.app.checker(src_lang, tgt_lang)
             store = self.app.store(self.course)
@@ -245,7 +257,7 @@ class CourseBuilder:
             ) -> Sequence[Any]:
                 procs: list[Any] = []
                 if self._summary is not None:
-                    sum_engine = self.app.engine(self._summary.engine_name)
+                    sum_engine = self._meter(self.app.engine(self._summary.engine_name))
                     procs.append(
                         SummaryProcessor(
                             sum_engine,
@@ -262,7 +274,7 @@ class CourseBuilder:
                     )
                 )
                 if self._align is not None:
-                    align_engine = self.app.engine(self._align.engine_name)
+                    align_engine = self._meter(self.app.engine(self._align.engine_name))
                     procs.append(
                         AlignProcessor(
                             align_engine,

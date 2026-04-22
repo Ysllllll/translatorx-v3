@@ -108,6 +108,7 @@ class VideoBuilder:
     _tts: _TTSStage | None = None
     _error_reporter: ErrorReporter | None = None
     _progress: Any = None
+    _usage_sink: Any = None
 
     def source(self, path: str | Path, *, language: str | None = None, kind: str | None = None) -> VideoBuilder:
         """Attach a file-based :class:`Source`.
@@ -257,6 +258,15 @@ class VideoBuilder:
         """Attach a progress callback forwarded to :class:`VideoOrchestrator`."""
         return replace(self, _progress=cb)
 
+    def with_usage_sink(self, sink: Any) -> VideoBuilder:
+        """Route every engine :class:`Usage` through ``sink`` (async callable).
+
+        The sink signature is ``async (usage: Usage) -> None``. Typically
+        bound to ``ResourceManager.record_usage(user_id, ...)`` so every
+        translate / summary / align call lands in the user's ledger.
+        """
+        return replace(self, _usage_sink=sink)
+
     async def run(self) -> VideoResult:
         if self._source is None and self._transcribe is None:
             raise ValueError("VideoBuilder.run() requires .source(...) or .transcribe(...) first")
@@ -279,9 +289,11 @@ class VideoBuilder:
             checker = self.app.checker(src_lang, tgt_lang)
             store = self.app.store(self.course)
 
+            engine = self._meter(engine)
+
             procs: list[Any] = []
             if self._summary is not None:
-                sum_engine = self.app.engine(self._summary.engine_name)
+                sum_engine = self._meter(self.app.engine(self._summary.engine_name))
                 procs.append(
                     SummaryProcessor(
                         sum_engine,
@@ -298,7 +310,7 @@ class VideoBuilder:
                 )
             )
             if self._align is not None:
-                align_engine = self.app.engine(self._align.engine_name)
+                align_engine = self._meter(self.app.engine(self._align.engine_name))
                 procs.append(
                     AlignProcessor(
                         align_engine,
@@ -336,6 +348,14 @@ class VideoBuilder:
         if self._source is None:
             raise ValueError("VideoBuilder.run() requires .source(...) or .transcribe(...) first")
         return self._source, self._source_language
+
+    def _meter(self, engine: Any) -> Any:
+        """Wrap ``engine`` with :class:`MeteringEngine` when a sink is set."""
+        if self._usage_sink is None:
+            return engine
+        from application.engines import MeteringEngine
+
+        return MeteringEngine(engine, self._usage_sink)
 
     async def _run_transcribe(self) -> tuple[Source, str]:
         import json
