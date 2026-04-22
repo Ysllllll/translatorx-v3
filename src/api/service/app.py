@@ -20,7 +20,7 @@ an anonymous ``free``-tier principal.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 
@@ -37,9 +37,9 @@ if TYPE_CHECKING:
 def from_app_config(app: "App") -> FastAPI:
     """Build a FastAPI service from ``app.config.service`` alone.
 
-    Resolves ``api_keys``, ``resource_backend`` (memory/redis), and
-    ``redis_url`` from :class:`ServiceConfig` so callers don't have to
-    duplicate wiring.
+    Resolves ``api_keys``, ``resource_backend`` (memory/redis),
+    ``redis_url``, and ``task_backend`` (inproc/arq) so callers don't
+    have to duplicate wiring.
     """
     svc = app.config.service
     api_keys: dict[str, tuple[str, str]] = {key: (entry.user_id, entry.tier) for key, entry in svc.api_keys.items()}
@@ -55,7 +55,30 @@ def from_app_config(app: "App") -> FastAPI:
         rm = RedisResourceManager(client, RedisResourceConfig(key_prefix=svc.redis_key_prefix))
     else:
         rm = InMemoryResourceManager()
-    return create_app(app, resource_manager=rm, api_keys=api_keys)
+    task_manager = None
+    if svc.task_backend == "arq":
+        if not svc.redis_url:
+            raise ValueError("service.task_backend='arq' requires service.redis_url")
+        try:
+            from arq.connections import RedisSettings, create_pool
+        except ImportError as exc:
+            raise ImportError("service.task_backend='arq' requires `pip install arq`") from exc
+
+        from api.service.tasks_arq import ArqTaskManager
+
+        async def _mk_arq(_app: "App" = app, _rm: "ResourceManager" = rm):
+            pool = await create_pool(RedisSettings.from_dsn(svc.redis_url), default_queue_name=svc.arq_queue_name)
+            return ArqTaskManager(
+                _app,
+                _rm,
+                pool,
+                queue_name=svc.arq_queue_name,
+                task_prefix=svc.arq_task_prefix,
+                events_prefix=svc.arq_events_prefix,
+            )
+
+        task_manager = _mk_arq
+    return create_app(app, resource_manager=rm, api_keys=api_keys, task_manager_factory=task_manager)
 
 
 def create_app(
@@ -64,6 +87,7 @@ def create_app(
     resource_manager: "ResourceManager | None" = None,
     api_keys: dict[str, tuple[str, str]] | None = None,
     tier_map: dict[str, UserTier] | None = None,
+    task_manager_factory: Any | None = None,
 ) -> FastAPI:
     """Build a FastAPI app wired to the given :class:`App` facade.
 
@@ -75,6 +99,9 @@ def create_app(
             dev mode (no auth).
         tier_map: Override for tier name → :class:`UserTier`. Defaults
             to :data:`DEFAULT_TIERS`.
+        task_manager_factory: Optional async factory returning a task
+            manager (e.g. :class:`ArqTaskManager`). When ``None`` the
+            in-process :class:`TaskManager` is used.
     """
     rm = resource_manager or InMemoryResourceManager()
     tier_resolver = dict(tier_map or DEFAULT_TIERS)
@@ -89,7 +116,10 @@ def create_app(
     async def lifespan(api: FastAPI):
         api.state.app = app
         api.state.rm = rm
-        api.state.tasks = TaskManager(app, rm)
+        if task_manager_factory is not None:
+            api.state.tasks = await task_manager_factory()
+        else:
+            api.state.tasks = TaskManager(app, rm)
         api.state.streams = {}
         api.state.auth_map = auth_map
         try:

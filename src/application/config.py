@@ -212,6 +212,11 @@ class ServiceConfig(BaseModel):
     redis_url: str = ""
     redis_key_prefix: str = "trx:rm:"
 
+    task_backend: Literal["inproc", "arq"] = "inproc"
+    arq_queue_name: str = "trx:tasks"
+    arq_task_prefix: str = "trx:task:"
+    arq_events_prefix: str = "trx:task-events:"
+
 
 class AppConfig(BaseModel):
     """Root configuration model."""

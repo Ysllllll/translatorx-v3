@@ -29,6 +29,7 @@ test = [
 
 [project.scripts]
 translatorx-serve = "api.service.__main__:main"
+translatorx-worker = "api.service.worker:main"
 
 [tool.ruff]
 line-length = 140
