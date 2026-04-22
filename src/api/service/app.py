@@ -34,6 +34,30 @@ if TYPE_CHECKING:
     from application.resources import ResourceManager
 
 
+def from_app_config(app: "App") -> FastAPI:
+    """Build a FastAPI service from ``app.config.service`` alone.
+
+    Resolves ``api_keys``, ``resource_backend`` (memory/redis), and
+    ``redis_url`` from :class:`ServiceConfig` so callers don't have to
+    duplicate wiring.
+    """
+    svc = app.config.service
+    api_keys: dict[str, tuple[str, str]] = {key: (entry.user_id, entry.tier) for key, entry in svc.api_keys.items()}
+    rm: "ResourceManager"
+    if svc.resource_backend == "redis":
+        if not svc.redis_url:
+            raise ValueError("service.resource_backend='redis' requires service.redis_url")
+        import redis.asyncio as redis_async
+
+        from application.resources import RedisResourceConfig, RedisResourceManager
+
+        client = redis_async.from_url(svc.redis_url, decode_responses=True)
+        rm = RedisResourceManager(client, RedisResourceConfig(key_prefix=svc.redis_key_prefix))
+    else:
+        rm = InMemoryResourceManager()
+    return create_app(app, resource_manager=rm, api_keys=api_keys)
+
+
 def create_app(
     app: "App",
     *,
@@ -80,4 +104,4 @@ def create_app(
     return api
 
 
-__all__ = ["create_app"]
+__all__ = ["create_app", "from_app_config"]

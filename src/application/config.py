@@ -183,6 +183,36 @@ class TTSConfig(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
+class AuthKeyEntry(BaseModel):
+    """One API key → principal mapping under :attr:`ServiceConfig.api_keys`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    tier: str = "free"
+
+
+class ServiceConfig(BaseModel):
+    """FastAPI service configuration (Stage 7).
+
+    Consumed by :func:`api.service.create_app` to wire auth + the
+    resource manager. Leave all fields empty/default for a dev server
+    (no auth, in-memory resource manager).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = "0.0.0.0"
+    port: int = 8080
+    api_keys: dict[str, AuthKeyEntry] = Field(
+        default_factory=dict,
+        description="Mapping of API key string → principal (user_id + tier).",
+    )
+    resource_backend: Literal["memory", "redis"] = "memory"
+    redis_url: str = ""
+    redis_key_prefix: str = "trx:rm:"
+
+
 class AppConfig(BaseModel):
     """Root configuration model."""
 
@@ -195,6 +225,7 @@ class AppConfig(BaseModel):
     preprocess: PreprocessConfig = Field(default_factory=PreprocessConfig)
     transcriber: TranscriberConfig = Field(default_factory=TranscriberConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
+    service: ServiceConfig = Field(default_factory=ServiceConfig)
 
     # -- loaders ---------------------------------------------------------
 
@@ -252,9 +283,13 @@ def _apply_env_overrides(data: dict[str, Any], *, prefix: str) -> dict[str, Any]
 
 __all__ = [
     "AppConfig",
+    "AuthKeyEntry",
     "ContextEntry",
     "EngineEntry",
     "PreprocessConfig",
     "RuntimeConfig",
+    "ServiceConfig",
     "StoreConfig",
+    "TranscriberConfig",
+    "TTSConfig",
 ]
