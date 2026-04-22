@@ -44,6 +44,56 @@ logger = logging.getLogger(__name__)
 TaskStatus = str  # "queued" | "running" | "done" | "failed" | "cancelled"
 
 
+class TaskStore:
+    """Atomic JSON persistence for :class:`Task` metadata.
+
+    One file per task under ``<root>/.trx-tasks/<task_id>.json``. Writes
+    are atomic (tmp + rename). Only the serialisable public fields are
+    persisted — asyncio runners/queues are intentionally omitted.
+    """
+
+    def __init__(self, root: Path | str) -> None:
+        self._root = Path(root)
+        self._root.mkdir(parents=True, exist_ok=True)
+
+    def path(self, task_id: str) -> Path:
+        return self._root / f"{task_id}.json"
+
+    def save(self, task: "Task") -> None:
+        payload = {
+            "task_id": task.task_id,
+            "course": task.course,
+            "video": task.video,
+            "src": task.src,
+            "tgt": task.tgt,
+            "stages": task.stages,
+            "status": task.status,
+            "done": task.done,
+            "total": task.total,
+            "error": task.error,
+            "elapsed_s": task.elapsed_s,
+        }
+        p = self.path(task.task_id)
+        tmp = p.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(p)
+
+    def load_all(self) -> list[dict]:
+        out: list[dict] = []
+        for p in self._root.glob("*.json"):
+            try:
+                out.append(json.loads(p.read_text(encoding="utf-8")))
+            except Exception:
+                logger.warning("task-store: failed to parse %s", p)
+        return out
+
+    def delete(self, task_id: str) -> None:
+        try:
+            self.path(task_id).unlink()
+        except FileNotFoundError:
+            pass
+
+
 @dataclass
 class Task:
     """One video translation task managed by :class:`TaskManager`."""
@@ -114,10 +164,62 @@ def _snapshot_event(task: Task) -> dict[str, Any]:
 class TaskManager:
     """Registry + async runner for video tasks."""
 
-    def __init__(self, app: "App", resource_mgr: "ResourceManager") -> None:
+    def __init__(
+        self,
+        app: "App",
+        resource_mgr: "ResourceManager",
+        *,
+        store: "TaskStore | None" = None,
+    ) -> None:
         self._app = app
         self._rm = resource_mgr
         self._tasks: dict[str, Task] = {}
+        self._store = store
+
+    # -- persistence recovery ------------------------------------------
+
+    def recover(self) -> int:
+        """Load persisted tasks; mark previously-running ones as failed.
+
+        Returns the number of ghost tasks that were recovered. Called
+        once at startup from the FastAPI lifespan.
+        """
+        if self._store is None:
+            return 0
+        n = 0
+        for row in self._store.load_all():
+            task = Task(
+                task_id=row["task_id"],
+                course=row["course"],
+                video=row["video"],
+                src=row.get("src"),
+                tgt=list(row.get("tgt") or []),
+                stages=list(row.get("stages") or []),
+                status=row.get("status") or "queued",
+                done=row.get("done") or 0,
+                total=row.get("total"),
+                error=row.get("error"),
+                elapsed_s=row.get("elapsed_s"),
+            )
+            # Anything mid-flight at restart time is forever lost —
+            # mark failed so clients can resubmit.
+            if task.status in ("queued", "running"):
+                task.status = "failed"
+                task.error = "interrupted by server restart"
+                self._store.save(task)
+            # Ensure the terminal flag is set so new /events subscribers
+            # get snapshot + sentinel immediately.
+            task._terminal.set()
+            self._tasks[task.task_id] = task
+            n += 1
+        return n
+
+    def _persist(self, task: Task) -> None:
+        if self._store is not None:
+            try:
+                self._store.save(task)
+            except Exception:
+                logger.exception("task %s: persistence write failed", task.task_id)
 
     # -- accessors ------------------------------------------------------
 
@@ -141,6 +243,8 @@ class TaskManager:
         return True
 
     async def shutdown(self) -> None:
+        # Cancel runners first so _run_task's finally runs mark_terminal
+        # and flushes subscriber queues with a sentinel.
         pending = [t._runner for t in self._tasks.values() if t._runner and not t._runner.done()]
         for r in pending:
             r.cancel()
@@ -149,6 +253,13 @@ class TaskManager:
                 await r
             except BaseException:
                 pass
+        # Belt-and-braces: any task that never ran (still queued) still
+        # needs its subscribers released so /events handlers can exit.
+        for t in self._tasks.values():
+            if not t._terminal.is_set():
+                if t.status == "queued":
+                    t.status = "cancelled"
+                t.mark_terminal()
 
     # -- submission -----------------------------------------------------
 
@@ -176,6 +287,7 @@ class TaskManager:
             status="queued",
         )
         self._tasks[task_id] = task
+        self._persist(task)
         loop = asyncio.get_running_loop()
         task._runner = loop.create_task(self._run_task(task, source_path, source_kind, engine_name, principal))
         return task
@@ -194,6 +306,7 @@ class TaskManager:
 
         app = self._app
         task.status = "running"
+        self._persist(task)
         task.emit(_snapshot_event(task))
 
         def on_progress(event: ProgressEvent) -> None:
@@ -252,6 +365,9 @@ class TaskManager:
                         builder = builder.with_progress(on_progress)
                     if hasattr(builder, "with_usage_sink"):
                         builder = builder.with_usage_sink(_usage_sink)
+                    reporter = getattr(self, "_error_reporter", None)
+                    if reporter is not None and hasattr(builder, "with_error_reporter"):
+                        builder = builder.with_error_reporter(reporter)
                     last = await builder.run()
                 task.result = last
                 task.elapsed_s = getattr(last, "elapsed_s", None)
@@ -264,6 +380,7 @@ class TaskManager:
             task.status = "failed"
             task.error = f"{type(exc).__name__}: {exc}"
         finally:
+            self._persist(task)
             task.mark_terminal()
 
 
@@ -317,4 +434,4 @@ def _srt_ts(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-__all__ = ["Task", "TaskManager", "load_result_bytes"]
+__all__ = ["Task", "TaskManager", "TaskStore", "load_result_bytes"]

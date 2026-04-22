@@ -244,8 +244,14 @@ async def admin_workspace_video(course: str, video: str, request: Request, princ
 @router.get("/errors")
 async def admin_errors(request: Request, limit: int = 100, principal: Principal = RequirePrincipal) -> dict:
     _require_admin(principal)
-    buffer: list[dict] = getattr(request.app.state, "error_buffer", [])
-    return {"errors": buffer[-limit:], "count": min(limit, len(buffer))}
+    buf = getattr(request.app.state, "error_buffer", None)
+    if buf is None:
+        return {"errors": [], "count": 0}
+    if hasattr(buf, "snapshot"):
+        items = buf.snapshot(limit)
+    else:
+        items = list(buf)[-limit:]
+    return {"errors": items, "count": len(items)}
 
 
 # -- Terms -----------------------------------------------------------
@@ -297,6 +303,56 @@ async def admin_get_config(request: Request, principal: Principal = RequirePrinc
     app = _app(request)
     data = app.config.model_dump()
     return _redact(data)
+
+
+@router.post("/reload")
+async def admin_reload(request: Request, principal: Principal = RequirePrincipal) -> dict:
+    """Hot-reload the subset of config safe to swap at runtime.
+
+    Re-parses the YAML referenced by ``service.reload_config_path`` and
+    updates:
+
+    * ``service.api_keys`` → ``app.state.auth_map``
+    * ``service.cors_origins`` → recorded on ``app.state.app.config``
+      (note: CORS middleware is installed at startup, so this only
+      affects future re-initialisations)
+
+    Anything else requires a full restart.
+    """
+    _require_admin(principal)
+    app = _app(request)
+    svc = app.config.service
+    if not svc.reload_enabled:
+        raise HTTPException(status_code=409, detail="reload disabled (service.reload_enabled=false)")
+    path = svc.reload_config_path
+    if not path:
+        raise HTTPException(status_code=409, detail="service.reload_config_path not set")
+
+    from application.config import AppConfig
+    from application.resources import DEFAULT_TIERS
+
+    try:
+        new_cfg = AppConfig.load(path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"reload failed: {exc}")
+
+    new_svc = new_cfg.service
+    tier_map = getattr(request.app.state, "tier_map", DEFAULT_TIERS)
+
+    new_auth: dict = {}
+    for key, entry in new_svc.api_keys.items():
+        tier = tier_map.get(entry.tier)
+        if tier is None:
+            raise HTTPException(status_code=400, detail=f"unknown tier {entry.tier!r}")
+        new_auth[key] = Principal(user_id=entry.user_id, tier=tier)
+
+    request.app.state.auth_map = new_auth
+    # Overwrite the in-memory ServiceConfig so future introspection sees new values.
+    try:
+        object.__setattr__(app.config, "service", new_svc)
+    except Exception:
+        pass
+    return {"ok": True, "api_keys": len(new_auth), "cors_origins": new_svc.cors_origins}
 
 
 __all__ = ["router"]

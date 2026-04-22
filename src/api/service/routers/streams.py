@@ -5,39 +5,55 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from dataclasses import dataclass, field
 from typing import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Request, status
 from sse_starlette.sse import EventSourceResponse
 
-from api.app.stream import LiveStreamHandle
 from api.service.auth import Principal, RequirePrincipal
 from api.service.schemas import CreateStreamRequest, StreamInfo, StreamSegmentIn
+from api.service.stream_registry import InMemoryStreamRegistry, LiveStream
 from domain.model import Segment
 
 
 router = APIRouter(prefix="/api/streams", tags=["streams"])
 
 
-@dataclass
-class _LiveStream:
-    stream_id: str
-    course: str
-    video: str
-    src: str
-    tgt: str
-    handle: LiveStreamHandle
-    queue: asyncio.Queue = field(default_factory=asyncio.Queue)
-    pump_task: asyncio.Task | None = None
-    status: str = "open"
+# Re-export for callers that still reference the old name.
+_LiveStream = LiveStream
 
 
-def _registry(request: Request) -> dict[str, _LiveStream]:
-    reg: dict[str, _LiveStream] | None = getattr(request.app.state, "streams", None)
+def _registry(request: Request):
+    reg = getattr(request.app.state, "streams", None)
     if reg is None:
-        reg = {}
+        reg = InMemoryStreamRegistry()
         request.app.state.streams = reg
+    # Back-compat: if someone stashed a plain dict (tests), wrap lookups.
+    if isinstance(reg, dict):
+
+        class _DictShim:
+            def __init__(self, d):
+                self._d = d
+
+            def get(self, sid):
+                return self._d.get(sid)
+
+            def put(self, s):
+                self._d[s.stream_id] = s
+
+            def remove(self, sid):
+                self._d.pop(sid, None)
+
+            def values(self):
+                return list(self._d.values())
+
+            def list_ids(self):
+                return list(self._d.keys())
+
+            async def close(self):
+                self._d.clear()
+
+        return _DictShim(reg)
     return reg
 
 
@@ -87,7 +103,7 @@ async def open_stream(
         tgt=body.tgt,
         handle=handle,
     )
-    reg[sid] = stream
+    reg.put(stream)
     stream.pump_task = asyncio.get_running_loop().create_task(_pump(stream))
     return StreamInfo(
         stream_id=sid,

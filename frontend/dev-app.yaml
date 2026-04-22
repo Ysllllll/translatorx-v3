@@ -1,0 +1,9 @@
+# Minimal dev config for trying the admin-ui frontend.
+# - No api_keys → "dev mode": every request is an anonymous free-tier user.
+# - cors_origins allows the Vite dev server to talk directly if you
+#   skip the proxy. With the proxy (default) this is not required.
+service:
+  host: 0.0.0.0
+  port: 8080
+  cors_origins:
+    - http://localhost:5173

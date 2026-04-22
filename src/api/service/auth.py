@@ -36,16 +36,22 @@ def _unauthorized(detail: str) -> HTTPException:
 async def require_principal(request: Request) -> Principal:
     """FastAPI dependency — resolve the authenticated principal.
 
-    Reads ``app.state.auth`` — a dict ``{api_key: Principal}`` — set up
-    by :func:`create_app`. When the dict is empty, a default anonymous
-    principal is returned (dev mode).
+    Reads ``app.state.auth_map`` — a dict ``{api_key: Principal}`` — set
+    up by :func:`create_app`. When the dict is empty, a default
+    anonymous principal is returned (dev mode).
+
+    The API key is resolved in priority order:
+
+    1. ``X-API-Key`` HTTP header (preferred, CLI-friendly)
+    2. ``trx_api_key`` cookie (browser SSE — EventSource can't send headers)
+    3. ``?access_token=...`` query parameter (fallback for SSE)
     """
     auth_map: dict[str, Principal] = getattr(request.app.state, "auth_map", {}) or {}
     if not auth_map:
         # Dev mode — no auth required.
         return Principal(user_id="anonymous", tier=DEFAULT_TIERS["free"])
 
-    key = request.headers.get(API_KEY_HEADER)
+    key = request.headers.get(API_KEY_HEADER) or request.cookies.get("trx_api_key") or request.query_params.get("access_token")
     if not key:
         raise _unauthorized(f"Missing {API_KEY_HEADER} header")
 

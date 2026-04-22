@@ -230,6 +230,32 @@ class ServiceConfig(BaseModel):
     )
     cors_allow_credentials: bool = False
 
+    task_persist_path: str = Field(
+        default="",
+        description=(
+            "Directory for persistent task metadata (JSON per task). "
+            "Empty = no persistence (in-proc only). Relative paths resolve "
+            "under the store root."
+        ),
+    )
+
+    rps_limit: float = Field(
+        default=0.0,
+        description="Per-user requests/second. <=0 disables the limiter.",
+    )
+    rps_burst: int = Field(
+        default=0,
+        description="Per-user bucket capacity. <=0 falls back to rps_limit.",
+    )
+
+    request_log_enabled: bool = True
+    reload_enabled: bool = False
+    reload_config_path: str = ""
+    error_log_path: str = Field(
+        default="",
+        description="JSONL error log path. Empty = in-memory buffer only.",
+    )
+
 
 class AppConfig(BaseModel):
     """Root configuration model."""
