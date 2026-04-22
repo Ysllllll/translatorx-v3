@@ -18,6 +18,7 @@ from adapters.sources.whisperx import WhisperXSource
 if TYPE_CHECKING:
     from api.app.app import App
     from ports.errors import ErrorReporter
+    from application.observability.progress import ProgressCallback
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,7 @@ class VideoBuilder:
     _translate: _TranslateStage | None = None
     _summary: _SummaryStage | None = None
     _error_reporter: ErrorReporter | None = None
+    _progress: Any = None
 
     def source(self, path: str | Path, *, language: str | None = None, kind: str | None = None) -> VideoBuilder:
         """Attach a file-based :class:`Source`.
@@ -154,6 +156,10 @@ class VideoBuilder:
     def with_error_reporter(self, reporter: "ErrorReporter") -> VideoBuilder:
         return replace(self, _error_reporter=reporter)
 
+    def with_progress(self, cb: "ProgressCallback | None") -> VideoBuilder:
+        """Attach a progress callback forwarded to :class:`VideoOrchestrator`."""
+        return replace(self, _progress=cb)
+
     async def run(self) -> VideoResult:
         if self._source is None:
             raise ValueError("VideoBuilder.run() requires .source(...) first")
@@ -197,6 +203,7 @@ class VideoBuilder:
                 store=store,
                 video_key=VideoKey(course=self.course, video=self.video),
                 error_reporter=self._error_reporter,
+                progress=self._progress,
             )
             result = await orch.run()
 

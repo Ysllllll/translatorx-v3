@@ -35,12 +35,22 @@ from typing import AsyncIterator, Sequence
 from application.translate import TranslationContext
 from domain.model import SentenceRecord, Segment
 
+from application.observability.progress import ProgressCallback, ProgressEvent
 from ports.errors import ErrorInfo, ErrorReporter
 from ports.source import Priority, Processor, Source, VideoKey
 from adapters.sources.push import PushQueueSource
 from adapters.storage.store import Store
 
 logger = logging.getLogger(__name__)
+
+
+def _fire(cb: ProgressCallback | None, event: ProgressEvent) -> None:
+    if cb is None:
+        return
+    try:
+        cb(event)
+    except Exception:  # pragma: no cover
+        logger.warning("progress callback raised for event=%s", event, exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +154,7 @@ class VideoOrchestrator:
         store: Store,
         video_key: VideoKey,
         error_reporter: ErrorReporter | None = None,
+        progress: ProgressCallback | None = None,
     ) -> None:
         if not processors:
             raise ValueError("processors must not be empty")
@@ -153,6 +164,7 @@ class VideoOrchestrator:
         self._store = store
         self._video_key = video_key
         self._error_reporter = error_reporter
+        self._progress = progress
 
     async def run(self) -> VideoResult:
         start = time.monotonic()
@@ -164,14 +176,32 @@ class VideoOrchestrator:
             stream = wrap(stream, proc)
 
         records: list[SentenceRecord] = []
+        _fire(self._progress, ProgressEvent(kind="started", processor="orchestrator", done=0))
         try:
             async for rec in stream:
                 records.append(rec)
+                _fire(
+                    self._progress,
+                    ProgressEvent(
+                        kind="record",
+                        processor="orchestrator",
+                        done=len(records),
+                        record_id=rec.extra.get("id") if rec.extra else None,
+                    ),
+                )
         except BaseException:
             logger.exception(
                 "VideoOrchestrator.run failed for %s/%s",
                 self._video_key.course,
                 self._video_key.video,
+            )
+            _fire(
+                self._progress,
+                ProgressEvent(
+                    kind="failed",
+                    processor="orchestrator",
+                    done=len(records),
+                ),
             )
             raise
 
@@ -185,6 +215,15 @@ class VideoOrchestrator:
                     stale.add(rid)
                     break
 
+        _fire(
+            self._progress,
+            ProgressEvent(
+                kind="finished",
+                processor="orchestrator",
+                done=len(records),
+                total=len(records),
+            ),
+        )
         return VideoResult(
             records=records,
             stale_ids=tuple(sorted(stale)),
