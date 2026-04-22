@@ -6,7 +6,7 @@ import asyncio
 import json
 from typing import AsyncIterator
 
-from api.service.tasks import Task
+from api.service.runtime.tasks import Task
 
 
 async def task_event_stream(task: Task) -> AsyncIterator[dict]:

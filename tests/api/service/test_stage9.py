@@ -12,9 +12,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.service import create_app
-from api.service.error_buffer import ErrorBuffer
-from api.service.stream_registry import InMemoryStreamRegistry, LiveStream
-from api.service.tasks import Task, TaskStore
+from api.service.runtime.error_buffer import ErrorBuffer
+from api.service.runtime.stream_registry import InMemoryStreamRegistry, LiveStream
+from api.service.runtime.tasks import Task, TaskStore
 from ports.errors import ErrorInfo
 from tests.api.service._helpers import make_app
 
@@ -68,7 +68,7 @@ def test_task_store_save_and_load(tmp_path: Path) -> None:
 
 def test_task_manager_recovers_failed(tmp_path: Path) -> None:
     from api.app import App
-    from api.service.tasks import TaskManager
+    from api.service.runtime.tasks import TaskManager
     from application.resources import InMemoryResourceManager
 
     store = TaskStore(tmp_path / "tasks")

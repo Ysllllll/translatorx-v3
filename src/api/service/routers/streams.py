@@ -12,7 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from api.service.auth import Principal, RequirePrincipal
 from api.service.schemas import CreateStreamRequest, StreamInfo, StreamSegmentIn
-from api.service.stream_registry import InMemoryStreamRegistry, LiveStream
+from api.service.runtime.stream_registry import InMemoryStreamRegistry, LiveStream
 from domain.model import Segment
 
 

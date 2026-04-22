@@ -27,8 +27,8 @@ from fastapi import FastAPI
 from api.service.auth import Principal
 from api.service.observability import install_opentelemetry, install_prometheus
 from api.service.routers import admin, health, streams, usage, videos
-from api.service.stream_registry import InMemoryStreamRegistry
-from api.service.tasks import TaskManager, TaskStore
+from api.service.runtime.stream_registry import InMemoryStreamRegistry
+from api.service.runtime.tasks import TaskManager, TaskStore
 from application.resources import DEFAULT_TIERS, InMemoryResourceManager, UserTier
 
 if TYPE_CHECKING:
@@ -66,7 +66,7 @@ def from_app_config(app: "App") -> FastAPI:
         except ImportError as exc:
             raise ImportError("service.task_backend='arq' requires `pip install arq`") from exc
 
-        from api.service.tasks_arq import ArqTaskManager
+        from api.service.runtime.tasks_arq import ArqTaskManager
 
         async def _mk_arq(_app: "App" = app, _rm: "ResourceManager" = rm):
             pool = await create_pool(RedisSettings.from_dsn(svc.redis_url), default_queue_name=svc.arq_queue_name)
@@ -137,7 +137,7 @@ def create_app(
             api.state.tasks.recover()
 
         # Error buffer + optional JSONL reporter chain.
-        from api.service.error_buffer import ErrorBuffer
+        from api.service.runtime.error_buffer import ErrorBuffer
 
         delegate = None
         errlog = getattr(app.config.service, "error_log_path", "") or ""
@@ -200,7 +200,7 @@ def create_app(
             await api.state.tasks.shutdown()
 
     api = FastAPI(title="translatorx API", lifespan=lifespan)
-    from api.service.errors import install_error_handlers
+    from api.service.middleware.errors import install_error_handlers
 
     install_error_handlers(api)
     api.include_router(health.router)
@@ -222,11 +222,11 @@ def create_app(
             expose_headers=["X-API-Key"],
         )
     if svc_cfg.rps_limit > 0:
-        from api.service.rate_limit import RateLimitMiddleware
+        from api.service.middleware.rate_limit import RateLimitMiddleware
 
         api.add_middleware(RateLimitMiddleware, rps=svc_cfg.rps_limit, burst=svc_cfg.rps_burst or None)
     if svc_cfg.request_log_enabled:
-        from api.service.logging_mw import RequestLogMiddleware
+        from api.service.middleware.logging import RequestLogMiddleware
 
         api.add_middleware(RequestLogMiddleware)
     install_prometheus(api, enabled=svc_cfg.prometheus_enabled, path=svc_cfg.prometheus_path)

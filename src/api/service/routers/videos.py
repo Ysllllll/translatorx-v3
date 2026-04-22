@@ -12,7 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 from api.service.auth import Principal, RequirePrincipal
 from api.service.schemas import CreateVideoRequest, VideoList, VideoState
 from api.service.sse import task_event_stream
-from api.service.tasks import Task, TaskManager, load_result_bytes
+from api.service.runtime.tasks import Task, TaskManager, load_result_bytes
 
 if TYPE_CHECKING:
     from api.app.app import App

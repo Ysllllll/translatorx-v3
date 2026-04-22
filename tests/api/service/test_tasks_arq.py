@@ -12,7 +12,7 @@ import pytest
 
 def test_arq_module_imports_optional():
     arq = pytest.importorskip("arq")
-    from api.service import tasks_arq
+    from api.service.runtime import tasks_arq
 
     assert hasattr(tasks_arq, "ArqTaskManager")
     assert hasattr(tasks_arq, "build_worker_settings")

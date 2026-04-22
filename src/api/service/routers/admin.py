@@ -46,7 +46,7 @@ from api.service.auth import Principal, RequirePrincipal
 
 if TYPE_CHECKING:
     from api.app.app import App
-    from api.service.tasks import Task, TaskManager
+    from api.service.runtime.tasks import Task, TaskManager
 
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])

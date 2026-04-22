@@ -24,7 +24,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from api.service.tasks import Task
+from api.service.runtime.tasks import Task
 
 if TYPE_CHECKING:
     from api.app.app import App

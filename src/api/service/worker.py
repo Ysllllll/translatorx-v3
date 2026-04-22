@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     from api.app.app import App
-    from api.service.tasks_arq import build_worker_settings
+    from api.service.runtime.tasks_arq import build_worker_settings
     from application.config import AppConfig
 
     cfg = AppConfig.load(cfg_path)
