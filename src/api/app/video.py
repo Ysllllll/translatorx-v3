@@ -227,25 +227,30 @@ class VideoBuilder:
     def align(
         self,
         *,
-        engine: str = "default",
-        enable_text_mode: bool = False,
-        json_norm_ratio: float = 5.0,
-        json_accept_ratio: float = 5.0,
-        text_norm_ratio: float = 3.0,
-        text_accept_ratio: float = 3.0,
-        rearrange_chunk_len: int = 90,
+        engine: str | None = None,
+        enable_text_mode: bool | None = None,
+        json_norm_ratio: float | None = None,
+        json_accept_ratio: float | None = None,
+        text_norm_ratio: float | None = None,
+        text_accept_ratio: float | None = None,
+        rearrange_chunk_len: int | None = None,
     ) -> VideoBuilder:
-        """Attach an :class:`AlignProcessor` after translate."""
+        """Attach an :class:`AlignProcessor` after translate.
+
+        Any argument left as ``None`` falls back to the corresponding
+        :class:`AppConfig.align` default.
+        """
+        cfg = self.app.config.align
         return replace(
             self,
             _align=_AlignStage(
-                engine_name=engine,
-                enable_text_mode=enable_text_mode,
-                json_norm_ratio=json_norm_ratio,
-                json_accept_ratio=json_accept_ratio,
-                text_norm_ratio=text_norm_ratio,
-                text_accept_ratio=text_accept_ratio,
-                rearrange_chunk_len=rearrange_chunk_len,
+                engine_name=engine if engine is not None else cfg.engine,
+                enable_text_mode=cfg.enable_text_mode if enable_text_mode is None else enable_text_mode,
+                json_norm_ratio=cfg.json_norm_ratio if json_norm_ratio is None else json_norm_ratio,
+                json_accept_ratio=cfg.json_accept_ratio if json_accept_ratio is None else json_accept_ratio,
+                text_norm_ratio=cfg.text_norm_ratio if text_norm_ratio is None else text_norm_ratio,
+                text_accept_ratio=cfg.text_accept_ratio if text_accept_ratio is None else text_accept_ratio,
+                rearrange_chunk_len=cfg.rearrange_chunk_len if rearrange_chunk_len is None else rearrange_chunk_len,
             ),
         )
 

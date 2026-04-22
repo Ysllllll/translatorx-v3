@@ -96,3 +96,32 @@ class TestAppConfig:
         monkeypatch.setenv("TRX_RUNTIME__MAX_CONCURRENT_VIDEOS", "9")
         cfg = AppConfig.from_dict({})
         assert cfg.runtime.max_concurrent_videos == 9
+
+    def test_align_defaults(self):
+        cfg = AppConfig.from_dict({})
+        assert cfg.align.engine == "default"
+        assert cfg.align.enable_text_mode is False
+        assert cfg.align.json_norm_ratio == 5.0
+        assert cfg.align.json_accept_ratio == 5.0
+        assert cfg.align.text_norm_ratio == 3.0
+        assert cfg.align.text_accept_ratio == 3.0
+        assert cfg.align.rearrange_chunk_len == 90
+        assert cfg.align.max_concurrent == 8
+
+    def test_align_yaml_override(self):
+        cfg = AppConfig.from_yaml("align:\n  enable_text_mode: true\n  json_norm_ratio: 4.0\n  text_accept_ratio: 2.5\n  rearrange_chunk_len: 120\n")
+        assert cfg.align.enable_text_mode is True
+        assert cfg.align.json_norm_ratio == 4.0
+        assert cfg.align.text_accept_ratio == 2.5
+        assert cfg.align.rearrange_chunk_len == 120
+
+    def test_align_env_override(self, monkeypatch):
+        monkeypatch.setenv("TRX_ALIGN__JSON_NORM_RATIO", "6.5")
+        monkeypatch.setenv("TRX_ALIGN__ENABLE_TEXT_MODE", "true")
+        cfg = AppConfig.from_dict({})
+        assert cfg.align.json_norm_ratio == 6.5
+        assert cfg.align.enable_text_mode is True
+
+    def test_align_rejects_unknown_keys(self):
+        with pytest.raises(Exception):
+            AppConfig.from_yaml("align:\n  bogus: 1\n")

@@ -139,6 +139,33 @@ class PreprocessConfig(BaseModel):
     max_concurrent: int = 8
 
 
+class AlignConfig(BaseModel):
+    """AlignProcessor configuration.
+
+    Governs the binary-recursive alignment pass that maps an N-segment
+    source window onto the LLM translation. Two modes:
+
+    - JSON mode — LLM returns structured ``{mapping: [{src, tgt}, ...]}``.
+    - Text mode — two-line plain text output; enables source word-level
+      ``rearrange`` via :func:`domain.subtitle.rebalance_segment_words`.
+
+    ``norm_ratio`` is the cross-length tolerance for a clean accept.
+    Ratios in ``[norm_ratio, accept_ratio)`` are accepted but flagged
+    with ``need_rearrange`` so the text pass can rebalance word boundaries.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    engine: str = "default"
+    enable_text_mode: bool = False
+    json_norm_ratio: float = 5.0
+    json_accept_ratio: float = 5.0
+    text_norm_ratio: float = 3.0
+    text_accept_ratio: float = 3.0
+    rearrange_chunk_len: int = 90
+    max_concurrent: int = 8
+
+
 class TranscriberConfig(BaseModel):
     """Transcriber backend configuration (Stage 6).
 
@@ -267,6 +294,7 @@ class AppConfig(BaseModel):
     store: StoreConfig = Field(default_factory=StoreConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     preprocess: PreprocessConfig = Field(default_factory=PreprocessConfig)
+    align: AlignConfig = Field(default_factory=AlignConfig)
     transcriber: TranscriberConfig = Field(default_factory=TranscriberConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
