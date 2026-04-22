@@ -1,6 +1,12 @@
-# Preprocess 指南：PuncRestorer & Chunker
+# Adapter Backends Guide：PuncRestorer / Chunker / Transcriber
 
-本文档覆盖 `adapters.preprocess` 下两个预处理器的设计理念、使用示例，以及它们背后的**注册器 / 装饰器机制**。
+本文档覆盖 `adapters/` 下使用**注册器 + 装饰器模式**的三类可插拔适配器：
+
+- **PuncRestorer** — 标点恢复（`adapters.preprocess.punc`）
+- **Chunker** — 文本分块 / 分句（`adapters.preprocess.chunk`）
+- **Transcriber** — 音频转录（`adapters.transcribers`）
+
+三者共享同一个抽象骨架：*编排器 / 后端 / 注册器*。新增后端只需要实现一个工厂函数并加上一行 `@Registry.register("name")` 装饰器。
 
 ```text
 adapters/preprocess/
@@ -14,11 +20,20 @@ adapters/preprocess/
 └── chunk/           文本分块 / 分句
     ├── chunker.py   Chunker（编排器）
     ├── registry.py  ChunkBackendRegistry
+    ├── reconstruct.py  # chunks_match_source / recover_pair
     └── backends/
         ├── rule.py       # LangOps.split_by_length 兜底
         ├── spacy.py      # spaCy 分句
         ├── llm.py        # LLM 递归切分
+        ├── remote.py     # HTTP 自建服务
         └── composite.py  # inner + refine 组合
+
+adapters/transcribers/        音频转录
+├── registry.py   TranscriberBackendRegistry
+└── backends/
+    ├── whisperx.py   # 本地 WhisperX（GPU）
+    ├── openai.py     # OpenAI-compatible Whisper API
+    └── http.py       # 自建 HTTP Whisper 服务
 ```
 
 ---
@@ -460,7 +475,162 @@ restorer = PuncRestorer(backends={"*": {"library": "rot13", "shift": 7}})
 
 ---
 
-## 6. 速查表
+## 6. Transcriber — 音频转录
+
+与 preprocess 同构：**`Transcriber` Protocol** + **`TranscriberBackendRegistry`** + 三个内置 backend。区别是：
+
+| 维度 | preprocess backend | transcriber backend |
+|---|---|---|
+| 输入 | `list[str]`（批文本） | `audio: str \| Path` + `TranscribeOptions`（单条） |
+| 输出 | `list[str]` / `list[list[str]]` | `TranscriptionResult`（`segments + language + duration`） |
+| 并发 | 编排器 batch + 后端 Semaphore | 后端内部按需（WhisperX 串行，OpenAI/HTTP async 并发） |
+| 返回形状 | Callable 闭包 | Protocol 实例（有 `.transcribe()` 方法） |
+
+因此 transcriber 工厂**返回一个类实例**（`WhisperXTranscriber(...)`），而不是像 preprocess backend 那样返回闭包。
+
+### 6.1 三分钟上手
+
+```python
+import asyncio
+from ports.transcriber import TranscribeOptions
+from adapters.transcribers import create as create_transcriber
+
+# 本地 WhisperX（默认 GPU）
+tx = create_transcriber({
+    "library": "whisperx",
+    "model": "large-v3",
+    "device": "cuda",
+    "compute_type": "float16",
+    "batch_size": 16,
+    "align": True,          # 生成 word-level 时间戳
+    "diarize": False,
+})
+
+result = asyncio.run(tx.transcribe(
+    "lecture.mp3",
+    TranscribeOptions(language="en", word_timestamps=True),
+))
+print(result.language, len(result.segments))
+for seg in result.segments[:3]:
+    print(f"[{seg.start:.2f} → {seg.end:.2f}] {seg.text}")
+```
+
+`create()` 接收一个 `Mapping`（必含 `"library"` 字段）或现成的 `Transcriber` 实例。未知字段会直接以 kwargs 传给对应的工厂。
+
+### 6.2 OpenAI-compatible Whisper API
+
+```python
+tx = create_transcriber({
+    "library": "openai",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "sk-...",
+    "model": "whisper-1",
+    "response_format": "verbose_json",  # 保留 segment / word 时间戳
+    "timeout": 300.0,
+})
+result = await tx.transcribe("lecture.mp3", TranscribeOptions(language="en", prompt="glossary: AI, LLM"))
+```
+
+同样支持自建的 OpenAI-compatible 服务（groq、faster-whisper-server、local vLLM+Whisper 等），只需把 `base_url` 指过去。
+
+### 6.3 自建 HTTP Whisper 服务
+
+契约（`POST {base_url}{endpoint}`，multipart）：
+
+```text
+file: <audio bytes>
+language: <code or "">
+word_timestamps: "true" / "false"
+prompt: <optional>
+
+→ 200 OK
+{
+  "segments": [
+    {"start": 0.0, "end": 2.1, "text": "Hello world.",
+     "speaker": null,
+     "words": [{"word": "Hello", "start": 0.0, "end": 0.5, "speaker": null}, ...]},
+    ...
+  ],
+  "language": "en",
+  "duration": 12.34
+}
+```
+
+用法：
+
+```python
+tx = create_transcriber({
+    "library": "http",
+    "base_url": "http://my-whisper:9000",
+    "endpoint": "/transcribe",
+    "api_key": "optional-bearer",
+    "timeout": 600.0,
+    "extra_headers": {"x-project": "trx"},
+    "extra_fields": {"batch": "true"},
+})
+```
+
+### 6.4 通过 App / 配置驱动（推荐）
+
+`AppConfig.transcriber` 直接声明一个 backend：
+
+```yaml
+# app.yaml
+transcriber:
+  library: whisperx
+  model: large-v3
+  device: cuda
+  compute_type: float16
+  batch_size: 16
+  align: true
+  language: en
+  extra:
+    hf_token: "hf_xxx"      # pyannote 需要
+```
+
+```python
+from api.app import App
+app = App.from_config("app.yaml")
+
+tx = app.transcriber()      # None 表示 `library` 为空 → 未启用转录
+if tx is not None:
+    result = await tx.transcribe("lecture.mp3")
+```
+
+`AppConfig.transcriber.library` 只接受 `""` / `"whisperx"` / `"openai"` / `"http"`。需要新 backend 时同步扩 `Literal` 枚举。
+
+### 6.5 自定义 Transcriber backend
+
+与 preprocess 完全同构 —— 在模块顶层装饰即可：
+
+```python
+# myproject/my_transcriber.py
+from typing import Any
+from adapters.transcribers.registry import DEFAULT_REGISTRY
+from ports.transcriber import TranscribeOptions, Transcriber, TranscriptionResult
+
+
+class DummyTranscriber:
+    """Returns a single empty segment — handy for tests."""
+    async def transcribe(self, audio, opts: TranscribeOptions | None = None) -> TranscriptionResult:
+        return TranscriptionResult(segments=[], language=(opts or TranscribeOptions()).language or "")
+
+
+@DEFAULT_REGISTRY.register("dummy")
+def dummy_backend(**_params: Any) -> Transcriber:
+    return DummyTranscriber()
+```
+
+使用：
+
+```python
+import myproject.my_transcriber    # 触发注册
+tx = create_transcriber({"library": "dummy"})
+```
+
+---
+
+## 7. 速查表
 
 ### Backend 契约
 
@@ -468,6 +638,7 @@ restorer = PuncRestorer(backends={"*": {"library": "rot13", "shift": 7}})
 |---|---|
 | punc | `Callable[[list[str]], list[str]]` |
 | chunk | `Callable[[list[str]], list[list[str]]]` |
+| transcriber | `(**kwargs) → Transcriber` 实例（Protocol：`async transcribe(audio, opts) -> TranscriptionResult`） |
 
 ### 已内置 backend
 
@@ -477,9 +648,13 @@ restorer = PuncRestorer(backends={"*": {"library": "rot13", "shift": 7}})
 | punc | `llm` | LLM 驱动，非确定 | ✅ |
 | punc | `remote` | HTTP 服务，网络依赖 | ✅ |
 | chunk | `rule` | `LangOps.split_by_length` | ❌ |
-| chunk | `spacy` | spaCy 分句 | ❌ |
-| chunk | `llm` | LLM 递归切分 | ✅ |
+| chunk | `spacy` | spaCy 分句（按语言自动选模型） | ❌ |
+| chunk | `llm` | LLM 递归切分 + `recover_pair` 恢复 | ✅ |
+| chunk | `remote` | HTTP 服务 + `recover_pair` 恢复 | ✅ |
 | chunk | `composite` | inner + refine 组合 | 由子 backend 决定 |
+| transcriber | `whisperx` | 本地 WhisperX（CUDA） | ❌（内部批处理） |
+| transcriber | `openai` | OpenAI-compatible Whisper API | 由 httpx/调用方决定 |
+| transcriber | `http` | 自建 HTTP Whisper 服务 | 由 httpx/调用方决定 |
 
 ### 常用参数
 
@@ -490,3 +665,5 @@ restorer = PuncRestorer(backends={"*": {"library": "rot13", "shift": 7}})
 | `max_len` (chunk) | 短于此长度跳过后端 | `None` |
 | `on_failure` (编排器) | `"keep"` / `"raise"` | `"keep"` |
 | `on_failure` (llm chunk backend) | `"rule" / "keep" / "raise"` | — |
+| `TranscribeOptions.language` | 强制语言（留空 = 自动检测） | `None` |
+| `TranscribeOptions.word_timestamps` | 是否生成 word-level 时间戳 | `True` |
