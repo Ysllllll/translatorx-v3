@@ -130,3 +130,6 @@ class ChineseTextTest(LangOpsTestCase):
 
         # normalize()
         self._assert_cjk_normalize("你好世界", '你好，世界！这是"测试"。')
+
+        # ASCII-quoted Latin inside CJK
+        self._assert_cjk_ascii_quotes()

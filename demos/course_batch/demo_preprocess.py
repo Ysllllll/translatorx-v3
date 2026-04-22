@@ -85,7 +85,7 @@ def verify_preprocess_factories() -> None:
     )
     chunker = app2.chunker("en")
     assert chunker is not None
-    print(f"    {ts()} ✓ chunk_mode=llm → LlmChunker (chunk_len={chunker._chunk_len})")
+    print(f"    {ts()} ✓ chunk_mode=llm → llm chunker (callable ApplyFn)")
 
     # Remote punc (no endpoint → error)
     try:

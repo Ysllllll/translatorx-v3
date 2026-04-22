@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from adapters.transcribers.http_remote import HttpRemoteConfig, HttpRemoteTranscriber
+from adapters.transcribers.backends.http import HttpRemoteConfig, HttpRemoteTranscriber
 
 
 def _patch_client(monkeypatch, handler):

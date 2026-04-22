@@ -16,6 +16,10 @@ import httpx
 from domain.model import Segment, Word
 from ports.transcriber import TranscribeOptions, TranscriptionResult
 
+from adapters.transcribers.registry import DEFAULT_REGISTRY as _registry
+
+_register_backend = _registry.register
+
 
 @dataclass
 class OpenAiTranscriberConfig:
@@ -144,4 +148,16 @@ def _words_to_domain(raw_words: list[dict[str, Any]]) -> list[Word]:
     return out
 
 
-__all__ = ["OpenAiTranscriberConfig", "OpenAiTranscriber"]
+__all__ = [
+    "OpenAiTranscriberConfig",
+    "OpenAiTranscriber",
+    "openai_backend",
+]
+
+
+@_register_backend("openai")
+def openai_backend(**params: Any) -> "OpenAiTranscriber":
+    """Factory for the ``openai`` Whisper-compatible transcriber."""
+    cfg_fields = set(OpenAiTranscriberConfig.__dataclass_fields__.keys())
+    cfg_kw = {k: v for k, v in params.items() if k in cfg_fields}
+    return OpenAiTranscriber(OpenAiTranscriberConfig(**cfg_kw))

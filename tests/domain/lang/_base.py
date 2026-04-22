@@ -95,15 +95,33 @@ class LangOpsTestCase(unittest.TestCase):
         self._assert_mode_invalid(text)
         self._assert_mode_shorthand(text)
 
+    def _assert_cjk_ascii_quotes(self) -> None:
+        """CJK: verify ASCII-quoted Latin stays as one token (e.g. "AI" in CJK context)."""
+        # Plain "AI" surrounded by CJK — stays as one token in mode=word
+        self._assert_preserved_fragments('他说"AI"真好', ['"AI"'], modes=("word",))
+        # 'single'-quoted Latin surrounded by CJK
+        self._assert_preserved_fragments("他说'AI'真好", ["'AI'"], modes=("word",))
+        # Contractions / dotted ids / URLs still protected
+        self._assert_preserved_fragments("他说I'm是visit deeplearning.ai的https://example.com", ["I'm", "deeplearning.ai", "https://example.com"], modes=("word",))
+
     def _assert_cjk_normalize(self, text: str, text_with_punct: str) -> None:
-        # CJK normalize is currently a no-op (identity).
-        # Tests verify that punctuation drift is NOT introduced.
+        # CJK normalize applies pangu-style beautification at CJK↔Latin boundaries,
+        # but leaves pure-CJK text and already-spaced text unchanged.
 
         # Full sentence roundtrip
         self.assertEqual(self.ops.normalize(text), text)
 
         # Punctuation-related: these are the core scenarios normalize is meant to address
         self.assertEqual(self.ops.normalize(text_with_punct), text_with_punct)
+
+        # Pangu-style: ASCII-quoted Latin gets spaces between CJK and the quoted span
+        self.assertEqual(self.ops.normalize('他说"AI"真好'), '他说 "AI" 真好')
+        # Already-spaced stays unchanged
+        self.assertEqual(self.ops.normalize('他说 "AI" 真好'), '他说 "AI" 真好')
+        # Pure Latin inside quotes is untouched
+        self.assertEqual(self.ops.normalize('"Deep Learning"'), '"Deep Learning"')
+        # CJK↔Latin without whitespace gets a space
+        self.assertEqual(self.ops.normalize("Hello世界"), "Hello 世界")
 
         # CJK punctuation stays in place
         self.assertEqual(self.ops.normalize("。"), "。")

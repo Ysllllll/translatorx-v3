@@ -32,6 +32,10 @@ import httpx
 from domain.model import Segment, Word
 from ports.transcriber import TranscribeOptions, TranscriptionResult
 
+from adapters.transcribers.registry import DEFAULT_REGISTRY as _registry
+
+_register_backend = _registry.register
+
 
 @dataclass
 class HttpRemoteConfig:
@@ -131,4 +135,16 @@ def _parse_http_response(payload: dict[str, Any], *, fallback_language: str) -> 
     )
 
 
-__all__ = ["HttpRemoteConfig", "HttpRemoteTranscriber"]
+__all__ = [
+    "HttpRemoteConfig",
+    "HttpRemoteTranscriber",
+    "http_backend",
+]
+
+
+@_register_backend("http")
+def http_backend(**params: Any) -> "HttpRemoteTranscriber":
+    """Factory for the ``http`` remote transcriber."""
+    cfg_fields = set(HttpRemoteConfig.__dataclass_fields__.keys())
+    cfg_kw = {k: v for k, v in params.items() if k in cfg_fields}
+    return HttpRemoteTranscriber(HttpRemoteConfig(**cfg_kw))

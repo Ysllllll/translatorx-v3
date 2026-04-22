@@ -76,6 +76,37 @@ class TestRemoteBackend:
         with pytest.raises(RuntimeError, match="Remote punc failed"):
             backend(["hello world"])
 
+    def test_retries_on_content_mismatch(self, monkeypatch):
+        # First response mutates words (rejected), second returns clean output.
+        responses = [httpx.Response(200, json={"result": "hello world extra."}), httpx.Response(200, json={"result": "hello world."})]
+        transport = httpx.MockTransport(_handler_factory(responses))
+        original = httpx.Client.__init__
+
+        def patched_init(self, *args, **kwargs):
+            kwargs.pop("transport", None)
+            original(self, *args, transport=transport, **kwargs)
+
+        monkeypatch.setattr(httpx.Client, "__init__", patched_init)
+
+        backend = remote_factory(endpoint="https://api.test/punc", max_retries=2)
+        out = backend(["hello world"])
+        assert out == ["hello world."]
+
+    def test_raises_after_content_mismatch_exhausted(self, monkeypatch):
+        responses = [httpx.Response(200, json={"result": "bye bye."})] * 5
+        transport = httpx.MockTransport(_handler_factory(responses))
+        original = httpx.Client.__init__
+
+        def patched_init(self, *args, **kwargs):
+            kwargs.pop("transport", None)
+            original(self, *args, transport=transport, **kwargs)
+
+        monkeypatch.setattr(httpx.Client, "__init__", patched_init)
+
+        backend = remote_factory(endpoint="https://api.test/punc", max_retries=1)
+        with pytest.raises(RuntimeError, match="Remote punc failed"):
+            backend(["hello world"])
+
     def test_rejects_invalid_max_retries(self):
         with pytest.raises(ValueError):
             remote_factory(endpoint="https://api.test/punc", max_retries=-1)

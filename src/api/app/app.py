@@ -136,59 +136,69 @@ class App:
     def chunker(self, language: str) -> ApplyFn | None:
         """Build a chunker :data:`ApplyFn` for *language* from config.
 
-        - ``"spacy"`` → :class:`SpacySplitter` (NLP-based sentence splitting,
-          language-specific model resolved via
-          :meth:`SpacySplitter.for_language`).
-        - ``"llm"`` → :class:`LlmChunker` (recursive binary LLM splitting,
-          uses :meth:`LangOps.length` / :meth:`LangOps.split_by_length`).
-        - ``"spacy_llm"`` → spaCy coarse split, then LLM fine split for
-          chunks exceeding ``chunk_len``.
+        Wires ``config.preprocess`` into a :class:`Chunker` with a
+        single-language backends map and returns the language-bound
+        :data:`ApplyFn`. Returns ``None`` when ``chunk_mode == "none"``.
+
+        - ``"spacy"`` → ``"spacy"`` backend (NLP sentence split).
+        - ``"llm"`` → ``"llm"`` backend (recursive LLM splitting).
+        - ``"spacy_llm"`` → ``"composite"`` backend (spaCy coarse, LLM refine).
         """
-        from domain.lang import LangOps, normalize_language
+        from domain.lang import normalize_language
+
+        from adapters.preprocess import Chunker
 
         cfg = self._config.preprocess
         if cfg.chunk_mode == "none":
             return None
 
         lang = normalize_language(language)
-        ops = LangOps.for_language(lang)
+        common_llm_kwargs = {
+            "chunk_len": cfg.chunk_len,
+            "max_depth": cfg.chunk_max_depth,
+            "max_retries": cfg.chunk_max_retries,
+            "on_failure": cfg.chunk_on_failure,
+            "split_parts": cfg.chunk_split_parts,
+            "max_concurrent": cfg.max_concurrent,
+        }
 
         if cfg.chunk_mode == "spacy":
-            from adapters.preprocess import SpacySplitter
+            spec: dict[str, object] = {
+                "library": "spacy",
+                "language": lang,
+                "model": cfg.spacy_model or None,
+            }
+        elif cfg.chunk_mode == "llm":
+            spec = {
+                "library": "llm",
+                "language": lang,
+                "engine": self.engine(cfg.chunk_engine),
+                **common_llm_kwargs,
+            }
+        elif cfg.chunk_mode == "spacy_llm":
+            spec = {
+                "library": "composite",
+                "language": lang,
+                "chunk_len": cfg.chunk_len,
+                "inner": {
+                    "library": "spacy",
+                    "model": cfg.spacy_model or None,
+                },
+                "refine": {
+                    "library": "llm",
+                    "engine": self.engine(cfg.chunk_engine),
+                    **common_llm_kwargs,
+                },
+            }
+        else:
+            raise ValueError(f"unknown chunk_mode: {cfg.chunk_mode!r}")
 
-            return SpacySplitter.for_language(lang, model=cfg.spacy_model or None)
-        if cfg.chunk_mode == "llm":
-            from adapters.preprocess import LlmChunker
-
-            engine = self.engine(cfg.chunk_engine)
-            return LlmChunker(
-                engine,
-                chunk_len=cfg.chunk_len,
-                max_depth=cfg.chunk_max_depth,
-                max_retries=cfg.chunk_max_retries,
-                on_failure=cfg.chunk_on_failure,
-                split_parts=cfg.chunk_split_parts,
-                max_concurrent=cfg.max_concurrent,
-                ops=ops,
-            )
-        if cfg.chunk_mode == "spacy_llm":
-            from adapters.preprocess import LlmChunker, SpacySplitter
-            from adapters.preprocess.spacy_llm_chunk import SpacyLlmChunker
-
-            splitter = SpacySplitter.for_language(lang, model=cfg.spacy_model or None)
-            engine = self.engine(cfg.chunk_engine)
-            llm = LlmChunker(
-                engine,
-                chunk_len=cfg.chunk_len,
-                max_depth=cfg.chunk_max_depth,
-                max_retries=cfg.chunk_max_retries,
-                on_failure=cfg.chunk_on_failure,
-                split_parts=cfg.chunk_split_parts,
-                max_concurrent=cfg.max_concurrent,
-                ops=ops,
-            )
-            return SpacyLlmChunker(splitter, llm, chunk_len=cfg.chunk_len, ops=ops)
-        raise ValueError(f"unknown chunk_mode: {cfg.chunk_mode!r}")
+        chunker = Chunker(
+            backends={lang: spec},
+            max_len=cfg.chunk_len,
+            on_failure="keep" if cfg.chunk_on_failure == "rule" else cfg.chunk_on_failure,
+        )
+        return chunker.for_language(lang)
 
     # -- stage factories (Stage 6/8 — transcribe / tts) -----------------
 

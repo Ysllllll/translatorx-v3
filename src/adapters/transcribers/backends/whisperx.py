@@ -20,6 +20,10 @@ from typing import Any
 from domain.model import Segment, Word
 from ports.transcriber import TranscribeOptions, TranscriptionResult
 
+from adapters.transcribers.registry import DEFAULT_REGISTRY as _register_backend_src
+
+_register_backend = _register_backend_src.register
+
 
 def whisperx_is_available() -> bool:
     """Return ``True`` when the ``whisperx`` package can be imported."""
@@ -189,4 +193,24 @@ def _to_domain_words(raw_words: list[dict[str, Any]]) -> list[Word]:
     return out
 
 
-__all__ = ["WhisperXConfig", "WhisperXTranscriber", "whisperx_is_available"]
+__all__ = [
+    "WhisperXConfig",
+    "WhisperXTranscriber",
+    "whisperx_backend",
+    "whisperx_is_available",
+]
+
+
+@_register_backend("whisperx")
+def whisperx_backend(**params: Any) -> "WhisperXTranscriber":
+    """Factory for the ``whisperx`` transcriber backend.
+
+    Keyword arguments matching :class:`WhisperXConfig` fields are
+    consumed directly; anything else is merged into ``extra``.
+    """
+    cfg_fields = set(WhisperXConfig.__dataclass_fields__.keys())
+    cfg_kw = {k: v for k, v in params.items() if k in cfg_fields}
+    leftover = {k: v for k, v in params.items() if k not in cfg_fields}
+    if leftover:
+        cfg_kw.setdefault("extra", {}).update(leftover)
+    return WhisperXTranscriber(WhisperXConfig(**cfg_kw))

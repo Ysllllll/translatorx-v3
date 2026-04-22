@@ -1,10 +1,15 @@
-"""LLM-based punc backend.
+"""LLM punc backend — registered as ``"llm"``.
 
-Calls an :class:`LLMEngine` with a punctuation-restoration prompt. The
-engine is typically remote, so network retries are important; this
-backend runs ``max_retries + 1`` attempts inside a ``retry_until_valid``
-loop and raises :class:`RuntimeError` if all fail. Content validation
-and ``on_failure`` are handled by :class:`PuncRestorer` upstream.
+Calls an :class:`LLMEngine` with a punctuation-restoration prompt. Since
+LLMs are non-deterministic and often network-bound, each text flows
+through a :func:`retry_until_valid` loop that re-runs the request when
+the output fails :func:`punc_content_matches` (i.e. the model changed
+the underlying words). A batch is fanned out concurrently through
+``asyncio.gather`` with a :class:`asyncio.Semaphore` throttle.
+
+Raises :class:`RuntimeError` per text when every attempt (``max_retries
++ 1``) fails; :class:`~adapters.preprocess.punc.restorer.PuncRestorer`
+catches that and applies the configured ``on_failure`` policy.
 """
 
 from __future__ import annotations
@@ -12,6 +17,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import TYPE_CHECKING
+
+from domain.lang import punc_content_matches
 
 from adapters.preprocess.punc.registry import Backend, PuncBackendRegistry
 from ports.retries import retry_until_valid
@@ -51,11 +58,17 @@ def factory(
     engine:
         An :class:`LLMEngine` (``async .complete(messages)``).
     max_retries:
-        Retries on transport-level failure; total attempts = ``max_retries + 1``.
+        Per-text retries on transport failure or content mismatch; total
+        attempts = ``max_retries + 1``.
     max_concurrent:
-        Maximum concurrent LLM calls per batch.
+        Upper bound on concurrent LLM calls within one batch.
     system_prompt:
         Override the default punctuation-restoration system prompt.
+
+    Raises
+    ------
+    ValueError
+        If ``max_retries < 0`` or ``max_concurrent < 1``.
     """
     if max_retries < 0:
         raise ValueError("max_retries must be >= 0")
@@ -75,14 +88,16 @@ def factory(
             async with sem:
                 return await _call_once(text)
 
-        def _always_accept(value: str):
+        def _validate(value: str):
+            if not punc_content_matches(text, value):
+                return False, value, f"content mismatch: {text[:60]!r} → {value[:60]!r}"
             return True, value, ""
 
         outcome = await retry_until_valid(
             _attempt,
-            validate=_always_accept,
+            validate=_validate,
             max_retries=max_retries,
-            on_reject=lambda attempt, reason: logger.warning("LLM punc attempt %d/%d failed: %s", attempt + 1, max_retries + 1, reason),
+            on_reject=lambda attempt, reason: logger.warning("LLM punc attempt %d/%d rejected: %s", attempt + 1, max_retries + 1, reason),
             on_exception=lambda attempt, exc: logger.warning("LLM punc attempt %d/%d raised: %r", attempt + 1, max_retries + 1, exc),
         )
         if not outcome.accepted:

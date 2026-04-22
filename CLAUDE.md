@@ -67,7 +67,7 @@ src/
 │   ├── parsers/                     # parse_srt, read_srt, sanitize_srt, parse_whisperx, read_whisperx
 │   ├── media/                       # YtdlpSource, ffmpeg.probe, ffmpeg.extract_audio
 │   ├── preprocess/                  # NerPuncRestorer, LlmPuncRestorer, RemotePuncRestorer,
-│   │                                # SpacySplitter, LlmChunker, SpacyLlmChunker + _availability
+│   │                                # Chunker + backends (rule/spacy/llm/composite) + _availability
 │   └── reporters/reporters.py       # LoggerReporter, JsonlErrorReporter, ChainReporter
 │
 ├── application/                     【L3 · use cases / orchestration】
@@ -158,8 +158,12 @@ tests/
 │   └── test_ytdlp.py            # yt-dlp source tests
 ├── preprocess_tests/            # Preprocessing tests
 │   ├── test_ner_punc.py         # NerPuncRestorer + dotted-word + trailing-punc protection
-│   ├── test_spacy.py            # SpacySplitter + dotted-word sentence splitting
-│   └── ...                      # LlmChunker, SpacyLlmChunker, etc.
+│   ├── chunk/                   # Chunker orchestrator + registry + per-backend tests
+│   │   ├── test_registry.py
+│   │   ├── test_chunker.py
+│   │   ├── test_llm_backend.py
+│   │   ├── test_spacy_backend.py
+│   │   └── test_composite_backend.py
 └── runtime_tests/               # Runtime orchestration tests
     ├── test_app.py              # App + VideoBuilder + CourseBuilder
     ├── test_config.py           # AppConfig (YAML + dict + env overrides)
@@ -185,7 +189,7 @@ Test directory is `lang_ops_tests` / `runtime_tests` etc. (not matching src pack
 - **jieba** / **MeCab** / **kiwipiepy** — CJK tokenizers (conditional, tests skip if missing)
 
 - **deepmultilingualpunctuation** — NER punctuation restoration (conditional, tests skip if missing)
-- **spacy** — sentence splitting via `SpacySplitter` (conditional, tests skip if missing)
+- **spacy** — sentence splitting via `spacy_backend` (conditional, tests skip if missing)
 
 Check availability at runtime: `jieba_is_available()`, `mecab_is_available()`, `kiwi_is_available()`, `langdetect_is_available()` (exported from `domain.lang`); `punc_model_is_available()`, `spacy_is_available()` (exported from `adapters.preprocess`).
 
@@ -236,7 +240,7 @@ course_result = await (
 | `parse_srt`, `read_srt`, `parse_whisperx` | `adapters.parsers` |
 | `extract_audio`, `YtdlpSource`, `MediaSource` | `adapters.media` / `ports.media` |
 | `OpenAICompatEngine`, `EngineConfig` | `adapters.engines.openai_compat` |
-| `NerPuncRestorer`, `SpacySplitter`, `LlmChunker` | `adapters.preprocess` |
+| `PuncRestorer`, `Chunker` (registry-based) | `adapters.preprocess` |
 | `TranslationContext`, `translate_with_verify`, `StaticTerms` | `application.translate` |
 | `Checker`, `default_checker`, `CheckReport` | `application.checker` |
 | `TranslateProcessor`, `SummaryProcessor` | `application.processors` |
@@ -347,20 +351,27 @@ read_whisperx(path)              → list[Word]  # read JSON file
 
 ### Preprocessing (ApplyFn-based — all conform to `list[str] → list[list[str]]`)
 
+Punctuation restoration and chunking both use the same registry + orchestrator pattern:
+
 ```
-from adapters.preprocess import NerPuncRestorer, SpacySplitter, SpacyLlmChunker, LlmChunker
+from adapters.preprocess import PuncRestorer, Chunker
 
-# NER punctuation restoration (singleton, thread-safe)
-restorer = NerPuncRestorer.get_instance()
-results = restorer(["hello world this is a test"])  # → [["Hello world, this is a test."]]
+# Unified punctuation restorer with per-language backend dispatch
+restorer = PuncRestorer(backends={
+    "en": {"library": "deepmultilingualpunctuation"},
+    "zh": {"library": "llm", "engine": engine},
+})
+fn = restorer.for_language("en")
+fn(["hello world this is a test"])  # → [["Hello world, this is a test."]]
 
-# spaCy sentence splitting (singleton per model)
-splitter = SpacySplitter.get_instance()
-results = splitter(["Hello world. This is Node.js."])  # → [["Hello world.", "This is Node.js."]]
-
-# Two-stage chunker: spaCy coarse split → LLM fine split for oversized chunks
-chunker = SpacyLlmChunker(splitter, llm_chunker, chunk_len=90)
-results = chunker(["long text..."])                 # → [["chunk1", "chunk2"]]
+# Unified chunker — "rule" | "spacy" | "llm" | "composite" backends
+chunker = Chunker(backends={
+    "en": {"library": "composite", "language": "en", "chunk_len": 90,
+           "inner": {"library": "spacy"},
+           "refine": {"library": "llm", "engine": engine}},
+})
+fn = chunker.for_language("en")
+fn(["long text..."])  # → [["chunk1", "chunk2"]]
 ```
 
 ### Orchestration (async, immutable)

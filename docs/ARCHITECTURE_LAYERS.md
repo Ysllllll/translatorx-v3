@@ -45,7 +45,7 @@ api  →  application  →  adapters  →  ports  →  domain
 │  ├── media/          YtdlpSource, ffmpeg probe/extract          │
 │  ├── parsers/        parse_srt, parse_whisperx, sanitize_*      │
 │  ├── preprocess/     PuncRestorer registry (ner/llm/remote),    │
-│  │                   SpacySplitter, SpacyLlmChunker, LlmChunker │
+│  │                   Chunker (rule/spacy/llm/composite backends) │
 │  ├── reporters/      LoggerReporter, JsonlErrorReporter         │
 │  ├── sources/        SrtSource, WhisperXSource, PushQueueSource │
 │  ├── storage/        JsonFileStore, Workspace                   │

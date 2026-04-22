@@ -110,3 +110,4 @@ class JapaneseTextTest(LangOpsTestCase):
 
         # normalize()
         self._assert_cjk_normalize("こんにちは", "こんにちは、世界！「テスト」。")
+        self._assert_cjk_ascii_quotes()

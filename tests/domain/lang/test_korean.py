@@ -116,3 +116,4 @@ class KoreanTextTest(LangOpsTestCase):
 
         # normalize()
         self._assert_cjk_normalize("안녕하세요", "안녕하세요, 세계! 테스트.")
+        self._assert_cjk_ascii_quotes()

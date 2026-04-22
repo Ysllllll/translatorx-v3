@@ -1,8 +1,15 @@
-"""spaCy-based sentence splitter — independent from punctuation restoration.
+"""spaCy chunk backend — registered as ``"spacy"``.
 
-Global singleton — only one spaCy model instance per process.  The old
-system loaded multiple instances which caused issues; this enforces a
-single shared model.
+Self-contained implementation: both the process-wide
+:class:`SpacySplitter` singleton and the registry factory live here.
+:class:`~adapters.preprocess.chunk.chunker.Chunker` dispatches per-language
+sentence splitting through the factory like every other backend.
+
+Deterministic (same input → same output), so no internal retry loop.
+
+Only one spaCy model instance per process is kept; multiple instances
+of the same model would duplicate memory and add GIL pressure during
+inference without any accuracy benefit.
 """
 
 from __future__ import annotations
@@ -11,6 +18,8 @@ import logging
 import re
 import threading
 from typing import ClassVar
+
+from adapters.preprocess.chunk.registry import Backend, ChunkBackendRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +36,8 @@ DEFAULT_SPACY_MODEL = "en_core_web_md"
 #: Default spaCy pipeline per language code. Falls back to the multilingual
 #: sentence-only model when a user-requested language isn't listed.
 #:
-#: Users can override by passing ``model=`` to :meth:`get_instance` or by
-#: editing this mapping before first instantiation.
+#: Users can override by passing ``model=`` to :meth:`SpacySplitter.get_instance`
+#: or by editing this mapping before first instantiation.
 DEFAULT_MODELS_BY_LANG: dict[str, str] = {
     "en": "en_core_web_md",
     "zh": "zh_core_web_md",
@@ -109,12 +118,10 @@ class SpacySplitter:
             if not text.strip():
                 results.append([text])
                 continue
-            # Protect dotted words from being split as sentence boundaries.
             protected, restore_map = self._protect_dotted_words(text)
             with self._infer_lock:
                 doc = self._nlp(protected)
             sents = [sent.text.strip() for sent in doc.sents if sent.text.strip()]
-            # Restore original dotted words.
             if restore_map:
                 sents = [self._restore_placeholders(s, restore_map) for s in sents]
             results.append(sents if sents else [text])
@@ -145,4 +152,31 @@ class SpacySplitter:
         return text
 
 
-__all__ = ["SpacySplitter", "DEFAULT_SPACY_MODEL", "DEFAULT_MODELS_BY_LANG", "FALLBACK_MODEL"]
+@ChunkBackendRegistry.register("spacy")
+def spacy_backend(*, language: str, model: str | None = None) -> Backend:
+    """Build a spaCy sentence-splitter backend for *language*.
+
+    Parameters
+    ----------
+    language:
+        BCP-47 / ISO code. Drives the default model lookup in
+        :data:`DEFAULT_MODELS_BY_LANG`.
+    model:
+        Optional explicit spaCy model name (overrides the per-language
+        default).
+    """
+    splitter = SpacySplitter.for_language(language, model=model)
+
+    def _backend(texts: list[str]) -> list[list[str]]:
+        return splitter(texts)
+
+    return _backend
+
+
+__all__ = [
+    "SpacySplitter",
+    "DEFAULT_SPACY_MODEL",
+    "DEFAULT_MODELS_BY_LANG",
+    "FALLBACK_MODEL",
+    "spacy_backend",
+]

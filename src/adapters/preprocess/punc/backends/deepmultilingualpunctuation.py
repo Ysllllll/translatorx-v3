@@ -1,8 +1,16 @@
-"""`deepmultilingualpunctuation` backend — multilingual NER fullstop model.
+"""deepmultilingualpunctuation punc backend — registered as ``"deepmultilingualpunctuation"``.
 
-Model weights are cached process-wide per checkpoint name; inference
-is serialized per-model via a dedicated :class:`threading.Lock` because
-the underlying HuggingFace pipeline is not thread-safe.
+Wraps the HuggingFace ``oliverguhr/fullstop-punctuation-multilang-large``
+NER model (or any compatible checkpoint).
+
+Behavior:
+
+* Model weights are cached process-wide per checkpoint name.
+* Inference is serialized per-model via a dedicated :class:`threading.Lock`
+  because the underlying HuggingFace pipeline is not thread-safe.
+* Deterministic: same input → same output, so no internal retry loop.
+  :class:`~adapters.preprocess.punc.restorer.PuncRestorer` provides the
+  single-shot ``on_failure`` safety net.
 """
 
 from __future__ import annotations

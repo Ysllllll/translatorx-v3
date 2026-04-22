@@ -1,22 +1,34 @@
 """Transcriber backend registry + resolver.
 
-Same pattern as :mod:`adapters.tts.registry` — factories keyed by a string
-``library`` name produce concrete :class:`Transcriber` instances from a
-config :class:`Mapping` or a pre-built instance.
+Aligned with :mod:`adapters.preprocess.chunk.registry` — backend
+implementations register a factory via the
+:func:`TranscriberBackendRegistry.register` decorator keyed by a string
+``library`` name. Factories accept keyword arguments and return a
+concrete :class:`Transcriber` instance.
 """
 
 from __future__ import annotations
 
 import threading
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Union
 
 from ports.transcriber import Transcriber
 
 
-Factory = Callable[[Mapping[str, Any]], Transcriber]
+#: Factory contract — keyword config → :class:`Transcriber`.
+Factory = Callable[..., Transcriber]
+
+
+#: Shapes accepted by :meth:`TranscriberBackendRegistry.create`:
+#:
+#: * :class:`Transcriber` — returned as-is.
+#: * :class:`Mapping` — ``{"library": str, **kwargs}``.
+TranscriberSpec = Union[Transcriber, Mapping[str, Any]]
 
 
 class TranscriberBackendRegistry:
+    """Thread-safe process-wide registry of transcriber factories."""
+
     def __init__(self) -> None:
         self._factories: dict[str, Factory] = {}
         self._lock = threading.Lock()
@@ -24,19 +36,38 @@ class TranscriberBackendRegistry:
     def register(
         self,
         name: str,
-        factory: Factory,
+        factory: Factory | None = None,
         *,
         overwrite: bool = False,
-    ) -> None:
-        name = name.strip().lower()
-        if not name:
-            raise ValueError("backend name must be non-empty")
-        with self._lock:
-            if name in self._factories and not overwrite:
-                raise ValueError(f"transcriber backend already registered: {name!r}")
-            self._factories[name] = factory
+    ) -> Callable[[Factory], Factory] | None:
+        """Register *factory* under *name*.
 
-    def create(self, spec: Mapping[str, Any] | Transcriber) -> Transcriber:
+        Usable as a decorator::
+
+            @DEFAULT_REGISTRY.register("whisperx")
+            def whisperx_factory(**kwargs) -> Transcriber: ...
+
+        Or imperatively::
+
+            DEFAULT_REGISTRY.register("whisperx", whisperx_factory)
+        """
+        name_norm = name.strip().lower()
+        if not name_norm:
+            raise ValueError("backend name must be non-empty")
+
+        def _register(fn: Factory) -> Factory:
+            with self._lock:
+                if name_norm in self._factories and not overwrite:
+                    raise ValueError(f"transcriber backend already registered: {name_norm!r}")
+                self._factories[name_norm] = fn
+            return fn
+
+        if factory is None:
+            return _register
+        _register(factory)
+        return None
+
+    def create(self, spec: TranscriberSpec) -> Transcriber:
         if isinstance(spec, Transcriber):
             return spec
         if isinstance(spec, Mapping):
@@ -47,8 +78,11 @@ class TranscriberBackendRegistry:
             factory = self._factories.get(name.strip().lower())
             if factory is None:
                 raise KeyError(f"unknown transcriber backend: {name!r}")
-            return factory(params)
+            return factory(**params)
         raise TypeError(f"invalid transcriber spec: {type(spec).__name__}")
+
+    def is_registered(self, name: str) -> bool:
+        return name.strip().lower() in self._factories
 
     def names(self) -> tuple[str, ...]:
         with self._lock:
@@ -58,51 +92,17 @@ class TranscriberBackendRegistry:
 DEFAULT_REGISTRY = TranscriberBackendRegistry()
 
 
-def register(name: str, factory: Factory, *, overwrite: bool = False) -> None:
-    DEFAULT_REGISTRY.register(name, factory, overwrite=overwrite)
+def register(name: str, factory: Factory | None = None, *, overwrite: bool = False):
+    return DEFAULT_REGISTRY.register(name, factory, overwrite=overwrite)
 
 
-def create(spec: Mapping[str, Any] | Transcriber) -> Transcriber:
+def create(spec: TranscriberSpec) -> Transcriber:
     return DEFAULT_REGISTRY.create(spec)
-
-
-# --- built-in factories -----------------------------------------------------
-
-
-def _whisperx_factory(params: Mapping[str, Any]) -> Transcriber:
-    from .whisperx import WhisperXConfig, WhisperXTranscriber
-
-    cfg_fields = {f for f in WhisperXConfig.__dataclass_fields__.keys()}
-    cfg_kw = {k: v for k, v in params.items() if k in cfg_fields}
-    extra = {k: v for k, v in params.items() if k not in cfg_fields}
-    if extra:
-        cfg_kw.setdefault("extra", {}).update(extra)
-    return WhisperXTranscriber(WhisperXConfig(**cfg_kw))
-
-
-def _openai_factory(params: Mapping[str, Any]) -> Transcriber:
-    from .openai_api import OpenAiTranscriber, OpenAiTranscriberConfig
-
-    cfg_fields = {f for f in OpenAiTranscriberConfig.__dataclass_fields__.keys()}
-    cfg_kw = {k: v for k, v in params.items() if k in cfg_fields}
-    return OpenAiTranscriber(OpenAiTranscriberConfig(**cfg_kw))
-
-
-def _http_factory(params: Mapping[str, Any]) -> Transcriber:
-    from .http_remote import HttpRemoteConfig, HttpRemoteTranscriber
-
-    cfg_fields = {f for f in HttpRemoteConfig.__dataclass_fields__.keys()}
-    cfg_kw = {k: v for k, v in params.items() if k in cfg_fields}
-    return HttpRemoteTranscriber(HttpRemoteConfig(**cfg_kw))
-
-
-DEFAULT_REGISTRY.register("whisperx", _whisperx_factory)
-DEFAULT_REGISTRY.register("openai", _openai_factory)
-DEFAULT_REGISTRY.register("http", _http_factory)
 
 
 __all__ = [
     "Factory",
+    "TranscriberSpec",
     "TranscriberBackendRegistry",
     "DEFAULT_REGISTRY",
     "register",

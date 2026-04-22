@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from adapters.transcribers.openai_api import OpenAiTranscriber, OpenAiTranscriberConfig
+from adapters.transcribers.backends.openai import OpenAiTranscriber, OpenAiTranscriberConfig
 
 
 def _patch_client(monkeypatch, handler):

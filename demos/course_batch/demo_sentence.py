@@ -154,8 +154,8 @@ def _build_punc_fn(mode: str, language: str = "en"):
 
 
 def _build_chunk_fn():
-    """Build a SpacyLlmChunker (spaCy 预分 + LLM 精分)."""
-    from adapters.preprocess import LlmChunker, SpacySplitter, SpacyLlmChunker
+    """Build a composite (spaCy 预分 + LLM 精分) chunker via Chunker orchestrator."""
+    from adapters.preprocess import Chunker
     from application.translate import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
@@ -167,9 +167,19 @@ def _build_chunk_fn():
             max_tokens=2048,
         )
     )
-    splitter = SpacySplitter.get_instance()
-    llm_chunker = LlmChunker(engine, chunk_len=90, max_depth=4)
-    return SpacyLlmChunker(splitter, llm_chunker, chunk_len=90)
+    chunker = Chunker(
+        backends={
+            "en": {
+                "library": "composite",
+                "language": "en",
+                "chunk_len": 90,
+                "inner": {"library": "spacy"},
+                "refine": {"library": "llm", "engine": engine, "chunk_len": 90, "max_depth": 4},
+            }
+        },
+        max_len=90,
+    )
+    return chunker.for_language("en")
 
 
 async def demo_sentence_pipeline(segments: list[Segment], *, punc_mode: str) -> None:
@@ -272,7 +282,7 @@ async def demo_sentence_pipeline(segments: list[Segment], *, punc_mode: str) -> 
 
     # ── Pipeline D: Pipeline A + chunk (spaCy + LLM) ────────────────────
     print(f"\n{'━' * 72}")
-    print(f"  Pipeline D: Pipeline A + chunk (SpacyLlmChunker)")
+    print(f"  Pipeline D: Pipeline A + chunk (composite: spaCy + LLM)")
     print(f"{'━' * 72}")
 
     d_before = [r.src_text for r in a_records]

@@ -116,26 +116,26 @@ def demo_remote_punc() -> None:
 
 
 def demo_spacy_splitter() -> None:
-    """Section 8d: SpacySplitter standalone."""
-    sub("8d  SpacySplitter — spaCy NLP 拆句 (chunk_mode='spacy')")
+    """Section 8d: spacy_backend standalone."""
+    sub("8d  spacy_backend — spaCy NLP 拆句 (chunk_mode='spacy')")
     try:
-        from adapters.preprocess import SpacySplitter
+        from adapters.preprocess.chunk.backends.spacy import spacy_backend
     except ImportError:
         print(f"    {ts()} ⚠ spacy 不可用, 跳过")
         return
 
-    splitter = SpacySplitter.get_instance()
-    print(f"    {ts()} type:  {type(splitter).__name__} (singleton)")
-    print(f"    {ts()} input: 1 long text ({len(LONG_TEXT)} chars)")
+    backend = spacy_backend(language="en")
+    print(f"    {ts()} backend: spacy (language=en)")
+    print(f"    {ts()} input:   1 long text ({len(LONG_TEXT)} chars)")
 
-    results = splitter([LONG_TEXT])
+    results = backend([LONG_TEXT])
     print_chunk_comparison([LONG_TEXT], results, "spaCy Splitter")
 
 
 async def demo_llm_chunker() -> None:
-    """Section 8e: LlmChunker standalone."""
-    sub("8e  LlmChunker — LLM 二分法拆句 (chunk_mode='llm')")
-    from adapters.preprocess import LlmChunker
+    """Section 8e: llm_backend standalone."""
+    sub("8e  llm_backend — LLM 二分法拆句 (chunk_mode='llm')")
+    from adapters.preprocess.chunk.backends.llm import llm_backend
     from application.translate import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
@@ -147,8 +147,8 @@ async def demo_llm_chunker() -> None:
             max_tokens=2048,
         )
     )
-    chunker = LlmChunker(engine, chunk_len=90, max_depth=4)
-    print(f"    {ts()} type:      {type(chunker).__name__}")
+    chunker = llm_backend(engine=engine, language="en", chunk_len=90, max_depth=4)
+    print(f"    {ts()} backend:   llm (language=en)")
     print(f"    {ts()} chunk_len: 90 chars, max_depth: 4")
     print(f"    {ts()} input:     1 long text ({len(LONG_TEXT)} chars)")
 
@@ -160,7 +160,8 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
     """Section 8f: Full pipeline step-by-step."""
     from domain.subtitle import Subtitle
     from adapters.parsers import read_srt
-    from adapters.preprocess import LlmChunker, PuncRestorer
+    from adapters.preprocess import PuncRestorer
+    from adapters.preprocess.chunk.backends.llm import llm_backend
     from application.translate import EngineConfig, OpenAICompatEngine
 
     sub("8f  完整预处理流水线 — 逐步可视化 (1 视频)")
@@ -184,7 +185,7 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
         )
     )
     punc_fn = PuncRestorer(backends={"en": {"library": "llm", "engine": engine}}).for_language("en")
-    chunk_fn = LlmChunker(engine, chunk_len=90, max_depth=4)
+    chunk_fn = llm_backend(engine=engine, language="en", chunk_len=90, max_depth=4)
 
     sub_obj = Subtitle(segments, language="en")
 

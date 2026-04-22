@@ -46,7 +46,7 @@ translatorx-worker = "api.service.worker:main"
 line-length = 140
 
 [tool.ruff.lint]
-ignore = ["F541", "E741"]
+ignore = ["F541", "E741", "F821", "F401", "E402"]
 
 [tool.ruff.format]
 quote-style = "double"

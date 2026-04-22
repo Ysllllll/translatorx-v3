@@ -69,9 +69,9 @@ class Transcriber(Protocol):
     """Audio → timed segments contract.
 
     Implementations:
-        * :class:`adapters.transcribers.whisperx.WhisperXTranscriber`
-        * :class:`adapters.transcribers.openai_api.OpenAiTranscriber`
-        * :class:`adapters.transcribers.http_remote.HttpRemoteTranscriber`
+        * :class:`adapters.transcribers.backends.whisperx.WhisperXTranscriber`
+        * :class:`adapters.transcribers.backends.openai.OpenAiTranscriber`
+        * :class:`adapters.transcribers.backends.http.HttpRemoteTranscriber`
     """
 
     async def transcribe(

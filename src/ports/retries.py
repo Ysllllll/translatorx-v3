@@ -26,7 +26,7 @@ Shared failure vocabulary
 Call sites that need a configurable fallback on total failure use the
 :data:`OnFailure` literal (``"keep"`` or ``"raise"``) with
 :func:`resolve_on_failure` to dispatch. Domain-specific extensions
-(e.g. :class:`preprocess._chunk.LlmChunker`'s ``"rule"``) layer on top.
+(e.g. :func:`preprocess.chunk.backends.llm.llm_backend`'s ``"rule"``) layer on top.
 """
 
 from __future__ import annotations

@@ -13,7 +13,7 @@ from adapters.preprocess.availability import (
     punc_model_is_available,
     spacy_is_available,
 )
-from adapters.preprocess.llm_chunk import LlmChunker
+from adapters.preprocess.chunk import ChunkBackendRegistry, Chunker
 from adapters.preprocess.punc import (
     Backend,
     BackendFactory,
@@ -24,14 +24,13 @@ from adapters.preprocess.punc import (
 )
 from ports.apply_fn import ApplyFn
 
-_spacy_available = spacy_is_available()
-
 __all__ = [
     "ApplyFn",
     "Backend",
     "BackendFactory",
     "BackendSpec",
-    "LlmChunker",
+    "ChunkBackendRegistry",
+    "Chunker",
     "PuncBackendRegistry",
     "PuncRestorer",
     "langdetect_is_available",
@@ -39,9 +38,3 @@ __all__ = [
     "resolve_backend_spec",
     "spacy_is_available",
 ]
-
-if _spacy_available:
-    from adapters.preprocess.spacy_split import SpacySplitter
-    from adapters.preprocess.spacy_llm_chunk import SpacyLlmChunker
-
-    __all__ += ["SpacySplitter", "SpacyLlmChunker"]

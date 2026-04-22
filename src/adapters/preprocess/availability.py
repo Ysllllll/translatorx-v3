@@ -1,6 +1,11 @@
 """Availability guards for optional preprocessing dependencies.
 
-Follows the same pattern as ``lang_ops._core._availability``.
+Each helper returns ``True`` iff the corresponding third-party package
+is importable. Callers use them to skip features gracefully instead of
+hard-failing at import time; pytest fixtures use them to emit
+``pytest.skip`` when a backend's dependency is missing.
+
+Mirrors the pattern in :mod:`domain.lang._core._availability`.
 """
 
 
@@ -32,3 +37,10 @@ def langdetect_is_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+__all__ = [
+    "langdetect_is_available",
+    "punc_model_is_available",
+    "spacy_is_available",
+]

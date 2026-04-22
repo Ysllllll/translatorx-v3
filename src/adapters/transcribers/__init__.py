@@ -4,15 +4,25 @@ from __future__ import annotations
 
 from ports.transcriber import TranscribeOptions, Transcriber, TranscriptionResult
 
-from .http_remote import HttpRemoteConfig, HttpRemoteTranscriber
-from .openai_api import OpenAiTranscriber, OpenAiTranscriberConfig
+# Importing ``backends`` triggers registry side effects.
+from .backends import (
+    HttpRemoteConfig,
+    HttpRemoteTranscriber,
+    OpenAiTranscriber,
+    OpenAiTranscriberConfig,
+    WhisperXConfig,
+    WhisperXTranscriber,
+    http_backend,
+    openai_backend,
+    whisperx_backend,
+    whisperx_is_available,
+)
 from .registry import (
     DEFAULT_REGISTRY,
     TranscriberBackendRegistry,
     create,
     register,
 )
-from .whisperx import WhisperXConfig, WhisperXTranscriber, whisperx_is_available
 
 __all__ = [
     "TranscribeOptions",
@@ -25,6 +35,9 @@ __all__ = [
     "WhisperXConfig",
     "WhisperXTranscriber",
     "whisperx_is_available",
+    "http_backend",
+    "openai_backend",
+    "whisperx_backend",
     "DEFAULT_REGISTRY",
     "TranscriberBackendRegistry",
     "create",

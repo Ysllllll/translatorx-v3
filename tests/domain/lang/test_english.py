@@ -116,3 +116,8 @@ class EnglishTextTest(LangOpsTestCase):
 
         # normalize()
         self._assert_entype_normalize()
+
+        # ASCII quotes + contractions stay whole in mode=word
+        self._assert_preserved_fragments('He said "AI" rocks and I\'m fine', ['"AI"', "I'm"], modes=("word",))
+        self._assert_preserved_fragments("The '90s ruled, rock 'n' roll forever", ["'90s", "'n'"], modes=("word",))
+        self._assert_preserved_fragments("visit deeplearning.ai or https://example.com/path today", ["deeplearning.ai", "https://example.com/path"], modes=("word",))
