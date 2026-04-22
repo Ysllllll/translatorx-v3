@@ -224,6 +224,12 @@ class ServiceConfig(BaseModel):
     otel_exporter: Literal["console", "otlp-grpc", "otlp-http"] = "console"
     otel_endpoint: str = ""
 
+    cors_origins: list[str] = Field(
+        default_factory=list,
+        description="Allowed CORS origins. Empty = CORS disabled. Use ['*'] to allow all.",
+    )
+    cors_allow_credentials: bool = False
+
 
 class AppConfig(BaseModel):
     """Root configuration model."""

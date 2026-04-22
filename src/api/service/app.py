@@ -140,6 +140,17 @@ def create_app(
     api.include_router(admin.router)
 
     svc_cfg = app.config.service
+    if svc_cfg.cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        api.add_middleware(
+            CORSMiddleware,
+            allow_origins=svc_cfg.cors_origins,
+            allow_credentials=svc_cfg.cors_allow_credentials,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["X-API-Key"],
+        )
     install_prometheus(api, enabled=svc_cfg.prometheus_enabled, path=svc_cfg.prometheus_path)
     install_opentelemetry(
         api,
