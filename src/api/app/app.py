@@ -202,17 +202,20 @@ class App:
 
     # -- stage factories (Stage 6/8 — transcribe / tts) -----------------
 
-    def transcriber(self):
+    def transcriber(self, *, library: str | None = None):
         """Build a :class:`Transcriber` from ``config.transcriber``.
 
-        Returns ``None`` when ``library`` is unset.
+        Returns ``None`` when ``library`` is unset in both the argument and
+        the config. An explicit ``library`` argument overrides
+        ``config.transcriber.library``.
         """
         cfg = self._config.transcriber
-        if not cfg.library:
+        chosen = library or cfg.library
+        if not chosen:
             return None
         from adapters.transcribers import create as create_transcriber
 
-        spec: dict[str, object] = {"library": cfg.library}
+        spec: dict[str, object] = {"library": chosen}
         if cfg.model:
             spec["model"] = cfg.model
         if cfg.base_url:
@@ -228,17 +231,20 @@ class App:
             spec.setdefault(k, v)
         return create_transcriber(spec)
 
-    def tts_backend(self):
+    def tts_backend(self, *, library: str | None = None):
         """Build a :class:`TTS` backend from ``config.tts``.
 
-        Returns ``None`` when ``library`` is unset.
+        Returns ``None`` when ``library`` is unset in both the argument and
+        the config. An explicit ``library`` argument overrides
+        ``config.tts.library``.
         """
         cfg = self._config.tts
-        if not cfg.library:
+        chosen = library or cfg.library
+        if not chosen:
             return None
         from adapters.tts import create as create_tts
 
-        spec: dict[str, object] = {"library": cfg.library}
+        spec: dict[str, object] = {"library": chosen}
         if cfg.api_key:
             spec["api_key"] = cfg.api_key
         if cfg.base_url:

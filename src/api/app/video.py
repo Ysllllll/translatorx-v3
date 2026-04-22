@@ -385,7 +385,7 @@ class VideoBuilder:
         stage = self._transcribe
         assert stage is not None
 
-        transcriber = self.app.transcriber()
+        transcriber = self.app.transcriber(library=stage.library)
         if transcriber is None:
             raise ValueError(
                 "VideoBuilder.transcribe() requires config.transcriber.library to be set, "
@@ -455,9 +455,9 @@ class VideoBuilder:
         assert stage is not None
 
         cfg = self.app.config.tts
-        backend = self.app.tts_backend()
+        backend = self.app.tts_backend(library=stage.library)
         if backend is None:
-            raise ValueError("VideoBuilder.tts() requires config.tts.library to be set")
+            raise ValueError("VideoBuilder.tts() requires config.tts.library or an explicit library= argument")
         voice_picker = self.app.voice_picker(target_lang)
         return TTSProcessor(
             backend,

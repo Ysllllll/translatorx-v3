@@ -82,7 +82,7 @@ class TestVideoBuilderTranscribe:
     async def test_transcribe_stage_writes_json_and_runs_translate(self, app: App, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(app, "engine", lambda name="default": _FakeEngine())
         monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
-        monkeypatch.setattr(app, "transcriber", lambda: _FakeTranscriber())
+        monkeypatch.setattr(app, "transcriber", lambda **_kw: _FakeTranscriber())
 
         audio = tmp_path / "lec.wav"
         audio.write_bytes(b"fake")
@@ -104,7 +104,7 @@ class TestVideoBuilderTTS:
     async def test_tts_stage_requires_backend(self, app: App, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(app, "engine", lambda name="default": _FakeEngine())
         monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
-        monkeypatch.setattr(app, "tts_backend", lambda: None)
+        monkeypatch.setattr(app, "tts_backend", lambda **_kw: None)
 
         srt = tmp_path / "lec.srt"
         srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello world.\n", encoding="utf-8")

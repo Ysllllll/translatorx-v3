@@ -305,9 +305,9 @@ class CourseBuilder:
                         )
                     )
                 if self._tts is not None:
-                    backend = self.app.tts_backend()
+                    backend = self.app.tts_backend(library=self._tts.library)
                     if backend is None:
-                        raise ValueError("CourseBuilder.tts() requires config.tts.library to be set")
+                        raise ValueError("CourseBuilder.tts() requires config.tts.library or an explicit library= argument")
                     voice_picker = self.app.voice_picker(_tgt)
                     tts_cfg = self.app.config.tts
                     procs.append(
