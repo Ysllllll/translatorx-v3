@@ -8,7 +8,7 @@ from .agents import (
     TermsAgentResult,
     parse_terms_response,
 )
-from .align_agent import AlignAgent, AlignResult
+from .align_agent import AlignAgent, BisectResult
 from .context import (
     ContextWindow,
     StaticTerms,
@@ -44,7 +44,7 @@ __all__ = [
     "TermsAgentResult",
     "parse_terms_response",
     "AlignAgent",
-    "AlignResult",
+    "BisectResult",
     "IncrementalSummaryAgent",
     "IncrementalSummaryState",
     "SummarySnapshot",

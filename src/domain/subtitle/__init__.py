@@ -8,6 +8,7 @@ from .align import (
     fill_words,
     find_words,
     normalize_words,
+    rebalance_segment_words,
 )
 from .core import Subtitle, SubtitleStream
 
@@ -21,6 +22,7 @@ __all__ = [
     "fill_words",
     "find_words",
     "normalize_words",
+    "rebalance_segment_words",
     "Subtitle",
     "SubtitleStream",
 ]

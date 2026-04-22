@@ -32,7 +32,7 @@ class _ScriptedEngine:
 
 
 def _map(pieces: list[str]) -> str:
-    return json.dumps({"mapping": [{"source": f"s{i}", "target": p} for i, p in enumerate(pieces)]}, ensure_ascii=False)
+    return json.dumps({"mapping": [{"src": f"s{i}", "tgt": p} for i, p in enumerate(pieces)]}, ensure_ascii=False)
 
 
 def _rec(rid: int, segs: list[str], translation: str) -> SentenceRecord:
@@ -65,10 +65,16 @@ class TestFingerprint:
         b = AlignProcessor(e)
         assert a.fingerprint() == b.fingerprint()
 
-    def test_sensitive_to_tolerance(self):
+    def test_sensitive_to_text_mode_toggle(self):
         e = _ScriptedEngine([])
-        a = AlignProcessor(e, tolerate_ratio=0.1)
-        b = AlignProcessor(e, tolerate_ratio=0.2)
+        a = AlignProcessor(e, enable_text_mode=False)
+        b = AlignProcessor(e, enable_text_mode=True)
+        assert a.fingerprint() != b.fingerprint()
+
+    def test_sensitive_to_ratio_thresholds(self):
+        e = _ScriptedEngine([])
+        a = AlignProcessor(e, json_accept_ratio=5.0)
+        b = AlignProcessor(e, json_accept_ratio=3.0)
         assert a.fingerprint() != b.fingerprint()
 
 
@@ -88,7 +94,7 @@ class TestSkipPaths:
         assert e.calls == 0
 
     @pytest.mark.asyncio
-    async def test_single_segment_gets_trivial_alignment(self, store, video_key):
+    async def test_single_segment_trivial(self, store, video_key):
         e = _ScriptedEngine([])
         proc = AlignProcessor(e)
         recs = [_rec(0, ["hello"], "你好")]
@@ -102,9 +108,9 @@ class TestSkipPaths:
         assert e.calls == 0
 
 
-class TestAlignSuccess:
+class TestRecursiveBisect:
     @pytest.mark.asyncio
-    async def test_multi_segment(self, store, video_key):
+    async def test_two_segments_single_call(self, store, video_key):
         e = _ScriptedEngine([_map(["你好", "世界"])])
         proc = AlignProcessor(e)
         recs = [_rec(0, ["hello", "world"], "你好世界")]
@@ -115,8 +121,35 @@ class TestAlignSuccess:
 
         out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert out[0].alignment == {"zh": ["你好", "世界"]}
+        assert e.calls == 1
 
-        # Fingerprint persisted.
+    @pytest.mark.asyncio
+    async def test_four_segments_recurses(self, store, video_key):
+        # First split: "你好世界天地乾坤" -> ("你好世界", "天地乾坤") over segs[:2]|segs[2:]
+        # Then split "你好世界" -> ("你好", "世界") and "天地乾坤" -> ("天地", "乾坤")
+        scripts = [_map(["你好世界", "天地乾坤"]), _map(["你好", "世界"]), _map(["天地", "乾坤"])]
+        e = _ScriptedEngine(scripts)
+        proc = AlignProcessor(e)
+        recs = [_rec(0, ["one", "two", "three", "four"], "你好世界天地乾坤")]
+
+        async def src():
+            for r in recs:
+                yield r
+
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
+        assert out[0].alignment["zh"] == ["你好", "世界", "天地", "乾坤"]
+
+    @pytest.mark.asyncio
+    async def test_persists_fingerprint(self, store, video_key):
+        e = _ScriptedEngine([_map(["你好", "世界"])])
+        proc = AlignProcessor(e)
+        recs = [_rec(0, ["hello", "world"], "你好世界")]
+
+        async def src():
+            for r in recs:
+                yield r
+
+        await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         data = await store.load_video("v1")
         assert data["meta"]["_fingerprints"]["align"] == proc.fingerprint()
 
@@ -127,14 +160,12 @@ class TestCacheHit:
         e = _ScriptedEngine([_map(["你好", "世界"])])
         proc = AlignProcessor(e)
 
-        # First run populates the store.
         async def src1():
             yield _rec(0, ["hello", "world"], "你好世界")
 
         await _drain(proc.process(src1(), ctx=_ctx(), store=store, video_key=video_key))
         calls_after_first = e.calls
 
-        # Second run with identical inputs → no new LLM calls.
         proc2 = AlignProcessor(e)
 
         async def src2():

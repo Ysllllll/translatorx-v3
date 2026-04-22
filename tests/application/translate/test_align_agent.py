@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import pytest
 
-from application.translate.align_agent import AlignAgent
+from application.translate.align_agent import AlignAgent, BisectResult
 from domain.model.usage import CompletionResult
 
 
@@ -26,92 +25,120 @@ class _ScriptedEngine:
         yield (await self.complete(messages)).text
 
 
-def _mapping(pieces: list[str]) -> str:
-    return json.dumps({"mapping": [{"source": f"s{i}", "target": p} for i, p in enumerate(pieces)]}, ensure_ascii=False)
+def _json_mapping(pieces: list[str]) -> str:
+    return json.dumps({"mapping": [{"src": f"s{i}", "tgt": p} for i, p in enumerate(pieces)]}, ensure_ascii=False)
 
 
-@pytest.mark.asyncio
-async def test_single_segment_short_circuits():
-    engine = _ScriptedEngine([])
-    agent = AlignAgent(engine, "zh")
-    r = await agent.align(["hello"], "你好")
-    assert r.accepted
-    assert r.pieces == ["你好"]
-    assert engine.calls == 0
+# ---------------------------------------------------------------------------
+# JSON mode — binary split
+# ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_empty_translation_returns_blanks():
-    engine = _ScriptedEngine([])
-    agent = AlignAgent(engine, "zh")
-    r = await agent.align(["a", "b", "c"], "   ")
-    assert r.pieces == ["", "", ""]
-    assert engine.calls == 0
+class TestJsonBisect:
+    @pytest.mark.asyncio
+    async def test_empty_translation(self):
+        engine = _ScriptedEngine([])
+        agent = AlignAgent(engine, "zh")
+        r = await agent.bisect(["hello", "world"], "   ", norm_ratio=5, accept_ratio=5)
+        assert not r.accepted
+        assert r.pieces == ["", ""]
+        assert engine.calls == 0
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_binary_src(self):
+        engine = _ScriptedEngine([])
+        agent = AlignAgent(engine, "zh")
+        with pytest.raises(ValueError):
+            await agent.bisect(["a"], "xyz", norm_ratio=5, accept_ratio=5)
+
+    @pytest.mark.asyncio
+    async def test_successful_bisect(self):
+        engine = _ScriptedEngine([_json_mapping(["你好", "世界"])])
+        agent = AlignAgent(engine, "zh")
+        r = await agent.bisect(["hello", "world"], "你好世界", norm_ratio=5, accept_ratio=5)
+        assert r.accepted and not r.need_rearrange
+        assert r.pieces == ["你好", "世界"]
+        assert engine.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_retries_on_bad_shape(self):
+        engine = _ScriptedEngine([_json_mapping(["你好世界"]), _json_mapping(["你好", "世界"])])
+        agent = AlignAgent(engine, "zh", max_retries=2)
+        r = await agent.bisect(["hello", "world"], "你好世界", norm_ratio=5, accept_ratio=5)
+        assert r.accepted
+        assert engine.calls == 2
+
+    @pytest.mark.asyncio
+    async def test_retries_on_concat_mismatch(self):
+        engine = _ScriptedEngine(
+            [
+                _json_mapping(["完全", "不对"]),  # fails concat
+                _json_mapping(["你好", "世界"]),
+            ]
+        )
+        agent = AlignAgent(engine, "zh", max_retries=2)
+        r = await agent.bisect(["hello", "world"], "你好世界", norm_ratio=5, accept_ratio=5)
+        assert r.accepted
+        assert engine.calls == 2
+
+    @pytest.mark.asyncio
+    async def test_fallback_on_exhaustion(self):
+        engine = _ScriptedEngine([_json_mapping(["错", "了"])])
+        agent = AlignAgent(engine, "zh", max_retries=1)
+        r = await agent.bisect(["hello", "world"], "你好世界", norm_ratio=5, accept_ratio=5)
+        assert not r.accepted
+        assert r.pieces == ["", ""]
+
+    @pytest.mark.asyncio
+    async def test_json_fenced_response(self):
+        fenced = "```json\n" + _json_mapping(["你好", "世界"]) + "\n```"
+        engine = _ScriptedEngine([fenced])
+        agent = AlignAgent(engine, "zh")
+        r = await agent.bisect(["hello", "world"], "你好世界", norm_ratio=5, accept_ratio=5)
+        assert r.accepted
+        assert r.pieces == ["你好", "世界"]
+
+    @pytest.mark.asyncio
+    async def test_retries_on_json_parse_error(self):
+        engine = _ScriptedEngine(["not json at all", _json_mapping(["你好", "世界"])])
+        agent = AlignAgent(engine, "zh", max_retries=2)
+        r = await agent.bisect(["hello", "world"], "你好世界", norm_ratio=5, accept_ratio=5)
+        assert r.accepted
+
+    @pytest.mark.asyncio
+    async def test_rearrange_hint_when_ratio_between_norm_accept(self):
+        # Make the split heavily unbalanced in length to trigger ratio branch.
+        # src "a b c d e f g h i j" vs "k", tgt "你好" vs "你好世界世界世界"
+        engine = _ScriptedEngine([_json_mapping(["你好", "世界天地乾坤"])])
+        agent = AlignAgent(engine, "zh")
+        r = await agent.bisect(["a b c d e", "f"], "你好世界天地乾坤", norm_ratio=1.1, accept_ratio=100.0)
+        assert r.accepted
+        assert r.need_rearrange
 
 
-@pytest.mark.asyncio
-async def test_successful_alignment():
-    engine = _ScriptedEngine([_mapping(["你好", "世界"])])
-    agent = AlignAgent(engine, "zh")
-    r = await agent.align(["hello", "world"], "你好世界")
-    assert r.accepted
-    assert r.pieces == ["你好", "世界"]
-    assert engine.calls == 1
+# ---------------------------------------------------------------------------
+# Text mode — two-line output
+# ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_retries_on_length_mismatch():
-    engine = _ScriptedEngine(
-        [
-            _mapping(["你好世界"]),  # wrong length
-            _mapping(["你好", "世界"]),  # good
-        ]
-    )
-    agent = AlignAgent(engine, "zh", max_retries=2)
-    r = await agent.align(["hello", "world"], "你好世界")
-    assert r.accepted
-    assert engine.calls == 2
+class TestTextBisect:
+    @pytest.mark.asyncio
+    async def test_successful_two_line_split(self):
+        engine = _ScriptedEngine(["你好\n世界"])
+        agent = AlignAgent(engine, "zh", use_json=False, max_retries=0)
+        r = await agent.bisect(["hello", "world"], "你好世界", norm_ratio=3, accept_ratio=3)
+        assert r.accepted
+        assert r.pieces == ["你好", "世界"]
 
+    @pytest.mark.asyncio
+    async def test_text_mode_defaults_to_six_retries(self):
+        agent = AlignAgent(_ScriptedEngine([""]), "zh", use_json=False)
+        assert agent._max_retries == 6
 
-@pytest.mark.asyncio
-async def test_retries_on_concat_mismatch():
-    # Different content AND different length → fails ratio check too.
-    engine = _ScriptedEngine(
-        [
-            _mapping(["一", "二"]),  # concat length 2, expected length 4
-            _mapping(["你好", "世界"]),
-        ]
-    )
-    agent = AlignAgent(engine, "zh", max_retries=2, tolerate_ratio=0.1)
-    r = await agent.align(["hello", "world"], "你好世界")
-    assert r.accepted
-    assert engine.calls == 2
-
-
-@pytest.mark.asyncio
-async def test_fallback_on_exhaustion():
-    engine = _ScriptedEngine([_mapping(["wrong"])])
-    agent = AlignAgent(engine, "zh", max_retries=1)
-    r = await agent.align(["hello", "world"], "你好世界")
-    assert not r.accepted
-    assert r.pieces[0] == "你好世界"
-    assert r.pieces[1] == ""
-
-
-@pytest.mark.asyncio
-async def test_tolerate_ratio_accepts_close_enough():
-    # Concat "你好世界 " has whitespace — normalized away. If the mapping
-    # produces "你好世 界", whitespace normalization makes them equal.
-    engine = _ScriptedEngine([_mapping(["你好世", "界"])])
-    agent = AlignAgent(engine, "zh", max_retries=0)
-    r = await agent.align(["hello", "world"], "你好世界")
-    assert r.accepted
-    assert r.pieces == ["你好世", "界"]
-
-
-@pytest.mark.asyncio
-async def test_retries_on_json_parse_error():
-    engine = _ScriptedEngine(["not json at all", _mapping(["你好", "世界"])])
-    agent = AlignAgent(engine, "zh", max_retries=2)
-    r = await agent.align(["hello", "world"], "你好世界")
-    assert r.accepted
+    @pytest.mark.asyncio
+    async def test_text_mode_rejects_one_line(self):
+        engine = _ScriptedEngine(["只有一行", "你好\n世界"])
+        agent = AlignAgent(engine, "zh", use_json=False, max_retries=2)
+        r = await agent.bisect(["hello", "world"], "你好世界", norm_ratio=3, accept_ratio=3)
+        assert r.accepted
+        assert engine.calls == 2

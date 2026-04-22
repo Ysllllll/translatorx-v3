@@ -309,3 +309,69 @@ def align_segments(
         e = grp[-1].end if grp else 0.0
         segs.append(Segment(start=s, end=e, text=text, words=grp))
     return segs
+
+
+def rebalance_segment_words(
+    seg_a: Segment,
+    seg_b: Segment,
+    target_ratio: float,
+    max_chunk_len: int,
+    *,
+    ops,
+) -> tuple[Segment, Segment]:
+    """Redistribute the combined words of ``seg_a + seg_b`` to match *target_ratio*.
+
+    Ports the legacy ``AlignAgent.process_elements``: merges the two segments'
+    words, then picks the word-boundary ``i`` that minimizes
+    ``|target_ratio - length(left_text) / length(right_text)|`` subject to
+    ``length(left) <= max_chunk_len`` and ``length(right) <= max_chunk_len``.
+
+    Returns two new :class:`Segment`\\s whose ``text`` is rebuilt from the
+    rebalanced word content and whose ``start``/``end`` wrap the split.
+    If *target_ratio* cannot be achieved without exceeding *max_chunk_len*
+    on either side, returns ``(seg_a, seg_b)`` unchanged.
+    """
+    words = list(seg_a.words) + list(seg_b.words)
+    if len(words) < 2:
+        return seg_a, seg_b
+
+    def _join(ws: list[Word]) -> str:
+        # Rebuild text from surface forms, respecting ops tokenization.
+        return ops.join([w.word for w in ws])
+
+    best_i: int | None = None
+    best_score = float("inf")
+    for i in range(1, len(words)):
+        left_text = _join(words[:i])
+        right_text = _join(words[i:])
+        left_len = ops.length(left_text)
+        right_len = ops.length(right_text)
+        if left_len > max_chunk_len or right_len > max_chunk_len:
+            continue
+        if right_len <= 0:
+            continue
+        score = abs(target_ratio - (left_len / right_len))
+        if score < best_score:
+            best_score = score
+            best_i = i
+
+    if best_i is None:
+        return seg_a, seg_b
+
+    left_words = words[:best_i]
+    right_words = words[best_i:]
+    new_a = replace(
+        seg_a,
+        start=left_words[0].start if left_words else seg_a.start,
+        end=left_words[-1].end if left_words else seg_a.end,
+        text=_join(left_words),
+        words=left_words,
+    )
+    new_b = replace(
+        seg_b,
+        start=right_words[0].start if right_words else seg_b.start,
+        end=right_words[-1].end if right_words else seg_b.end,
+        text=_join(right_words),
+        words=right_words,
+    )
+    return new_a, new_b

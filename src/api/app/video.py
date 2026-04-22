@@ -50,8 +50,12 @@ class _SummaryStage:
 @dataclass(frozen=True)
 class _AlignStage:
     engine_name: str = "default"
-    max_retries: int = 2
-    tolerate_ratio: float = 0.1
+    enable_text_mode: bool = False
+    json_norm_ratio: float = 5.0
+    json_accept_ratio: float = 5.0
+    text_norm_ratio: float = 3.0
+    text_accept_ratio: float = 3.0
+    rearrange_chunk_len: int = 90
 
 
 @dataclass(frozen=True)
@@ -224,16 +228,24 @@ class VideoBuilder:
         self,
         *,
         engine: str = "default",
-        max_retries: int = 2,
-        tolerate_ratio: float = 0.1,
+        enable_text_mode: bool = False,
+        json_norm_ratio: float = 5.0,
+        json_accept_ratio: float = 5.0,
+        text_norm_ratio: float = 3.0,
+        text_accept_ratio: float = 3.0,
+        rearrange_chunk_len: int = 90,
     ) -> VideoBuilder:
         """Attach an :class:`AlignProcessor` after translate."""
         return replace(
             self,
             _align=_AlignStage(
                 engine_name=engine,
-                max_retries=max_retries,
-                tolerate_ratio=tolerate_ratio,
+                enable_text_mode=enable_text_mode,
+                json_norm_ratio=json_norm_ratio,
+                json_accept_ratio=json_accept_ratio,
+                text_norm_ratio=text_norm_ratio,
+                text_accept_ratio=text_accept_ratio,
+                rearrange_chunk_len=rearrange_chunk_len,
             ),
         )
 
@@ -314,8 +326,13 @@ class VideoBuilder:
                 procs.append(
                     AlignProcessor(
                         align_engine,
-                        max_retries=self._align.max_retries,
-                        tolerate_ratio=self._align.tolerate_ratio,
+                        source_lang=src_lang,
+                        enable_text_mode=self._align.enable_text_mode,
+                        json_norm_ratio=self._align.json_norm_ratio,
+                        json_accept_ratio=self._align.json_accept_ratio,
+                        text_norm_ratio=self._align.text_norm_ratio,
+                        text_accept_ratio=self._align.text_accept_ratio,
+                        rearrange_chunk_len=self._align.rearrange_chunk_len,
                         flush_every=self.app.config.runtime.flush_every,
                     )
                 )

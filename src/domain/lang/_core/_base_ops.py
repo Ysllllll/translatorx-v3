@@ -200,3 +200,145 @@ class _BaseOps(ABC):
         from domain.lang.chunk._pipeline import TextPipeline
 
         return TextPipeline(text, ops=self)
+
+    # -- Alignment support --------------------------------------------------
+
+    def ends_with_clause_punct(self, text: str) -> bool:
+        """True if *text* ends with a clause / sentence terminator for this language."""
+        if not text:
+            return False
+        stripped = text.rstrip()
+        if not stripped:
+            return False
+        return stripped[-1] in self.clause_separators or stripped[-1] in self.sentence_terminators
+
+    def find_half_join_balance(self, texts: list[str]) -> list[int]:
+        """Return candidate binary-split indices for a sequence of sibling texts.
+
+        Given ``N >= 2`` source segments that must be split into two halves,
+        return the boundary indices (1..N-1) ranked by a balance score.
+        Boundaries that land on a clause / sentence terminator are strongly
+        preferred; within equal preference, halves closer to equal total length
+        rank higher. The returned list is ordered best-first so callers can
+        try candidates in sequence until one succeeds.
+        """
+        n = len(texts)
+        if n <= 2:
+            return [1]
+
+        # weight=1 when the text BEFORE the boundary ends on a clause/sentence
+        # terminator; otherwise a large penalty so these are tried last.
+        # Use a finite large value (not sys.maxsize) to avoid overflow in the
+        # weighted product below.
+        _PENALTY = 10**9
+        weights = [1 if self.ends_with_clause_punct(t) else _PENALTY for t in texts]
+        lengths = [self.length(t) for t in texts]
+        total = sum(lengths)
+        diffs: list[tuple[int, int]] = []  # (score, boundary_idx)
+        for i in range(1, n):
+            left = sum(lengths[:i])
+            imbalance = abs(left - (total - left))
+            score = weights[i - 1] * imbalance
+            diffs.append((score, i))
+        diffs.sort(key=lambda x: x[0])
+        return [idx for _, idx in diffs]
+
+    def length_ratio(self, a: str, b: str) -> float:
+        """Cross-text length ratio ``length(a) / length(b)`` with zero-div guard."""
+        la = self.length(a)
+        lb = self.length(b)
+        return (la + 1e-7) / (lb + 1e-7)
+
+    def check_and_correct_split_sentence(
+        self,
+        split_sentence: list[str],
+        sentence: str,
+        can_reverse: bool = True,
+    ) -> tuple[bool, list[str]]:
+        """Verify that ``split_sentence`` (len=2) concatenates to ``sentence``.
+
+        Mirrors the legacy ``LanguageHandler.check_and_correct_split_sentence``
+        contract: accepts ``[a, b]``, tries to window-match each piece against
+        the words of ``sentence``. If both match, returns ``(True, [a, b])``.
+        When ``can_reverse`` is True and the reversed concatenation matches
+        while the original does not, returns the swapped pieces (CJK-aware
+        end/mid terminator swap for natural reading).
+
+        Returns ``(False, pieces)`` on unrecoverable mismatch.
+        """
+        if len(split_sentence) != 2:
+            raise ValueError(f"check_and_correct_split_sentence expects 2 pieces, got {len(split_sentence)}")
+
+        words_list = list(self.split(sentence))
+        fixed_texts: list[str] = []
+        for piece in split_sentence:
+            try:
+                fixed = self._match_window(piece, words_list)
+            except ValueError:
+                fixed = ""
+            fixed_texts.append(fixed)
+
+        first, second = fixed_texts[0], fixed_texts[1]
+        if not first and not second:
+            return False, fixed_texts
+
+        import re as _re
+
+        # Recover the missing side from the full sentence by subtraction.
+        if first and not second:
+            second = _re.sub(_re.escape(first), "", sentence, count=1)
+            fixed_texts = [first, second]
+        elif not first and second:
+            first = _re.sub(_re.escape(second), "", sentence, count=1)
+            fixed_texts = [first, second]
+
+        normalized_sent = _re.sub(r" +", "", sentence)
+        concat_forward = _re.sub(r" +", "", self.join([first, second]))
+        concat_reverse = _re.sub(r" +", "", self.join([second, first]))
+        good = concat_forward == normalized_sent or concat_reverse == normalized_sent
+
+        if not good:
+            # Try one more time, recovering the missing side.
+            if first:
+                trial = [first, _re.sub(_re.escape(first), "", sentence, count=1)]
+                if _re.sub(r" +", "", self.join(trial)) == normalized_sent:
+                    fixed_texts = trial
+                    good = True
+            if not good and second:
+                trial = [_re.sub(_re.escape(second), "", sentence, count=1), second]
+                if _re.sub(r" +", "", self.join(trial)) == normalized_sent:
+                    fixed_texts = trial
+                    good = True
+
+        if good and can_reverse and self.is_cjk:
+            # CJK-specific: prefer the ordering that ends the first piece with a
+            # sentence terminator (。？！) over a clause separator (，、).
+            a, b = fixed_texts[0], fixed_texts[1]
+            if (
+                a
+                and b
+                and _re.sub(r" +", "", self.join([b, a])) == normalized_sent
+                and a[-1] in self.sentence_terminators
+                and b[-1] in self.clause_separators
+            ):
+                schar = b[-1]
+                fchar = a[-1]
+                fixed_texts = [a[:-1] + schar, b[:-1] + fchar]
+
+        return good, [t.strip() for t in fixed_texts]
+
+    def _match_window(self, phrase: str, words_list: list[str]) -> str:
+        """Find a contiguous window in ``words_list`` whose stripped words match *phrase*.
+
+        Returns the joined window string (unmodified, with punctuation) on match.
+        Raises ``ValueError`` if no such window exists.
+        """
+        words = list(self.split(self.join([p.strip() for p in phrase.split("\n")])))
+        n = len(words)
+        if n == 0:
+            return ""
+        for i in range(len(words_list) - n + 1):
+            window = words_list[i : i + n]
+            if all(self.strip_punc(window[j]) == self.strip_punc(words[j]) for j in range(n)):
+                return self.join(window)
+        raise ValueError(f"phrase '{phrase}' does not match any window in word list")
