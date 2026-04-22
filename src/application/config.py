@@ -217,6 +217,13 @@ class ServiceConfig(BaseModel):
     arq_task_prefix: str = "trx:task:"
     arq_events_prefix: str = "trx:task-events:"
 
+    prometheus_enabled: bool = False
+    prometheus_path: str = "/metrics"
+    otel_enabled: bool = False
+    otel_service_name: str = "translatorx"
+    otel_exporter: Literal["console", "otlp-grpc", "otlp-http"] = "console"
+    otel_endpoint: str = ""
+
 
 class AppConfig(BaseModel):
     """Root configuration model."""

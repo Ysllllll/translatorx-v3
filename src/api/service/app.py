@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI
 
 from api.service.auth import Principal
+from api.service.observability import install_opentelemetry, install_prometheus
 from api.service.routers import health, streams, usage, videos
 from api.service.tasks import TaskManager
 from application.resources import DEFAULT_TIERS, InMemoryResourceManager, UserTier
@@ -120,6 +121,10 @@ def create_app(
             api.state.tasks = await task_manager_factory()
         else:
             api.state.tasks = TaskManager(app, rm)
+        # Wire Prometheus metrics (if installed) into the task manager sink.
+        metrics = getattr(api.state, "prom_metrics", None)
+        if metrics is not None:
+            api.state.tasks._prom_metrics = metrics
         api.state.streams = {}
         api.state.auth_map = auth_map
         try:
@@ -132,6 +137,16 @@ def create_app(
     api.include_router(videos.router)
     api.include_router(streams.router)
     api.include_router(usage.router)
+
+    svc_cfg = app.config.service
+    install_prometheus(api, enabled=svc_cfg.prometheus_enabled, path=svc_cfg.prometheus_path)
+    install_opentelemetry(
+        api,
+        enabled=svc_cfg.otel_enabled,
+        service_name=svc_cfg.otel_service_name,
+        exporter=svc_cfg.otel_exporter,
+        endpoint=svc_cfg.otel_endpoint or None,
+    )
     return api
 
 

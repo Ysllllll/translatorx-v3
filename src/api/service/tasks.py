@@ -216,9 +216,19 @@ class TaskManager:
 
         try:
             async with self._rm.acquire_video_slot(principal.user_id, principal.tier):
+                prom_metrics = getattr(self, "_prom_metrics", None)
 
                 async def _usage_sink(usage, _uid=principal.user_id) -> None:
                     await self._rm.record_usage(_uid, usage)
+                    if prom_metrics is not None:
+                        model = getattr(usage, "model", "") or "unknown"
+                        prom_metrics["engine_requests_total"].labels(model).inc()
+                        if getattr(usage, "prompt_tokens", None):
+                            prom_metrics["engine_tokens_total"].labels(model, "prompt").inc(usage.prompt_tokens)
+                        if getattr(usage, "completion_tokens", None):
+                            prom_metrics["engine_tokens_total"].labels(model, "completion").inc(usage.completion_tokens)
+                        if getattr(usage, "cost_usd", None):
+                            prom_metrics["engine_cost_usd_total"].labels(model).inc(usage.cost_usd)
 
                 last: VideoResult | None = None
                 for tgt_lang in task.tgt:
