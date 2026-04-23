@@ -22,15 +22,12 @@ This ensures consistent formatting. Never skip this step.
 
 ```bash
 # Run all tests
-pytest tests/ -v
+/home/ysl/workspace/.venv/bin/pytest tests/ -v
 
 # Run a single test file
-pytest tests/lang_ops_tests/test_chinese.py -v
-pytest tests/lang_ops_tests/chunk/test_chinese.py -v
-pytest tests/subtitle/build_tests/test_english.py -v
-
-# Run via the venv explicitly (if pytest not on PATH)
-/home/ysl/workspace/.venv/bin/pytest tests/ -v
+/home/ysl/workspace/.venv/bin/pytest tests/domain/lang/test_english.py -v
+/home/ysl/workspace/.venv/bin/pytest tests/domain/lang/chunk/test_english.py -v
+/home/ysl/workspace/.venv/bin/pytest tests/domain/subtitle/build_tests/test_english.py -v
 
 # Run with coverage
 /home/ysl/workspace/.venv/bin/pytest tests/ -v --cov=src --cov-report=term-missing
@@ -48,14 +45,18 @@ A subtitle translation platform organized as **Hexagonal (Ports & Adapters)** wi
 src/
 ├── domain/                          【L0 · pure domain, no I/O】
 │   ├── model/                       # Word, Segment, SentenceRecord, Usage, CompletionResult
-│   ├── lang/                        # LangOps + TextPipeline + per-language tokenizers (was lang_ops/)
-│   └── subtitle/                    # Subtitle class + word-timing alignment (was subtitle/core.py + align.py)
+│   ├── lang/                        # LangOps + TextPipeline + per-language tokenizers
+│   │   ├── _core/                   # _BaseOps, CJK/EnType base classes, factory, availability
+│   │   └── chunk/                   # TextPipeline (chainable, immutable text structuring)
+│   └── subtitle/                    # Subtitle class + word-timing alignment
 │
 ├── ports/                           【L1 · abstract protocols + generic utilities】
 │   ├── source.py                    # Source, Processor, VideoKey, Priority
 │   ├── processor.py                 # ProcessorBase
 │   ├── engine.py                    # LLMEngine, Message
 │   ├── media.py                     # MediaSource, MediaProbe, MediaInfo, PlaylistInfo, DownloadResult
+│   ├── transcriber.py               # Transcriber, TranscribeOptions, TranscriptionResult
+│   ├── tts.py                       # TTS protocol
 │   ├── errors.py                    # ErrorCategory, ErrorInfo, EngineError, ErrorReporter
 │   ├── apply_fn.py                  # ApplyFn protocol (list[str] -> list[list[str]])
 │   └── retries.py                   # retry_until_valid, OnFailure, AttemptOutcome (generic)
@@ -66,21 +67,32 @@ src/
 │   ├── engines/openai_compat.py     # OpenAICompatEngine + EngineConfig
 │   ├── parsers/                     # parse_srt, read_srt, sanitize_srt, parse_whisperx, read_whisperx
 │   ├── media/                       # YtdlpSource, ffmpeg.probe, ffmpeg.extract_audio
-│   ├── preprocess/                  # NerPuncRestorer, LlmPuncRestorer, RemotePuncRestorer,
-│   │                                # Chunker + backends (rule/spacy/llm/composite) + _availability
+│   ├── preprocess/                  # Registry-based punctuation restoration + chunking
+│   │   ├── punc/                    # PuncRestorer + backends (ner/llm/remote) + registry
+│   │   ├── chunk/                   # Chunker + backends (rule/spacy/llm/composite/remote) + registry
+│   │   └── _common/                 # Shared availability guards
+│   ├── transcribers/                # Transcriber adapters (local WhisperX, OpenAI API, HTTP remote)
+│   ├── tts/                         # TTS adapters (Edge-TTS, OpenAI-TTS, ElevenLabs, local)
 │   └── reporters/reporters.py       # LoggerReporter, JsonlErrorReporter, ChainReporter
 │
 ├── application/                     【L3 · use cases / orchestration】
-│   ├── orchestrator/                # VideoOrchestrator, StreamingOrchestrator (video.py), CourseOrchestrator (course.py)
+│   ├── orchestrator/                # VideoOrchestrator, StreamingOrchestrator, CourseOrchestrator
 │   ├── translate/                   # TranslationContext, translate_with_verify, providers, agents, prompts
 │   ├── checker/                     # Checker engine, rules, per-language profiles, default_checker
-│   ├── processors/                  # TranslateProcessor, SummaryProcessor, prefix.PrefixHandler
+│   ├── processors/                  # TranslateProcessor, SummaryProcessor, AlignProcessor, TtsProcessor
+│   ├── align/                       # AlignAgent — LLM-driven binary-split subtitle alignment
+│   ├── summary/                     # IncrementalSummaryAgent — incremental summary use case
+│   ├── terminology/                 # TermsProvider protocol + terminology extraction agent
+│   ├── resources/                   # InMemoryResourceManager + RedisResourceManager (quotas, slots, ledger)
 │   ├── observability/               # ProgressEvent, ProgressReporter (errors live in ports/errors.py)
-│   ├── resources.py                 # InMemoryResourceManager + UserTier + DEFAULT_TIERS
 │   └── config.py                    # AppConfig (Pydantic v2)
 │
 └── api/                             【L4 · user entrypoints】
     ├── app/                         # App + VideoBuilder + CourseBuilder + StreamBuilder
+    ├── service/                     # FastAPI HTTP + SSE service layer (create_app, from_app_config)
+    │   ├── middleware/              # CORS, auth middleware
+    │   ├── routers/                 # API route handlers
+    │   └── runtime/                 # Runtime lifecycle (startup/shutdown)
     └── trx/                         # create_engine, create_context, translate_srt + minimal type re-exports
 ```
 
@@ -106,6 +118,8 @@ Violations are caught by `tests/test_architecture.py` which parses every `src/` 
 
 **Per-sentence pipelines:** After `Subtitle.sentences()`, each sentence owns its own `TextPipeline` + word subset. Operations never cross sentence boundaries.
 
+**Registry pattern for preprocess:** Both `PuncRestorer` and `Chunker` use a registry — backends self-register via decorator at import time. Adding a new backend means creating a file under `backends/` with `@register`, no changes to the orchestrator class.
+
 **Runtime orchestration invariants:**
 - Processors are stateless — state flows through `Store` (one JSON file per video under `<root>/<course>/zzz_translation/<video>.json`).
 - Builders (`VideoBuilder`, `CourseBuilder`, `StreamBuilder`) are immutable — each stage returns a fresh instance via `dataclasses.replace()`.
@@ -113,72 +127,54 @@ Violations are caught by `tests/test_architecture.py` which parses every `src/` 
 
 ### Test structure
 
+Tests mirror `src/` layout for discoverability:
+
 ```
 tests/
-├── lang_ops_tests/              # Token + chunk tests
-│   ├── _base.py                 # TextOpsTestCase — shared assertion helpers
-│   ├── conftest.py              # Font path resolution, pixel length fixture
-│   ├── test_{language}.py       # Per-language token-level tests (10 files, English full names)
-│   ├── chunk/
-│   │   ├── _base.py             # SplitterTestBase — reconstruction assertions
-│   │   └── test_{language}.py   # Per-language chunk tests (English full names)
-│   └── _core/
-│       ├── test_mechanism.py    # Factory tests
-│       ├── test_normalize.py    # Language code normalization
-│       └── test_punctuation.py  # Punctuation constants tests
-├── subtitle/
-│   ├── align_tests/             # Word timing tests
-│   │   ├── test_align.py        # align_segments
-│   │   ├── test_attach_punct.py # attach_punct_words
-│   │   ├── test_distribute.py   # distribute_words
-│   │   ├── test_fill.py         # fill_words
-│   │   ├── test_find.py         # find_words
-│   │   ├── test_normalize.py    # normalize_words
-│   │   └── test_pipeline.py     # Pipeline integration
-│   ├── test_model.py            # Data type display/pretty tests
-│   ├── build_tests/             # Subtitle tests (English full names)
-│   │   ├── _base.py             # BuilderTestBase
-│   │   ├── test_english.py
-│   │   ├── test_korean.py
-│   │   └── test_chinese.py
-│   └── io_tests/
-│       ├── test_sanitize_srt.py # SRT sanitization tests
-│       ├── test_srt.py          # SRT parser tests
-│       └── test_whisperx.py     # WhisperX parser tests
-├── llm_ops_tests/               # LLM engine + context + translate tests
-│   ├── test_checker.py          # Checker integration via translate_with_verify
-│   ├── test_context.py          # ContextWindow, StaticTerms, TermsProvider
-│   ├── test_protocol.py         # LLMEngine Protocol conformance
-│   ├── test_translate.py        # translate_with_verify micro-loop
-│   └── engines_tests/
-│       └── test_openai_compat.py # OpenAI-compatible engine
-├── media_tests/                 # Media download + extraction tests
-│   ├── test_ffmpeg.py           # ffprobe + extract_audio
-│   ├── test_protocol.py         # MediaSource Protocol conformance
-│   └── test_ytdlp.py            # yt-dlp source tests
-├── preprocess_tests/            # Preprocessing tests
-│   ├── test_ner_punc.py         # NerPuncRestorer + dotted-word + trailing-punc protection
-│   ├── chunk/                   # Chunker orchestrator + registry + per-backend tests
-│   │   ├── test_registry.py
-│   │   ├── test_chunker.py
-│   │   ├── test_llm_backend.py
-│   │   ├── test_spacy_backend.py
-│   │   └── test_composite_backend.py
-└── runtime_tests/               # Runtime orchestration tests
-    ├── test_app.py              # App + VideoBuilder + CourseBuilder
-    ├── test_config.py           # AppConfig (YAML + dict + env overrides)
-    ├── test_store.py            # JsonFileStore
-    ├── test_workspace.py        # Workspace layout
-    ├── test_resource_manager.py # InMemoryResourceManager
-    ├── test_reporters.py        # Logger / Jsonl reporters
-    ├── test_usage.py            # Usage, CompletionResult
-    ├── test_base.py             # Protocol/errors/progress shape tests
-    ├── orchestrator_tests/      # VideoOrchestrator / Streaming / Course
-    ├── processors_tests/        # TranslateProcessor + prefix
-    └── sources_tests/           # SrtSource, WhisperXSource, PushQueueSource
+├── domain/                       # Domain model + lang + subtitle tests
+│   ├── lang/
+│   │   ├── _base.py              # TextOpsTestCase — shared assertion helpers
+│   │   ├── conftest.py           # Font path resolution, pixel length fixture
+│   │   ├── test_{language}.py    # Per-language token-level tests (10 languages)
+│   │   ├── chunk/
+│   │   │   ├── _base.py          # SplitterTestBase — reconstruction assertions
+│   │   │   └── test_{language}.py
+│   │   └── _core/                # Factory, normalize, punctuation, detect, alignment
+│   ├── model/                    # Usage, pretty, serde
+│   └── subtitle/
+│       ├── align_tests/          # Word timing (align, attach_punct, distribute, fill, find, normalize, rebalance)
+│       ├── build_tests/          # Subtitle builder (english, korean, chinese)
+│       └── test_apply_split.py
+├── adapters/                     # Adapter tests
+│   ├── engines/                  # OpenAICompatEngine
+│   ├── media/                    # ffprobe, yt-dlp
+│   ├── parsers/                  # SRT, WhisperX, sanitize
+│   ├── preprocess/
+│   │   ├── chunk/                # Chunker registry + per-backend tests
+│   │   ├── punc/                 # PuncRestorer registry + per-backend tests
+│   │   └── test_availability.py
+│   ├── reporters/                # Logger / Jsonl reporters
+│   ├── sources/                  # SrtSource, WhisperXSource, PushQueueSource + store integration
+│   ├── storage/                  # JsonFileStore (raw, schema, fingerprints), Workspace
+│   ├── transcribers/             # HTTP remote, OpenAI API
+│   └── tts/                      # TTS registry + OpenAI TTS
+├── application/                  # Use case tests
+│   ├── align/                    # AlignAgent
+│   ├── orchestrator/             # Video / Streaming / Course orchestrator
+│   ├── processors/               # Translate, Summary, Align, TTS processors
+│   ├── resources/                # Redis resource manager
+│   ├── summary/                  # IncrementalSummaryAgent
+│   ├── terminology/              # TermsProvider + extraction agent
+│   ├── translate/                # translate_with_verify, context, checker, prompts
+│   ├── test_config.py            # AppConfig (YAML + dict + env overrides)
+│   └── test_resources.py         # InMemoryResourceManager
+├── api/
+│   ├── app/                      # App + VideoBuilder + E2E chain tests
+│   └── service/                  # FastAPI endpoints (auth, health, streams, videos, admin, CORS, usage, arq tasks)
+├── ports/                        # Protocol conformance tests (engine, media, retries, transcriber, tts)
+├── demos/                        # Demo smoke tests
+└── test_architecture.py          # Layer dependency guard (parametrized over every src/ file)
 ```
-
-Test directory is `lang_ops_tests` / `runtime_tests` etc. (not matching src package names exactly) to prevent Python from shadowing the package during collection. Inside tests we import from the new layout (`from domain.lang import LangOps`, `from adapters.sources.srt import SrtSource`, etc.).
 
 **Architecture guard**: `tests/test_architecture.py` parametrizes over every file under `src/` and asserts that runtime imports only point to allowed (equal-or-lower) layers. Adding a new file automatically enrolls it.
 
@@ -187,7 +183,6 @@ Test directory is `lang_ops_tests` / `runtime_tests` etc. (not matching src pack
 - **Python 3.10+** (`list[list]`, `str | None`, `slots=True`, `frozen=True`)
 - **Pillow** — pixel length via `plength()`
 - **jieba** / **MeCab** / **kiwipiepy** — CJK tokenizers (conditional, tests skip if missing)
-
 - **deepmultilingualpunctuation** — NER punctuation restoration (conditional, tests skip if missing)
 - **spacy** — sentence splitting via `spacy_backend` (conditional, tests skip if missing)
 
@@ -240,14 +235,19 @@ course_result = await (
 | `parse_srt`, `read_srt`, `parse_whisperx` | `adapters.parsers` |
 | `extract_audio`, `YtdlpSource`, `MediaSource` | `adapters.media` / `ports.media` |
 | `OpenAICompatEngine`, `EngineConfig` | `adapters.engines.openai_compat` |
-| `PuncRestorer`, `Chunker` (registry-based) | `adapters.preprocess` |
+| `PuncRestorer` | `adapters.preprocess.punc` |
+| `Chunker` | `adapters.preprocess.chunk` |
+| `Transcriber`, `TranscribeOptions` | `adapters.transcribers` / `ports.transcriber` |
 | `TranslationContext`, `translate_with_verify`, `StaticTerms` | `application.translate` |
 | `Checker`, `default_checker`, `CheckReport` | `application.checker` |
 | `TranslateProcessor`, `SummaryProcessor` | `application.processors` |
+| `AlignAgent`, `BisectResult` | `application.align` |
+| `IncrementalSummaryAgent` | `application.summary` |
 | `VideoOrchestrator`, `CourseOrchestrator` | `application.orchestrator` |
 | `JsonFileStore`, `Workspace` | `adapters.storage` |
 | `AppConfig` | `application.config` |
 | `App`, `VideoBuilder`, `CourseBuilder`, `StreamBuilder` | `api.app` |
+| `create_app`, `from_app_config` (FastAPI) | `api.service` |
 
 ### Language operations
 
@@ -354,7 +354,8 @@ read_whisperx(path)              → list[Word]  # read JSON file
 Punctuation restoration and chunking both use the same registry + orchestrator pattern:
 
 ```
-from adapters.preprocess import PuncRestorer, Chunker
+from adapters.preprocess.punc import PuncRestorer
+from adapters.preprocess.chunk import Chunker
 
 # Unified punctuation restorer with per-language backend dispatch
 restorer = PuncRestorer(backends={
@@ -364,7 +365,7 @@ restorer = PuncRestorer(backends={
 fn = restorer.for_language("en")
 fn(["hello world this is a test"])  # → [["Hello world, this is a test."]]
 
-# Unified chunker — "rule" | "spacy" | "llm" | "composite" backends
+# Unified chunker — "rule" | "spacy" | "llm" | "composite" | "remote" backends
 chunker = Chunker(backends={
     "en": {"library": "composite", "language": "en", "chunk_len": 90,
            "stages": [
