@@ -41,12 +41,13 @@ from typing import TYPE_CHECKING, Callable, Literal
 from domain.lang import LangOps, normalize_language
 from ports.retries import resolve_on_failure, retry_until_valid
 
+from adapters.preprocess._common import run_async_in_sync
 from adapters.preprocess.chunk.reconstruct import chunks_match_source, recover_pair
 from adapters.preprocess.chunk.registry import Backend, ChunkBackendRegistry
 
 if TYPE_CHECKING:
     from domain.lang._core._base_ops import _BaseOps
-    from application.translate import LLMEngine
+    from ports.engine import LLMEngine
 
 logger = logging.getLogger(__name__)
 
@@ -233,16 +234,7 @@ def llm_backend(
         return list(await asyncio.gather(*(_chunk_one(t) for t in texts)))
 
     def _backend(texts: list[str]) -> list[list[str]]:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-        if loop is not None and loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(lambda: asyncio.run(_process_batch(texts))).result()
-        return asyncio.run(_process_batch(texts))
+        return run_async_in_sync(lambda: _process_batch(texts))
 
     return _backend
 

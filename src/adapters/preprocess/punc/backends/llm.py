@@ -20,11 +20,12 @@ from typing import TYPE_CHECKING
 
 from domain.lang import punc_content_matches
 
+from adapters.preprocess._common import run_async_in_sync
 from adapters.preprocess.punc.registry import Backend, PuncBackendRegistry
 from ports.retries import retry_until_valid
 
 if TYPE_CHECKING:
-    from application.translate import LLMEngine
+    from ports.engine import LLMEngine
 
 logger = logging.getLogger(__name__)
 
@@ -109,16 +110,7 @@ def factory(
         return await asyncio.gather(*(_restore_one(t, sem) for t in texts))
 
     def _call(texts: list[str]) -> list[str]:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(_restore_batch_async(texts))
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(lambda: asyncio.run(_restore_batch_async(texts))).result()
-        return asyncio.run(_restore_batch_async(texts))
+        return run_async_in_sync(lambda: _restore_batch_async(texts))
 
     return _call
 

@@ -305,6 +305,134 @@ _ABBREVIATIONS: dict[str, frozenset[str]] = {
 }
 
 
+#: Per-language conjunction / connective word sets for in-sentence
+#: splitting. Single-token only — multi-word connectives (e.g. "parce que",
+#: "sin embargo") are intentionally excluded because token-based matching
+#: can't reliably detect them without POS tagging. All entries are
+#: lowercase; comparisons must lowercase the incoming token.
+#:
+#: **Ambiguity policy**: only list words that are unambiguously connective
+#: (subordinating / adversative). Exclude determiner-like words
+#: (English "that", "which"), coordinators ("and", "or"), and relative
+#: pronouns ("who"). A POS-aware backend can use a richer set.
+_CONNECTIVES: dict[str, frozenset[str]] = {
+    # -- English 英语 --
+    "en": frozenset(
+        {
+            "because",
+            "but",
+            "when",
+            "while",
+            "although",
+            "though",
+            "if",
+            "so",
+            "since",
+            "until",
+            "unless",
+            "before",
+            "after",
+            "once",
+            "whereas",
+            "whilst",
+        }
+    ),
+    # -- Russian 俄语 --
+    "ru": frozenset(
+        {
+            "но",  # but 但是
+            "когда",  # when 当
+            "пока",  # while / until 当/直到
+            "хотя",  # although 虽然
+            "если",  # if 如果
+            "поэтому",  # therefore 所以
+            "однако",  # however 然而
+            "ибо",  # for / because 因为
+            "чтобы",  # in order to 为了
+        }
+    ),
+    # -- Spanish 西班牙语 --
+    "es": frozenset(
+        {
+            "porque",
+            "pero",
+            "cuando",
+            "mientras",
+            "aunque",
+            "si",
+            "entonces",
+            "además",
+            "pues",
+            "sino",
+        }
+    ),
+    # -- French 法语 --
+    "fr": frozenset(
+        {
+            "mais",
+            "quand",
+            "pendant",
+            "si",
+            "donc",
+            "cependant",
+            "alors",
+            "lorsque",
+            "puisque",
+            "toutefois",
+            "néanmoins",
+            "cependant",
+        }
+    ),
+    # -- German 德语 --
+    "de": frozenset(
+        {
+            "weil",
+            "aber",
+            "wenn",
+            "während",
+            "obwohl",
+            "falls",
+            "daher",
+            "jedoch",
+            "allerdings",
+            "sobald",
+            "nachdem",
+            "bevor",
+            "denn",
+        }
+    ),
+    # -- Portuguese 葡萄牙语 --
+    "pt": frozenset(
+        {
+            "porque",
+            "mas",
+            "quando",
+            "enquanto",
+            "embora",
+            "se",
+            "então",
+            "portanto",
+            "contudo",
+            "todavia",
+            "pois",
+        }
+    ),
+    # -- Vietnamese 越南语 --
+    "vi": frozenset(
+        {
+            "nhưng",  # but 但是
+            "khi",  # when 当
+            "nếu",  # if 如果
+            "vì",  # because 因为
+            "nên",  # so 所以
+            "tuy",  # although 虽然
+            "dù",  # although / even though 即使
+            "mặc",  # although (normally "mặc dù") 虽然
+        }
+    ),
+}
+
+
 class EnTypeOps(_BaseOps):
     def __init__(self, language: str = "en") -> None:
         self._language = language
@@ -320,6 +448,10 @@ class EnTypeOps(_BaseOps):
     @property
     def abbreviations(self) -> frozenset[str]:
         return _ABBREVIATIONS.get(self._language, _ABBREVIATIONS["en"])
+
+    @property
+    def connectives(self) -> frozenset[str]:
+        return _CONNECTIVES.get(self._language, _CONNECTIVES["en"])
 
     @property
     def is_cjk(self) -> bool:

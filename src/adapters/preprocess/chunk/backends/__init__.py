@@ -19,6 +19,10 @@ from adapters.preprocess.chunk.backends.composite import composite_backend  # no
 from adapters.preprocess.chunk.backends.llm import llm_backend  # noqa: F401
 from adapters.preprocess.chunk.backends.remote import remote_backend  # noqa: F401
 from adapters.preprocess.chunk.backends.rule import rule_backend  # noqa: F401
+from adapters.preprocess.chunk.backends.connective import (  # noqa: F401
+    pos_connective_backend,
+    rule_connective_backend,
+)
 
 try:
     from adapters.preprocess.chunk.backends.spacy import spacy_backend  # noqa: F401
@@ -31,4 +35,6 @@ __all__ = [
     "llm_backend",
     "remote_backend",
     "rule_backend",
+    "rule_connective_backend",
+    "pos_connective_backend",
 ]

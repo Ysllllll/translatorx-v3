@@ -17,6 +17,24 @@ from ._core._base_ops import normalize_mode, _VALID_MODES
 _SPACE_MARKER = " "
 
 
+_CONNECTIVES: frozenset[str] = frozenset(
+    {
+        "그러나",  # however 然而
+        "하지만",  # but 但是
+        "그래서",  # so 所以
+        "그런데",  # however 然而
+        "그러면",  # then 那么
+        "그러므로",  # therefore 因此
+        "또한",  # also 也
+        "또는",  # or 或者
+        "만약",  # if 如果
+        "비록",  # although 虽然
+        "따라서",  # therefore 因此
+        "그리고",  # and 并且
+    }
+)
+
+
 class KoreanOps(_BaseCjkOps):
     def __init__(self):
         from kiwipiepy import Kiwi
@@ -30,6 +48,10 @@ class KoreanOps(_BaseCjkOps):
     @property
     def clause_separators(self) -> frozenset[str]:
         return frozenset({",", "；"})
+
+    @property
+    def connectives(self) -> frozenset[str]:
+        return _CONNECTIVES
 
     @property
     def strip_spaces(self) -> bool:

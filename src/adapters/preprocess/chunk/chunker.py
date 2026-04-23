@@ -20,13 +20,13 @@ Per-language flow, for each text:
 from __future__ import annotations
 
 import logging
-import threading
 from typing import TYPE_CHECKING, Mapping
 
 from domain.lang import LangOps, normalize_language
 from ports.apply_fn import ApplyFn
 from ports.retries import OnFailure, resolve_on_failure
 
+from adapters.preprocess._common import BackendSpecResolver
 from adapters.preprocess.chunk.registry import (
     Backend,
     BackendSpec,
@@ -38,9 +38,6 @@ if TYPE_CHECKING:
     from domain.lang._core._base_ops import _BaseOps
 
 logger = logging.getLogger(__name__)
-
-
-WILDCARD = "*"
 
 
 class Chunker:
@@ -76,12 +73,9 @@ class Chunker:
         if on_failure not in ("keep", "raise"):
             raise ValueError(f"invalid on_failure: {on_failure!r}")
 
-        self._specs: dict[str, BackendSpec] = dict(backends or {})
         self._max_len = max_len
         self._on_failure: OnFailure = on_failure
-
-        self._resolved: dict[str, Backend] = {}
-        self._resolve_lock = threading.Lock()
+        self._resolver: BackendSpecResolver[BackendSpec, Backend] = BackendSpecResolver(backends, resolve_backend_spec)
 
     # -- Construction helpers ---------------------------------------------
 
@@ -117,31 +111,12 @@ class Chunker:
         ops = LangOps.for_language(lang)
 
         def _apply(texts: list[str]) -> list[list[str]]:
-            backend = self._resolve_backend(lang)
+            backend = self._resolver.resolve(lang)
             return self._chunk_batch(texts, ops=ops, backend=backend, language=lang)
 
         return _apply
 
     # -- Internals ---------------------------------------------------------
-
-    def _lookup_spec(self, lang: str) -> BackendSpec:
-        if lang in self._specs:
-            return self._specs[lang]
-        if WILDCARD in self._specs:
-            return self._specs[WILDCARD]
-        raise KeyError(f"No backend configured for language {lang!r} and no wildcard {WILDCARD!r} fallback provided")
-
-    def _resolve_backend(self, lang: str) -> Backend:
-        cached = self._resolved.get(lang)
-        if cached is not None:
-            return cached
-        with self._resolve_lock:
-            cached = self._resolved.get(lang)
-            if cached is not None:
-                return cached
-            backend = resolve_backend_spec(self._lookup_spec(lang))
-            self._resolved[lang] = backend
-            return backend
 
     def _chunk_batch(
         self,

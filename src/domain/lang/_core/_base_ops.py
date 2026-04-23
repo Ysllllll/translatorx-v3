@@ -45,6 +45,21 @@ class _BaseOps(ABC):
     def abbreviations(self) -> frozenset[str]: ...
 
     @property
+    def connectives(self) -> frozenset[str]:
+        """Conjunctions / connective words where a long sentence can be split.
+
+        Token-level match, already lowercased where applicable. Only
+        words that are *unambiguously* connective (no POS disambiguation
+        needed) should be listed here — e.g. English "because" is listed
+        but "that" / "which" / "and" are not, because they routinely act
+        as determiners or coordinators mid-phrase.
+
+        Default is empty (no connective-based splitting). Subclasses
+        override.
+        """
+        return frozenset()
+
+    @property
     @abstractmethod
     def is_cjk(self) -> bool: ...
 
