@@ -61,7 +61,7 @@ def build_real_punc_restorer(language: str) -> PuncRestorer | None:
     try:
         return PuncRestorer(
             backends={language: {"library": "deepmultilingualpunctuation"}},
-            threshold=0,
+            threshold=90,
         ).for_language(language)
     except Exception as exc:  # noqa: BLE001
         print(f"  [punc] real backend unavailable ({exc!r}), using mock")
@@ -103,7 +103,7 @@ def build_real_chunker(language: str, engine_url: str | None, max_len: int = 90)
                 "max_len": max_len,
                 "max_depth": 4,
                 "max_retries": 2,
-                "max_concurrent": 4,
+                "max_concurrent": 20,
             }
         )
     else:
@@ -131,11 +131,26 @@ def build_real_chunker(language: str, engine_url: str | None, max_len: int = 90)
 # ── pipeline ──────────────────────────────────────────────────────
 
 
+def _print_subtitle_state(sub: Subtitle, *, label: str) -> None:
+    """Dump every TextPipeline + its word slice inside *sub*."""
+    pipelines = sub._pipelines  # noqa: SLF001
+    words_per = sub._words  # noqa: SLF001
+    print(f"\n  [state:{label}] {len(pipelines)} pipeline(s)")
+    for i, (pipe, words) in enumerate(zip(pipelines, words_per)):
+        chunks = pipe.result()
+        print(f"    pipeline[{i}] chunks={len(chunks)} words={len(words)}")
+        for j, c in enumerate(chunks):
+            print(f"      chunk[{j}]: {c!r}")
+        if words:
+            head = " ".join(w.word for w in words[:6])
+            tail = "" if len(words) <= 6 else f" ... (+{len(words) - 6})"
+            print(f"      words[0:6]: {head}{tail}  span=[{words[0].start:.2f}, {words[-1].end:.2f}]")
+
+
 def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | None) -> None:
     segments = parse_srt(sanitize_srt(srt_text))
-    print(f"\nInput: {len(segments)} segments, language={language}")
+    print(f"\nInput: {len(segments)} SRT segments, language={language}")
 
-    # Build punc + chunk fns (real if requested, else mock).
     punc_fn = None
     if real:
         punc_fn = build_real_punc_restorer(language)
@@ -143,23 +158,114 @@ def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | 
         punc_fn = _mock_punc_restore
 
     if real:
-        chunk_fn = build_real_chunker(language, engine_url=engine_url, max_len=90)
+        chunk_fn = build_real_chunker(language, engine_url=engine_url, max_len=60)
     else:
-        # Mock chunker: just rule-based length split.
         ops = LangOps.for_language(language)
 
         def chunk_fn(texts: list[str]) -> list[list[str]]:
-            return [ops.split_by_length(t, 90) for t in texts]
+            return [ops.split_by_length(t, 60) for t in texts]
 
-    t0 = time.perf_counter()
-    result = (
-        Subtitle(segments, language=language).sentences().transform(punc_fn, scope="joined").clauses().transform(chunk_fn, scope="chunk")
-    )
-    records = result.records()
-    elapsed = time.perf_counter() - t0
-
-    print(f"\nPipeline output: {len(records)} sentence records in {elapsed:.3f}s")
+    # ── STEP 0: raw SRT segments ──────────────────────────────────
+    print("\n" + "=" * 60)
+    print("STEP 0 — raw SRT segments (input)")
+    print("Expected: one Segment per SRT cue, lowercase, no punctuation.")
     print("=" * 60)
+    for i, seg in enumerate(segments):
+        print(f"  [{i}] {seg.start:6.2f}-{seg.end:6.2f}  {seg.text!r}")
+
+    # ── STEP 1: Subtitle() — one flat pipeline ────────────────────
+    print("\n" + "=" * 60)
+    print("STEP 1 — Subtitle(segments, language=...)")
+    print("Expected: exactly 1 pipeline holding the joined text + all words (no split yet).")
+    print("=" * 60)
+    t0 = time.perf_counter()
+    sub0 = Subtitle(segments, language=language)
+    _print_subtitle_state(sub0, label="step1")
+    assert len(sub0._pipelines) == 1, "expected 1 pipeline before sentences()"  # noqa: SLF001
+    print("  ✓ self-check: single pipeline")
+
+    # ── STEP 2: .sentences() — split by sentence boundaries ───────
+    print("\n" + "=" * 60)
+    print("STEP 2 — .sentences()")
+    print("Expected: split into per-sentence pipelines based on sentence-ending")
+    print("punctuation. When input is raw lowercase with NO punctuation, this")
+    print("step finds no boundaries and keeps 1 pipeline. After punc restore")
+    print("a second .sentences() call will produce real splits.")
+    print("=" * 60)
+    sub1 = sub0.sentences()
+    _print_subtitle_state(sub1, label="step2")
+    if len(sub1._pipelines) == 1:  # noqa: SLF001
+        print("  ⚠ only 1 pipeline — input had no sentence punctuation, expected.")
+    else:
+        print(f"  ✓ split into {len(sub1._pipelines)} sentence pipelines")  # noqa: SLF001
+
+    # ── STEP 3: .transform(punc, scope='joined') ──────────────────
+    print("\n" + "=" * 60)
+    print("STEP 3 — .transform(punc_fn, scope='joined')")
+    print("Expected: joins each pipeline's chunks into one string, sends through")
+    print("punc backend, rebuilds pipeline. Output text should contain . , ? !")
+    print("=" * 60)
+    sub2 = sub1.transform(punc_fn, scope="joined")
+    _print_subtitle_state(sub2, label="step3")
+    all_text = " ".join(c for p in sub2._pipelines for c in p.result())  # noqa: SLF001
+    has_punct = any(c in all_text for c in ".,?!")
+    if has_punct:
+        print("  ✓ self-check: punctuation present after restore")
+    else:
+        print("  ⚠ self-check: no punctuation found — backend may have failed silently")
+
+    # ── STEP 3b: .sentences() again — now with punctuation ────────
+    print("\n" + "=" * 60)
+    print("STEP 3b — .sentences() (second call, post-punc)")
+    print("Expected: punctuation now present → real sentence splits.")
+    print("=" * 60)
+    sub2b = sub2.sentences()
+    _print_subtitle_state(sub2b, label="step3b")
+    n_sent = len(sub2b._pipelines)  # noqa: SLF001
+    if n_sent > 1:
+        print(f"  ✓ split into {n_sent} sentence pipelines")
+    else:
+        print("  ⚠ still 1 pipeline — no sentence boundaries detected")
+
+    # ── STEP 4: .clauses() — sentence-aware clause splitting ──────
+    print("\n" + "=" * 60)
+    print("STEP 4 — .clauses()")
+    print("Expected: each sentence pipeline splits into clause chunks at")
+    print("inner punctuation (, ; :). Clause count >= 1 per sentence.")
+    print("=" * 60)
+    sub3 = sub2b.clauses()
+    _print_subtitle_state(sub3, label="step4")
+    total_clauses = sum(len(p.result()) for p in sub3._pipelines)  # noqa: SLF001
+    print(f"  ✓ total clauses across all sentences: {total_clauses}")
+
+    # ── STEP 5: .transform(chunk, scope='chunk') ──────────────────
+    print("\n" + "=" * 60)
+    print("STEP 5 — .transform(chunk_fn, scope='chunk')  [max_len=60]")
+    print("Expected: each clause is passed individually to chunk_fn. Clauses")
+    print("already <= max_len pass through unchanged; longer ones are split.")
+    print("=" * 60)
+    sub4 = sub3.transform(chunk_fn, scope="chunk")
+    _print_subtitle_state(sub4, label="step5")
+    ops = LangOps.for_language(language)
+    total_out = sum(len(p.result()) for p in sub4._pipelines)  # noqa: SLF001
+    over = [c for p in sub4._pipelines for c in p.result() if ops.length(c) > 60]  # noqa: SLF001
+    print(f"  ✓ total output chunks: {total_out}")
+    if over:
+        print(f"  ⚠ {len(over)} chunks still > 60 (chunk_fn may have left long pieces): {over[:2]}")
+    else:
+        print("  ✓ self-check: all chunks within max_len")
+
+    # ── STEP 6: .records() — assemble SentenceRecords ─────────────
+    print("\n" + "=" * 60)
+    print("STEP 6 — .records()")
+    print("Expected: one SentenceRecord per pipeline. Each record carries")
+    print("src_text (joined final chunks), start/end (from word span), and")
+    print("segments (one Segment per output chunk, timing re-aligned to words).")
+    print("=" * 60)
+    records = sub4.records()
+    elapsed = time.perf_counter() - t0
+    print(f"  got {len(records)} SentenceRecord(s) in {elapsed:.3f}s end-to-end")
+
     for i, rec in enumerate(records, 1):
         print(f"\n─── SentenceRecord #{i}  [{rec.start:.2f}s → {rec.end:.2f}s]")
         print(f"  src_text: {rec.src_text!r}")
