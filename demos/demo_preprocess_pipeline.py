@@ -38,18 +38,18 @@ from domain.subtitle import Subtitle
 # ── mock backends（默认启用，无外部依赖）────────────────────────────
 
 
-def _mock_punc_restore(texts: list[str]) -> list[str]:
-    """示例：只做首字母大写 + 句尾加句号（如果没有）。"""
-    out = []
+def _mock_punc_restore(texts: list[str]) -> list[list[str]]:
+    """示例：只做首字母大写 + 句尾加句号（如果没有）。返回 list[list[str]] 以符合 ApplyFn。"""
+    out: list[list[str]] = []
     for t in texts:
         t = t.strip()
         if not t:
-            out.append(t)
+            out.append([t])
             continue
         t = t[0].upper() + t[1:] if t[0].isalpha() else t
         if t[-1] not in ".?!":
             t = t + "."
-        out.append(t)
+        out.append([t])
     return out
 
 
@@ -60,7 +60,7 @@ def build_real_punc_restorer(language: str) -> PuncRestorer | None:
     """Try to build a deepmultilingualpunctuation-based restorer."""
     try:
         return PuncRestorer(
-            backends={language: {"library": "ner", "language": language}},
+            backends={language: {"library": "deepmultilingualpunctuation"}},
             threshold=0,
         ).for_language(language)
     except Exception as exc:  # noqa: BLE001
@@ -153,23 +153,28 @@ def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | 
 
     t0 = time.perf_counter()
     result = (
-        Subtitle(segments, language=language)
-        .sentences()
-        .transform(lambda texts: [[t] for t in punc_fn(texts)], scope="joined")
-        .clauses()
-        .transform(chunk_fn, scope="chunk")
+        Subtitle(segments, language=language).sentences().transform(punc_fn, scope="joined").clauses().transform(chunk_fn, scope="chunk")
     )
     records = result.records()
     elapsed = time.perf_counter() - t0
 
     print(f"\nPipeline output: {len(records)} sentence records in {elapsed:.3f}s")
-    for i, rec in enumerate(records[:5], 1):
-        print(f"  [{i}] src_text={rec.src_text!r}")
-        print(f"      chunks={len(rec.segments)} segments")
+    print("=" * 60)
+    for i, rec in enumerate(records, 1):
+        print(f"\n─── SentenceRecord #{i}  [{rec.start:.2f}s → {rec.end:.2f}s]")
+        print(f"  src_text: {rec.src_text!r}")
+        print(f"  segments ({len(rec.segments)}):")
         for j, seg in enumerate(rec.segments):
-            print(f"         [{j}] {seg.start:.2f}-{seg.end:.2f}  {seg.text!r}")
-    if len(records) > 5:
-        print(f"  ... and {len(records) - 5} more")
+            spk = f" spk={seg.speaker}" if seg.speaker else ""
+            print(f"    [{j}] {seg.start:6.2f}-{seg.end:6.2f}{spk}  {seg.text!r}")
+            if seg.words:
+                words_preview = " ".join(w.word for w in seg.words[:8])
+                more = f" ... (+{len(seg.words) - 8})" if len(seg.words) > 8 else ""
+                print(f"         words[{len(seg.words)}]: {words_preview}{more}")
+        if rec.translations:
+            print(f"  translations: {rec.translations!r}")
+        if rec.alignment:
+            print(f"  alignment: {rec.alignment!r}")
 
 
 # ── sample data ───────────────────────────────────────────────────
