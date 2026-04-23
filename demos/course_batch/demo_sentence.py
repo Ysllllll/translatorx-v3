@@ -138,7 +138,7 @@ def _build_punc_fn(mode: str, language: str = "en"):
         backends = {language: {"library": "deepmultilingualpunctuation"}}
         return PuncRestorer(backends=backends).for_language(language)
 
-    from application.translate import EngineConfig, OpenAICompatEngine
+    from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
         EngineConfig(
@@ -156,7 +156,7 @@ def _build_punc_fn(mode: str, language: str = "en"):
 def _build_chunk_fn():
     """Build a composite (spaCy 预分 + LLM 精分) chunker via Chunker orchestrator."""
     from adapters.preprocess import Chunker
-    from application.translate import EngineConfig, OpenAICompatEngine
+    from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
         EngineConfig(

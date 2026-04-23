@@ -375,7 +375,7 @@ class VideoBuilder:
         """Wrap ``engine`` with :class:`MeteringEngine` when a sink is set."""
         if self._usage_sink is None:
             return engine
-        from application.engines import MeteringEngine
+        from adapters.engines import MeteringEngine
 
         return MeteringEngine(engine, self._usage_sink)
 

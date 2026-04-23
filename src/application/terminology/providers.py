@@ -1,6 +1,6 @@
 """Dynamic :class:`TermsProvider` implementations.
 
-Two flavors, both built on :class:`llm_ops.agents.TermsAgent`:
+Two flavors, both built on :class:`application.terminology.agent.TermsAgent`:
 
 * :class:`PreloadableTerms` — **batch mode**. Caller invokes
   ``await provider.preload(all_texts)`` exactly once before translation;
@@ -11,9 +11,9 @@ Two flavors, both built on :class:`llm_ops.agents.TermsAgent`:
   LLM extraction in the background, and transitions to ready.
 
 Both follow the 2-state machine declared by
-:class:`llm_ops.context.TermsProvider`: ``ready`` starts ``False`` and
-becomes ``True`` exactly once — including on failure, where the provider
-falls back to empty terms so downstream callers can proceed.
+:class:`application.terminology.protocol.TermsProvider`: ``ready`` starts
+``False`` and becomes ``True`` exactly once — including on failure, where
+the provider falls back to empty terms so downstream callers can proceed.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import asyncio
 import logging
 from typing import Literal
 
-from .agents import TermsAgent, TermsAgentResult
+from .agent import TermsAgent, TermsAgentResult
 from ports.engine import LLMEngine
 from ports.retries import retry_until_valid
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Local policy literal — "empty" is domain-specific (fall back to empty
 # terms so translation can proceed), so we don't reuse the shared
-# :data:`llm_ops.retries.OnFailure` vocabulary here.
+# :data:`ports.retries.OnFailure` vocabulary here.
 TermsOnFailure = Literal["empty", "raise"]
 
 

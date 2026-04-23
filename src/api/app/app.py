@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Callable
 
 from application.checker import Checker, default_checker
-from application.translate import EngineConfig, OpenAICompatEngine, StaticTerms, TranslationContext
+from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
+from application.terminology import StaticTerms
+from application.translate import TranslationContext
 
 from application.config import AppConfig, EngineEntry
 from adapters.storage.store import JsonFileStore, Store

@@ -10,7 +10,8 @@ import pytest
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
 from application.processors import AlignProcessor
-from application.translate import StaticTerms, TranslationContext
+from application.terminology import StaticTerms
+from application.translate import TranslationContext
 from domain.model import Segment, SentenceRecord
 from domain.model.usage import CompletionResult
 from ports.source import VideoKey

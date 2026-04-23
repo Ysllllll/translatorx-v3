@@ -6,7 +6,7 @@ from typing import AsyncIterator
 
 import pytest
 
-from application.translate.agents import TermsAgent, TermsAgentResult, parse_terms_response
+from application.terminology import TermsAgent, TermsAgentResult, parse_terms_response
 from domain.model.usage import CompletionResult
 
 

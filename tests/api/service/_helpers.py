@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from application.checker import CheckReport
-from application.translate import Checker
+from application.checker import Checker
 from domain.model.usage import CompletionResult
 
 from api.app import App

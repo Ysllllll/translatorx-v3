@@ -1,102 +1,24 @@
 """Translation context — value objects that travel through the pipeline.
 
-Defines :class:`TermsProvider` (Protocol), :class:`StaticTerms`
-(always-ready implementation), :class:`ContextWindow` (sliding history),
-and :class:`TranslationContext` (immutable carrier of all translation state).
+Defines :class:`ContextWindow` (sliding history), :class:`TranslationContext`
+(immutable carrier of all translation state), and the helper
+:func:`build_frozen_messages` for compact term few-shot encoding.
 
-Terms follow a simple **one-shot state transition** model: a provider is
-either *not ready* (``ready=False``, no terms yet) or *ready*
-(``ready=True``, terms finalized — including the degraded "empty terms"
-state after failure). There is no version tracking; once a provider
-becomes ready, its terms do not change again.
+The terminology side of the contract — :class:`TermsProvider`,
+:class:`StaticTerms`, and concrete provider implementations — lives in
+:mod:`application.terminology`.  We re-export :class:`TermsProvider` and
+:class:`StaticTerms` here for backward compatibility with code that has
+historically imported them from this module.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
 
+from application.terminology.protocol import TermsProvider
+from application.terminology.static import StaticTerms
 from ports.engine import Message
 
-
-# ---------------------------------------------------------------------------
-# TermsProvider Protocol
-# ---------------------------------------------------------------------------
-
-
-@runtime_checkable
-class TermsProvider(Protocol):
-    """Async interface for supplying domain-specific terminology.
-
-    Implementations live on a 2-state machine:
-    - ``ready == False`` — terms not yet available; ``get_terms()`` returns ``{}``
-    - ``ready == True``  — terms finalized (may still be empty on failure)
-
-    ``metadata`` carries auxiliary information such as ``topic``, ``title``,
-    and ``description`` that callers may interpolate into system prompts via
-    :attr:`TranslationContext.system_prompt_template`.
-    """
-
-    @property
-    def ready(self) -> bool:
-        """Whether terms have been finalized."""
-        ...
-
-    async def get_terms(self) -> dict[str, str]:
-        """Return current ``{source_term: target_term}`` mapping."""
-        ...
-
-    async def request_generation(self, texts: list[str]) -> None:
-        """Feed texts to the provider. Idempotent; may or may not trigger LLM work."""
-        ...
-
-    @property
-    def metadata(self) -> dict[str, str]:
-        """Auxiliary info (topic, title, description). Empty if not available."""
-        ...
-
-
-# ---------------------------------------------------------------------------
-# StaticTerms — fixed glossary known upfront
-# ---------------------------------------------------------------------------
-
-
-class StaticTerms:
-    """Pre-defined terminology that never changes.
-
-    Always ``ready``; ``request_generation`` is a no-op.  Suitable for
-    batch translation where the glossary is known upfront.
-    """
-
-    __slots__ = ("_terms", "_metadata")
-
-    def __init__(
-        self,
-        terms: dict[str, str] | None = None,
-        *,
-        metadata: dict[str, str] | None = None,
-    ):
-        self._terms: dict[str, str] = dict(terms) if terms else {}
-        self._metadata: dict[str, str] = dict(metadata) if metadata else {}
-
-    @property
-    def ready(self) -> bool:
-        return True
-
-    async def get_terms(self) -> dict[str, str]:
-        return dict(self._terms)
-
-    async def request_generation(self, texts: list[str]) -> None:
-        return None
-
-    @property
-    def metadata(self) -> dict[str, str]:
-        return dict(self._metadata)
-
-
-# ---------------------------------------------------------------------------
-# ContextWindow — sliding translation-pair history (cache-friendly)
-# ---------------------------------------------------------------------------
 
 # Hardcoded primer demonstrating the "compact term list" format to the LLM
 # and showing that spoken math should be rendered as LaTeX.  Ported from

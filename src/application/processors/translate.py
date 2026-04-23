@@ -46,11 +46,9 @@ import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
+from application.checker import CheckReport, Checker
 from application.translate import (
-    CheckReport,
-    Checker,
     ContextWindow,
-    LLMEngine,
     TranslateResult,
     TranslationContext,
     translate_with_verify,
@@ -58,10 +56,11 @@ from application.translate import (
 from domain.model import SentenceRecord
 from application.processors.prefix import PrefixHandler, TranslateNodeConfig
 
+from ports.engine import LLMEngine
 from ports.processor import ProcessorBase
 
 if TYPE_CHECKING:
-    from application.translate.context import TermsProvider
+    from application.terminology import TermsProvider
 
     from ports.source import VideoKey
     from adapters.storage.store import Store

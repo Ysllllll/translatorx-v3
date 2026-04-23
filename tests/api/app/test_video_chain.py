@@ -9,7 +9,7 @@ import pytest
 
 from api.app import App
 from application.checker import CheckReport
-from application.translate import Checker
+from application.checker import Checker
 from domain.model import Segment, Word
 from domain.model.usage import CompletionResult
 from ports.transcriber import TranscribeOptions, TranscriptionResult

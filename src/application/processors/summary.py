@@ -37,13 +37,10 @@ import hashlib
 import logging
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from application.translate import LLMEngine
-from application.translate.agents import (
-    IncrementalSummaryAgent,
-    IncrementalSummaryState,
-)
+from application.summary import IncrementalSummaryAgent, IncrementalSummaryState
 from application.translate.context import TranslationContext
 from domain.model import SentenceRecord
+from ports.engine import LLMEngine
 
 if TYPE_CHECKING:  # pragma: no cover
     from ports.source import VideoKey

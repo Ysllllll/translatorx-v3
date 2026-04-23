@@ -73,7 +73,7 @@ async def demo_llm_punc() -> None:
     """Section 8b: PuncRestorer with LLM backend."""
     sub("8b  PuncRestorer + llm — LLM 标点恢复")
     from adapters.preprocess import PuncRestorer
-    from application.translate import EngineConfig, OpenAICompatEngine
+    from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
         EngineConfig(
@@ -136,7 +136,7 @@ async def demo_llm_chunker() -> None:
     """Section 8e: llm_backend standalone."""
     sub("8e  llm_backend — LLM 二分法拆句 (chunk_mode='llm')")
     from adapters.preprocess.chunk.backends.llm import llm_backend
-    from application.translate import EngineConfig, OpenAICompatEngine
+    from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
 
     engine = OpenAICompatEngine(
         EngineConfig(
@@ -162,7 +162,7 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
     from adapters.parsers import read_srt
     from adapters.preprocess import PuncRestorer
     from adapters.preprocess.chunk.backends.llm import llm_backend
-    from application.translate import EngineConfig, OpenAICompatEngine
+    from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
 
     sub("8f  完整预处理流水线 — 逐步可视化 (1 视频)")
     print(f"    {ts()} 流程: raw_segments → punc_global → sentences → punc_sentence → chunk → records")

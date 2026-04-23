@@ -1,14 +1,23 @@
-"""Application-layer translation use cases (translate + retries + context)."""
+"""Translation use case — :func:`translate_with_verify` + context + prompts.
 
-from .agents import (
-    IncrementalSummaryAgent,
-    IncrementalSummaryState,
-    SummarySnapshot,
-    TermsAgent,
-    TermsAgentResult,
-    parse_terms_response,
-)
-from .align_agent import AlignAgent, BisectResult
+This package owns the *narrow* translation use case: turn a source-language
+sentence into a target-language sentence, using LLM history, prompt
+degradation on retry, and a system-prompt registry.
+
+Sibling use cases live in their own packages:
+
+* :mod:`application.terminology` — terminology / metadata extraction
+* :mod:`application.summary`     — incremental summary
+* :mod:`application.align`       — LLM-driven binary-split alignment
+* :mod:`application.checker`     — translation quality validation rules
+
+The :class:`TranslationContext` value object aggregates everything a
+translate call needs (engine config, language pair, terminology provider,
+chat history, prompt template) so processors stay stateless.
+"""
+
+from __future__ import annotations
+
 from .context import (
     ContextWindow,
     StaticTerms,
@@ -17,53 +26,16 @@ from .context import (
     build_frozen_messages,
 )
 from .prompts import get_default_system_prompt, register_default_prompt
-from .providers import OneShotTerms, PreloadableTerms
-from ports.retries import (
-    AttemptOutcome,
-    OnFailure,
-    ValidateResult,
-    resolve_on_failure,
-    retry_until_valid,
-)
 from .translate import TranslateResult, translate_with_verify
-from ports.engine import LLMEngine, Message
-from domain.model import CompletionResult, Usage
-from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
-from application.checker import CheckReport, Checker, Severity, default_checker
 
 __all__ = [
-    "LLMEngine",
-    "Message",
-    "CompletionResult",
-    "Usage",
-    "TermsProvider",
-    "StaticTerms",
-    "PreloadableTerms",
-    "OneShotTerms",
-    "TermsAgent",
-    "TermsAgentResult",
-    "parse_terms_response",
-    "AlignAgent",
-    "BisectResult",
-    "IncrementalSummaryAgent",
-    "IncrementalSummaryState",
-    "SummarySnapshot",
     "ContextWindow",
+    "StaticTerms",
+    "TermsProvider",
+    "TranslateResult",
     "TranslationContext",
     "build_frozen_messages",
-    "TranslateResult",
-    "translate_with_verify",
-    "retry_until_valid",
-    "AttemptOutcome",
-    "ValidateResult",
-    "OnFailure",
-    "resolve_on_failure",
     "get_default_system_prompt",
     "register_default_prompt",
-    "OpenAICompatEngine",
-    "EngineConfig",
-    "Severity",
-    "CheckReport",
-    "Checker",
-    "default_checker",
+    "translate_with_verify",
 ]

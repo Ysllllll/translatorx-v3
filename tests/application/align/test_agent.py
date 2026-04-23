@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from application.translate.align_agent import AlignAgent, BisectResult
+from application.align import AlignAgent, BisectResult
 from domain.model.usage import CompletionResult
 
 

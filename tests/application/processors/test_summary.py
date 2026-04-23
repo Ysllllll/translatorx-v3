@@ -19,9 +19,9 @@ from typing import AsyncIterator, List
 
 import pytest
 
-from application.translate.agents import IncrementalSummaryState
+from application.summary import IncrementalSummaryState
 from application.translate.context import TranslationContext
-from application.translate import StaticTerms
+from application.terminology import StaticTerms
 from domain.model import SentenceRecord
 from domain.model.usage import CompletionResult
 

@@ -9,7 +9,8 @@ import pytest
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
 from application.processors import TTSProcessor
-from application.translate import StaticTerms, TranslationContext
+from application.terminology import StaticTerms
+from application.translate import TranslationContext
 from domain.model import Segment, SentenceRecord
 from ports.source import VideoKey
 from ports.tts import SynthesizeOptions, Voice, VoicePicker

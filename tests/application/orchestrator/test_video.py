@@ -10,7 +10,9 @@ import asyncio
 import pytest
 
 from application.checker import CheckReport
-from application.translate import Checker, StaticTerms, TranslationContext
+from application.checker import Checker
+from application.terminology import StaticTerms
+from application.translate import TranslationContext
 from domain.model import SentenceRecord
 from domain.model.usage import CompletionResult
 

@@ -8,7 +8,7 @@ import pytest
 
 from domain.model.usage import CompletionResult
 from application.checker import CheckReport
-from application.translate import Checker
+from application.checker import Checker
 
 from api.app import App
 from application.config import AppConfig

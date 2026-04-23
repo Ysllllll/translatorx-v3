@@ -41,11 +41,9 @@ from application.checker.rules import (
     LengthRatioRule,
 )
 from application.checker.types import Issue
+from application.terminology import OneShotTerms, PreloadableTerms, StaticTerms
 from application.translate import (
     ContextWindow,
-    OneShotTerms,
-    PreloadableTerms,
-    StaticTerms,
     TranslationContext,
     build_frozen_messages,
     get_default_system_prompt,

@@ -21,7 +21,7 @@ from typing import AsyncIterator
 import pytest
 
 from application.checker import CheckReport
-from application.translate import Checker
+from application.checker import Checker
 from domain.model import Segment
 from domain.model.usage import CompletionResult
 

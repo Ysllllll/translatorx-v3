@@ -31,7 +31,7 @@ import logging
 import re
 from dataclasses import dataclass
 
-from application.translate.align_ratio import cross_ratio
+from application.align.ratio import cross_ratio
 from domain.lang import LangOps
 from ports.engine import LLMEngine
 

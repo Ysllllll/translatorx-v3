@@ -25,7 +25,8 @@ from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
 from application.checker import default_checker
 from application.orchestrator.video import VideoOrchestrator
-from application.translate.context import StaticTerms, TermsProvider, TranslationContext
+from application.terminology import StaticTerms, TermsProvider
+from application.translate.context import TranslationContext
 from domain.model import SentenceRecord, Segment, Word
 from domain.subtitle import Subtitle
 from ports.engine import LLMEngine

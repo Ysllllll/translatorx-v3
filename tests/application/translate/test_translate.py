@@ -6,7 +6,8 @@ from typing import AsyncIterator
 
 import pytest
 
-from application.translate.context import ContextWindow, StaticTerms, TranslationContext
+from application.terminology import StaticTerms
+from application.translate.context import ContextWindow, TranslationContext
 from application.translate.translate import TranslateResult, _build_messages_compressed, _build_messages_full, _build_messages_minimal, translate_with_verify
 from application.checker import CheckReport, Checker, Issue, Severity
 from domain.model.usage import CompletionResult

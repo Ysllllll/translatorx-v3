@@ -232,7 +232,7 @@ class CourseBuilder:
     def _meter(self, engine: Any) -> Any:
         if self._usage_sink is None:
             return engine
-        from application.engines import MeteringEngine
+        from adapters.engines import MeteringEngine
 
         return MeteringEngine(engine, self._usage_sink)
 

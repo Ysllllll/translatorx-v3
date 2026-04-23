@@ -32,7 +32,8 @@ import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from application.translate import AlignAgent, TranslationContext
+from application.align import AlignAgent
+from application.translate import TranslationContext
 from domain.lang import LangOps
 from domain.model import Segment, SentenceRecord
 from domain.subtitle import rebalance_segment_words

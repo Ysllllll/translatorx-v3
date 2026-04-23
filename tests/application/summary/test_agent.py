@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from application.translate import CompletionResult, IncrementalSummaryAgent, IncrementalSummaryState, SummarySnapshot
+from application.summary import IncrementalSummaryAgent, IncrementalSummaryState, SummarySnapshot
+from domain.model import CompletionResult
 
 
 class FakeEngine:

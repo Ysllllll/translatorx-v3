@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.service import create_app
-from application.engines import MeteringEngine
+from adapters.engines import MeteringEngine
 from application.resources import DEFAULT_TIERS, InMemoryResourceManager
 from domain.model import Usage
 from domain.model.usage import CompletionResult

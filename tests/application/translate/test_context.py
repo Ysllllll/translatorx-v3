@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from application.translate.context import ContextWindow, StaticTerms, TermsProvider, TranslationContext
+from application.terminology import StaticTerms, TermsProvider
+from application.translate.context import ContextWindow, TranslationContext
 
 
 # ---------------------------------------------------------------------------

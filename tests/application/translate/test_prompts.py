@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from application.translate import StaticTerms, TranslationContext, get_default_system_prompt, register_default_prompt
+from application.terminology import StaticTerms
+from application.translate import TranslationContext, get_default_system_prompt, register_default_prompt
 
 
 class TestEnZhDefault:
