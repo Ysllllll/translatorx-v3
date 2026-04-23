@@ -173,8 +173,10 @@ def _build_chunk_fn():
                 "library": "composite",
                 "language": "en",
                 "max_len": 90,
-                "inner": {"library": "spacy"},
-                "refine": {"library": "llm", "engine": engine, "max_len": 90, "max_depth": 4},
+                "stages": [
+                    {"library": "spacy"},
+                    {"library": "llm", "engine": engine, "max_len": 90, "max_depth": 4},
+                ],
             }
         },
         max_len=90,

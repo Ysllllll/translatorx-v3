@@ -1,20 +1,27 @@
 """Composite chunk backend — registered as ``"composite"``.
 
-Two-stage backend: run an ``inner`` (coarse) backend on the full batch,
-then run a ``refine`` (fine) backend on the subset of produced chunks
-still exceeding ``max_len``. Reassembles each text's chunks in order.
+N-stage chain backend: runs an ordered list of sub-backends, cascading
+chunks that still exceed ``max_len`` from each stage to the next.
 
-Strictly more general than any bespoke two-stage chunker — any coarse
-backend (spacy, rule, ...) can be composed with any refine backend
-(llm, rule, ...). Both sub-specs flow through
-:func:`resolve_backend_spec`, so you can mix callables and mapping
-specs freely.
+Typical pipelines:
+
+* ``[spacy, llm]`` — coarse sentence split → LLM refinement.
+* ``[spacy, llm, rule]`` — coarse split → LLM refinement → hard rule
+  backstop that guarantees no chunk exceeds ``max_len``.
+
+Chunks already within ``max_len`` after any stage are frozen and passed
+through unchanged; only oversized survivors are forwarded. The final
+stage's output is accepted as-is regardless of size — callers wanting a
+hard guarantee should make the last stage a rule-based length splitter.
+
+All sub-specs flow through :func:`resolve_backend_spec`, so callables
+and mapping specs can be mixed freely.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from domain.lang import LangOps, normalize_language
 
@@ -27,77 +34,75 @@ logger = logging.getLogger(__name__)
 def composite_backend(
     *,
     language: str,
-    inner: BackendSpec,
-    refine: BackendSpec,
+    stages: Sequence[BackendSpec],
     max_len: int = 90,
 ) -> Backend:
-    """Build a composite coarse → refine backend.
+    """Build a composite N-stage chunk backend.
 
     Parameters
     ----------
     language:
         BCP-47 / ISO code. Drives :meth:`LangOps.length` for the
-        oversized check. Also propagated into nested mapping specs
-        that don't already declare their own ``language``.
-    inner:
-        Coarse backend spec (e.g. ``{"library": "spacy", ...}``). Runs
-        first on the full batch.
-    refine:
-        Refinement backend spec (e.g. ``{"library": "llm", ...}``).
-        Runs on any coarse output chunk whose length exceeds
-        *max_len*.
+        oversized cascade check and is injected into nested mapping
+        specs missing their own ``language``.
+    stages:
+        Ordered list of backend specs. Must contain at least one entry.
+        Each stage receives only the chunks still exceeding ``max_len``
+        after the previous stage; chunks within the threshold are
+        frozen and passed through.
     max_len:
         Length threshold (measured by :meth:`LangOps.length`) above
-        which a coarse chunk is forwarded to *refine*. When embedded in
-        a :class:`~adapters.preprocess.chunk.chunker.Chunker` without an
+        which a chunk cascades to the next stage. When embedded in a
+        :class:`~adapters.preprocess.chunk.chunker.Chunker` without an
         explicit value, the orchestrator's own ``max_len`` is injected
-        automatically so the composite and the outer threshold stay
-        aligned.
+        automatically so composite and outer threshold stay aligned.
 
     Raises
     ------
     ValueError
-        If ``max_len <= 0``.
+        If ``stages`` is empty or ``max_len <= 0``.
     """
     if max_len <= 0:
         raise ValueError("max_len must be > 0")
-    inner_spec = _inject_language(inner, language)
-    refine_spec = _inject_language(refine, language)
+    if not stages:
+        raise ValueError("stages must contain at least one backend spec")
 
-    coarse: Backend = resolve_backend_spec(inner_spec)
-    fine: Backend = resolve_backend_spec(refine_spec)
+    resolved: list[Backend] = [resolve_backend_spec(_inject_language(spec, language)) for spec in stages]
     ops = LangOps.for_language(normalize_language(language))
 
     def _backend(texts: list[str]) -> list[list[str]]:
-        coarse_chunks: list[list[str]] = list(coarse(texts))
-        if len(coarse_chunks) != len(texts):
-            raise RuntimeError(f"Composite inner backend returned {len(coarse_chunks)} lists, expected {len(texts)}")
+        # Run the first stage on every input text.
+        current: list[list[str]] = list(resolved[0](texts))
+        if len(current) != len(texts):
+            raise RuntimeError(f"Composite stage 0 returned {len(current)} lists, expected {len(texts)}")
 
-        oversized: list[str] = []
-        for chunks in coarse_chunks:
-            for c in chunks:
-                if ops.length(c) > max_len:
-                    oversized.append(c)
+        for stage_idx in range(1, len(resolved)):
+            oversized: list[str] = []
+            for chunks in current:
+                for c in chunks:
+                    if ops.length(c) > max_len:
+                        oversized.append(c)
+            if not oversized:
+                break
 
-        if not oversized:
-            return coarse_chunks
+            unique_oversized = list(dict.fromkeys(oversized))
+            refined = list(resolved[stage_idx](unique_oversized))
+            if len(refined) != len(unique_oversized):
+                raise RuntimeError(f"Composite stage {stage_idx} returned {len(refined)} lists, expected {len(unique_oversized)}")
+            refine_map = dict(zip(unique_oversized, refined))
 
-        unique_oversized = list(dict.fromkeys(oversized))
-        refined = list(fine(unique_oversized))
-        if len(refined) != len(unique_oversized):
-            raise RuntimeError(f"Composite refine backend returned {len(refined)} lists, expected {len(unique_oversized)}")
-        refine_map = dict(zip(unique_oversized, refined))
+            next_current: list[list[str]] = []
+            for chunks in current:
+                out: list[str] = []
+                for c in chunks:
+                    if c in refine_map:
+                        out.extend(refine_map[c])
+                    else:
+                        out.append(c)
+                next_current.append(out)
+            current = next_current
 
-        results: list[list[str]] = []
-        for chunks in coarse_chunks:
-            out: list[str] = []
-            for c in chunks:
-                if c in refine_map:
-                    out.extend(refine_map[c])
-                else:
-                    out.append(c)
-            results.append(out)
-        return results
+        return current
 
     return _backend
 
@@ -107,7 +112,7 @@ def _inject_language(spec: BackendSpec, language: str) -> BackendSpec:
 
     A plain callable is passed through unchanged. A mapping spec without
     an explicit ``language`` key inherits the parent's language so users
-    only declare it once at the composite level.
+    declare it only once at the composite level.
     """
     if isinstance(spec, Mapping):
         merged: dict[str, Any] = dict(spec)

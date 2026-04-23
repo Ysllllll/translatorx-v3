@@ -112,6 +112,9 @@ class PreprocessConfig(BaseModel):
     - ``"llm"`` — recursive binary splitting via LLM.
     - ``"spacy_llm"`` — spaCy coarse split first, then LLM fine split
       for chunks still exceeding ``chunk_len``.
+    - ``"spacy_llm_rule"`` — three-stage chain: spaCy → LLM → rule
+      length-splitter as a hard backstop for any surviving oversize
+      chunks.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -126,7 +129,7 @@ class PreprocessConfig(BaseModel):
 
     spacy_model: str = ""
 
-    chunk_mode: Literal["none", "spacy", "llm", "spacy_llm"] = "none"
+    chunk_mode: Literal["none", "spacy", "llm", "spacy_llm", "spacy_llm_rule"] = "none"
     chunk_engine: str = "default"
     chunk_len: int = 90
     chunk_max_depth: int = 4

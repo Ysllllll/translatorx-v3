@@ -144,7 +144,9 @@ class App:
 
         - ``"spacy"`` → ``"spacy"`` backend (NLP sentence split).
         - ``"llm"`` → ``"llm"`` backend (recursive LLM splitting).
-        - ``"spacy_llm"`` → ``"composite"`` backend (spaCy coarse, LLM refine).
+        - ``"spacy_llm"`` → ``"composite"`` backend stages=[spacy, llm].
+        - ``"spacy_llm_rule"`` → ``"composite"`` backend
+          stages=[spacy, llm, rule] (rule tail guarantees max_len).
         """
         from domain.lang import normalize_language
 
@@ -182,15 +184,38 @@ class App:
                 "library": "composite",
                 "language": lang,
                 "max_len": cfg.chunk_len,
-                "inner": {
-                    "library": "spacy",
-                    "model": cfg.spacy_model or None,
-                },
-                "refine": {
-                    "library": "llm",
-                    "engine": self.engine(cfg.chunk_engine),
-                    **common_llm_kwargs,
-                },
+                "stages": [
+                    {
+                        "library": "spacy",
+                        "model": cfg.spacy_model or None,
+                    },
+                    {
+                        "library": "llm",
+                        "engine": self.engine(cfg.chunk_engine),
+                        **common_llm_kwargs,
+                    },
+                ],
+            }
+        elif cfg.chunk_mode == "spacy_llm_rule":
+            spec = {
+                "library": "composite",
+                "language": lang,
+                "max_len": cfg.chunk_len,
+                "stages": [
+                    {
+                        "library": "spacy",
+                        "model": cfg.spacy_model or None,
+                    },
+                    {
+                        "library": "llm",
+                        "engine": self.engine(cfg.chunk_engine),
+                        **common_llm_kwargs,
+                    },
+                    {
+                        "library": "rule",
+                        "max_len": cfg.chunk_len,
+                    },
+                ],
             }
         else:
             raise ValueError(f"unknown chunk_mode: {cfg.chunk_mode!r}")

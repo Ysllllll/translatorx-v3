@@ -367,8 +367,10 @@ fn(["hello world this is a test"])  # → [["Hello world, this is a test."]]
 # Unified chunker — "rule" | "spacy" | "llm" | "composite" backends
 chunker = Chunker(backends={
     "en": {"library": "composite", "language": "en", "chunk_len": 90,
-           "inner": {"library": "spacy"},
-           "refine": {"library": "llm", "engine": engine}},
+           "stages": [
+               {"library": "spacy"},
+               {"library": "llm", "engine": engine},
+           ]},
 })
 fn = chunker.for_language("en")
 fn(["long text..."])  # → [["chunk1", "chunk2"]]

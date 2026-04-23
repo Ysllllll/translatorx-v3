@@ -26,7 +26,7 @@ adapters/preprocess/
         ├── spacy.py      # spaCy 分句
         ├── llm.py        # LLM 递归切分
         ├── remote.py     # HTTP 自建服务
-        └── composite.py  # inner + refine 组合
+        └── composite.py  # stages 链式组合
 
 adapters/transcribers/        音频转录
 ├── registry.py   TranscriberBackendRegistry
@@ -193,24 +193,24 @@ Chunker 本身**不做**分句逻辑，它只负责三件事：
 | `rule` | `LangOps.split_by_length` 硬切 | 确定性、快、但不管语义 |
 | `spacy` | spaCy 句法分析找边界 | 语义好、本地、确定 |
 | `llm` | Prompt LLM 递归二分 | 质量最高、慢、非确定（带重试） |
-| `composite` | inner 先切 → 超长的再 refine 切 | **生产推荐** |
+| `composite` | stages 链式：每个 stage 处理上一 stage 超长的块 | **生产推荐** |
 
 ### 3.3 Chunker 的执行流（含 composite backend）
 
-以 `composite: inner=spacy, refine=llm` 为例，输入一段口语长文本：
+以 `composite: stages=[spacy, llm]` 为例，输入一段口语长文本：
 
 ```text
 输入："大家好今天我们讲一下 AI 的发展历史这将是非常有意思的一节课..."（150 字）
 
 Chunker._chunk_batch
   ├─ max_len=80, length(text)=150 > 80 → 交给 backend
-  └─ backend = composite(inner=spacy, refine=llm)
+  └─ backend = composite(stages=[spacy, llm])
         │
-        ├─ inner (spacy)：按句号/问号切
+        ├─ stage 0 (spacy)：按句号/问号切
         │   → ["大家好今天我们讲一下 AI 的发展历史", "这将是非常有意思的一节课..."]
         │      （假设第一段 35 字、第二段 115 字）
         │
-        ├─ refine (llm)：对 > chunk_len=90 的再切
+        ├─ stage 1 (llm)：对 > max_len=90 的再切（仅超长块参与）
         │   ├─ 第一段 35 字 → 跳过
         │   └─ 第二段 115 字 → LLM 切成 ["这将是非常有意思的一节课", "我们从 1950 年代讲起..."]
         │
@@ -222,6 +222,8 @@ Chunker._finalize
   └─ chunks_match_source("大家好今天...1950 年代讲起...", parts) ✓
      返回 parts
 ```
+
+三级链 `stages=[spacy, llm, rule]` 则在 LLM 输出仍有超长块时，最后 `rule` 硬切做兜底保证 `≤ max_len`。
 
 ### 3.4 示例配置
 
@@ -264,18 +266,40 @@ chunker = Chunker(
     backends={
         "en": {
             "library": "composite",
-            "inner":  {"library": "spacy"},
-            "refine": {"library": "llm", "engine": engine, "chunk_len": 90},
+            "stages": [
+                {"library": "spacy"},
+                {"library": "llm", "engine": engine, "chunk_len": 90},
+            ],
         },
         "zh": {
             "library": "composite",
-            "inner":  {"library": "spacy"},
-            "refine": {"library": "llm", "engine": engine, "chunk_len": 60},
+            "stages": [
+                {"library": "spacy"},
+                {"library": "llm", "engine": engine, "chunk_len": 60},
+            ],
         },
         "*": {"library": "rule"},
     },
     max_len=80,
     on_failure="keep",
+)
+```
+
+三级链式（带硬兜底）：
+
+```python
+chunker = Chunker(
+    backends={
+        "en": {
+            "library": "composite",
+            "stages": [
+                {"library": "spacy"},
+                {"library": "llm", "engine": engine, "chunk_len": 90},
+                {"library": "rule", "max_len": 90},  # 硬保证 ≤ max_len
+            ],
+        },
+    },
+    max_len=90,
 )
 ```
 
@@ -288,8 +312,10 @@ cfg = {
     "backends": {
         "en": {
             "library": "composite",
-            "inner":  {"library": "spacy"},
-            "refine": {"library": "llm", "engine": engine, "chunk_len": 90},
+            "stages": [
+                {"library": "spacy"},
+                {"library": "llm", "engine": engine, "chunk_len": 90},
+            ],
         },
         "*":  {"library": "rule"},
     },
@@ -651,7 +677,7 @@ tx = create_transcriber({"library": "dummy"})
 | chunk | `spacy` | spaCy 分句（按语言自动选模型） | ❌ |
 | chunk | `llm` | LLM 递归切分 + `recover_pair` 恢复 | ✅ |
 | chunk | `remote` | HTTP 服务 + `recover_pair` 恢复 | ✅ |
-| chunk | `composite` | inner + refine 组合 | 由子 backend 决定 |
+| chunk | `composite` | stages 链式组合 | 由子 backend 决定 |
 | transcriber | `whisperx` | 本地 WhisperX（CUDA） | ❌（内部批处理） |
 | transcriber | `openai` | OpenAI-compatible Whisper API | 由 httpx/调用方决定 |
 | transcriber | `http` | 自建 HTTP Whisper 服务 | 由 httpx/调用方决定 |

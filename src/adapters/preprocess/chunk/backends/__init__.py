@@ -10,7 +10,7 @@ Registered names:
 * ``"spacy"`` — spaCy sentence splitter (requires ``spacy`` + a model).
 * ``"llm"`` — LLM-driven recursive splitter (requires an engine).
 * ``"remote"`` — HTTP-backed splitter calling a self-hosted service.
-* ``"composite"`` — composite of two backends (coarse → refine).
+* ``"composite"`` — N-stage chain of backends (each stage handles oversized chunks from the previous).
 """
 
 from __future__ import annotations
