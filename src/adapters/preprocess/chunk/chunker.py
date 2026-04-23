@@ -109,9 +109,11 @@ class Chunker:
 
     def _inject_max_len(self, spec: dict[str, object]) -> dict[str, object]:
         library = spec.get("library")
-        if not isinstance(library, str) or not ChunkBackendRegistry.is_registered(library):
+        if not isinstance(library, str):
             return spec
-        factory = ChunkBackendRegistry._factories[library]
+        factory = ChunkBackendRegistry.get_factory(library)
+        if factory is None:
+            return spec
         try:
             params = inspect.signature(factory).parameters
         except (TypeError, ValueError):

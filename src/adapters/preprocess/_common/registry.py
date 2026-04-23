@@ -76,6 +76,16 @@ class BackendRegistry(Generic[B]):
     def names(cls) -> list[str]:
         return sorted(cls._factories)
 
+    @classmethod
+    def get_factory(cls, name: str) -> BackendFactory | None:
+        """Return the raw factory registered under *name*, or ``None``.
+
+        Callers that need to inspect the factory itself (e.g. reading
+        its signature via :mod:`inspect`) should use this instead of
+        reaching into the private ``_factories`` dict.
+        """
+        return cls._factories.get(name)
+
 
 def resolve_spec(
     spec: Union[Callable[..., B], Mapping[str, Any], B],

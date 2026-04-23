@@ -222,14 +222,19 @@ class _PosConnectiveSplitter:
     :class:`~adapters.preprocess.chunk.backends.spacy.SpacySplitter`).
     """
 
-    _instances: ClassVar[dict[tuple[str, str], "_PosConnectiveSplitter"]] = {}
+    _instances: ClassVar[dict[tuple[str, str, int], "_PosConnectiveSplitter"]] = {}
+    _nlp_cache: ClassVar[dict[str, object]] = {}
     _lock: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(self, model_name: str, language: str, min_words: int) -> None:
-        import spacy
+        nlp = self._nlp_cache.get(model_name)
+        if nlp is None:
+            import spacy
 
-        logger.info("Loading spaCy model %r for pos_connective (%s) ...", model_name, language)
-        self._nlp = spacy.load(model_name)
+            logger.info("Loading spaCy model %r for pos_connective (%s) ...", model_name, language)
+            nlp = spacy.load(model_name)
+            self._nlp_cache[model_name] = nlp
+        self._nlp = nlp
         self._language = language
         self._ops = LangOps.for_language(language)
         self._min_words = min_words
@@ -237,13 +242,11 @@ class _PosConnectiveSplitter:
 
     @classmethod
     def get(cls, model: str, language: str, min_words: int) -> "_PosConnectiveSplitter":
-        key = (model, language)
+        key = (model, language, min_words)
         if key not in cls._instances:
             with cls._lock:
                 if key not in cls._instances:
                     cls._instances[key] = cls(model, language, min_words)
-        # min_words may differ per call; keep last value as default but
-        # the __call__ path lets callers override.
         return cls._instances[key]
 
     # -- helpers --------------------------------------------------------
@@ -293,9 +296,6 @@ class _PosConnectiveSplitter:
                 tail = doc[start:].text.strip()
                 if tail:
                     new_sentences.append(tail)
-                if not did_split and not new_sentences[-1:] == [sent.strip()]:
-                    # ensure unsplit sent is preserved exactly once
-                    pass
             if not split_occurred:
                 break
             sentences = [s for s in new_sentences if s]

@@ -5,11 +5,12 @@ POSTs single texts to a configurable HTTP endpoint. Symmetric with
 
 * **Transport** (``transport_retries``) — handled transparently by
   :class:`httpx.HTTPTransport` for connection-level failures.
-* **Application** (``max_retries``) — re-sends the request on HTTP
-  errors, ``len(parts) != split_parts``, or reconstruction mismatch
-  (:func:`chunks_match_source`). When ``split_parts == 2`` a
-  deterministic :func:`recover_pair` recovery is attempted before
-  declaring a response invalid.
+* **Application** (``max_retries``) — routed through
+  :func:`~ports.retries.retry_until_valid`, retrying on HTTP errors,
+  ``len(parts) != split_parts``, or reconstruction mismatch
+  (:func:`chunks_match_source`, ``strict=True``). When
+  ``split_parts == 2`` a deterministic :func:`recover_pair` recovery is
+  attempted before declaring a response invalid.
 
 Raises :class:`RuntimeError` per text when every attempt fails; the
 orchestrator :class:`~adapters.preprocess.chunk.chunker.Chunker`
@@ -32,6 +33,9 @@ import logging
 
 import httpx
 
+from ports.retries import retry_until_valid
+
+from adapters.preprocess._common import run_async_in_sync
 from adapters.preprocess.chunk.reconstruct import chunks_match_source, recover_pair
 from adapters.preprocess.chunk.registry import Backend, ChunkBackendRegistry
 
@@ -86,52 +90,62 @@ def remote_backend(
 
     transport = httpx.HTTPTransport(retries=transport_retries)
 
-    def _call_one(client: httpx.Client, text: str) -> list[str]:
+    async def _chunk_one(client: httpx.Client, text: str) -> list[str]:
         payload: dict[str, object] = {
             "text": text,
             "language": language,
             "split_parts": split_parts,
         }
 
-        attempts = max_retries + 1
-        last_reason: str = "no attempts made"
-        last_result: list[str] | None = None
-        for attempt in range(attempts):
-            try:
-                resp = client.post(endpoint, json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-                parts = data["parts"]
-                if not isinstance(parts, list) or not all(isinstance(p, str) for p in parts):
-                    raise ValueError(f"remote response 'parts' must be list[str], got {type(parts).__name__}")
-            except (httpx.HTTPError, KeyError, ValueError) as exc:
-                last_reason = repr(exc)
-                logger.warning("Remote chunk attempt %d/%d failed: %r", attempt + 1, attempts, exc)
-                continue
+        async def _attempt(_n: int) -> list[str]:
+            resp = client.post(endpoint, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            parts = data["parts"]
+            if not isinstance(parts, list) or not all(isinstance(p, str) for p in parts):
+                raise ValueError(f"remote response 'parts' must be list[str], got {type(parts).__name__}")
+            return list(parts)
 
-            # Primary validation.
-            if len(parts) == split_parts and chunks_match_source(parts, text, language=language):
-                return list(parts)
-
+        def _validate(parts: list[str]):
+            if len(parts) == split_parts and chunks_match_source(parts, text, language=language, strict=True):
+                return True, parts, ""
             # 2-piece recovery: salvage near-miss responses.
             if split_parts == 2 and 1 <= len(parts) <= 2:
                 padded = list(parts) + [""] * (2 - len(parts))
                 recovered = recover_pair(padded, text, language=language)
-                if recovered is not None and chunks_match_source(recovered, text, language=language):
-                    return recovered
-
-            last_result = list(parts)
+                if recovered is not None and chunks_match_source(recovered, text, language=language, strict=True):
+                    return True, recovered, ""
             if len(parts) != split_parts:
-                last_reason = f"expected {split_parts} parts, got {len(parts)}"
-            else:
-                last_reason = f"reconstruction mismatch: {text[:60]!r} → {parts}"
-            logger.warning("Remote chunk attempt %d/%d rejected: %s", attempt + 1, attempts, last_reason)
+                return False, None, f"expected {split_parts} parts, got {len(parts)}"
+            return False, None, f"reconstruction mismatch: {text[:60]!r} → {parts}"
 
-        raise RuntimeError(f"Remote chunk failed after {attempts} attempts: {last_reason} (last_result={last_result!r})")
+        outcome = await retry_until_valid(
+            _attempt,
+            validate=_validate,
+            max_retries=max_retries,
+            on_reject=lambda attempt, reason: logger.warning(
+                "Remote chunk attempt %d/%d rejected: %s",
+                attempt + 1,
+                max_retries + 1,
+                reason,
+            ),
+            on_exception=lambda attempt, exc: logger.warning(
+                "Remote chunk attempt %d/%d failed: %r",
+                attempt + 1,
+                max_retries + 1,
+                exc,
+            ),
+        )
+        if not outcome.accepted:
+            raise RuntimeError(f"Remote chunk failed after {outcome.attempts} attempts: {outcome.last_reason}")
+        return outcome.value  # type: ignore[return-value]
+
+    async def _chunk_batch(texts: list[str]) -> list[list[str]]:
+        with httpx.Client(timeout=timeout, transport=transport) as client:
+            return [await _chunk_one(client, t) for t in texts]
 
     def _call(texts: list[str]) -> list[list[str]]:
-        with httpx.Client(timeout=timeout, transport=transport) as client:
-            return [_call_one(client, t) for t in texts]
+        return run_async_in_sync(lambda: _chunk_batch(texts))
 
     return _call
 

@@ -159,13 +159,13 @@ def llm_backend(
         def _validate(completion):
             raw = completion.text.strip()
             lines = [_STRIP_LEADING_NUM.sub("", line).strip() for line in raw.splitlines() if line.strip()]
-            if len(lines) == split_parts and chunks_match_source(lines, text, language=language):
+            if len(lines) == split_parts and chunks_match_source(lines, text, language=language, strict=True):
                 return True, lines, ""
             # 2-piece recovery: salvage LLM output that is almost correct.
             if split_parts == 2 and 1 <= len(lines) <= 2:
                 padded = lines + [""] * (2 - len(lines))
                 recovered = recover_pair(padded, text, language=language)
-                if recovered is not None and chunks_match_source(recovered, text, language=language):
+                if recovered is not None and chunks_match_source(recovered, text, language=language, strict=True):
                     return True, recovered, ""
             if len(lines) != split_parts:
                 return False, None, f"expected {split_parts} lines, got {len(lines)}"

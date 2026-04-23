@@ -4,8 +4,11 @@ POSTs single texts to a configurable HTTP endpoint. Two retry layers:
 
 * **Transport** (``transport_retries``) — handled transparently by
   :class:`httpx.HTTPTransport` for connection-level failures.
-* **Application** (``max_retries``) — re-sends the request on both HTTP
-  errors and content mismatches (:func:`punc_content_matches`).
+* **Application** (``max_retries``) — routed through
+  :func:`~ports.retries.retry_until_valid`, retrying on HTTP errors,
+  malformed responses, or content mismatch
+  (:func:`punc_content_matches`). Matches the LLM backend's retry shape
+  so logging/diagnostics stay consistent.
 
 Raises :class:`RuntimeError` per text when every attempt fails; the
 orchestrator :class:`~adapters.preprocess.punc.restorer.PuncRestorer`
@@ -28,7 +31,9 @@ import logging
 import httpx
 
 from domain.lang import punc_content_matches
+from ports.retries import retry_until_valid
 
+from adapters.preprocess._common import run_async_in_sync
 from adapters.preprocess.punc.registry import Backend, PuncBackendRegistry
 
 logger = logging.getLogger(__name__)
@@ -74,40 +79,54 @@ def factory(
 
     transport = httpx.HTTPTransport(retries=transport_retries)
 
-    def _call_one(client: httpx.Client, text: str) -> str:
+    async def _restore_one(client: httpx.Client, text: str) -> str:
         payload: dict[str, object] = {"text": text}
         if language is not None:
             payload["language"] = language
 
-        attempts = max_retries + 1
-        last_reason: str = "no attempts made"
-        last_result: str | None = None
-        for attempt in range(attempts):
-            try:
-                resp = client.post(endpoint, json=payload)
-                resp.raise_for_status()
-                data = resp.json()
-                result = data["result"]
-                if not isinstance(result, str):
-                    raise ValueError(f"remote response 'result' must be str, got {type(result).__name__}")
-            except (httpx.HTTPError, KeyError, ValueError) as exc:
-                last_reason = repr(exc)
-                logger.warning("Remote punc attempt %d/%d failed: %r", attempt + 1, attempts, exc)
-                continue
-
-            if not punc_content_matches(text, result):
-                last_reason = f"content mismatch: {text[:60]!r} → {result[:60]!r}"
-                last_result = result
-                logger.warning("Remote punc attempt %d/%d rejected: %s", attempt + 1, attempts, last_reason)
-                continue
-
+        async def _attempt(_n: int) -> str:
+            # Sync httpx call; each retry is sequential so blocking the
+            # single-shot event loop is acceptable.
+            resp = client.post(endpoint, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            result = data["result"]
+            if not isinstance(result, str):
+                raise ValueError(f"remote response 'result' must be str, got {type(result).__name__}")
             return result
 
-        raise RuntimeError(f"Remote punc failed after {attempts} attempts: {last_reason} (last_result={last_result!r})")
+        def _validate(value: str):
+            if not punc_content_matches(text, value):
+                return False, value, f"content mismatch: {text[:60]!r} → {value[:60]!r}"
+            return True, value, ""
+
+        outcome = await retry_until_valid(
+            _attempt,
+            validate=_validate,
+            max_retries=max_retries,
+            on_reject=lambda attempt, reason: logger.warning(
+                "Remote punc attempt %d/%d rejected: %s",
+                attempt + 1,
+                max_retries + 1,
+                reason,
+            ),
+            on_exception=lambda attempt, exc: logger.warning(
+                "Remote punc attempt %d/%d failed: %r",
+                attempt + 1,
+                max_retries + 1,
+                exc,
+            ),
+        )
+        if not outcome.accepted:
+            raise RuntimeError(f"Remote punc failed after {outcome.attempts} attempts: {outcome.last_reason}")
+        return outcome.value  # type: ignore[return-value]
+
+    async def _restore_batch(texts: list[str]) -> list[str]:
+        with httpx.Client(timeout=timeout, transport=transport) as client:
+            return [await _restore_one(client, t) for t in texts]
 
     def _call(texts: list[str]) -> list[str]:
-        with httpx.Client(timeout=timeout, transport=transport) as client:
-            return [_call_one(client, t) for t in texts]
+        return run_async_in_sync(lambda: _restore_batch(texts))
 
     return _call
 

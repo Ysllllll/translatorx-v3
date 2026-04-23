@@ -37,6 +37,7 @@ def chunks_match_source(
     source: str,
     *,
     language: str | None = None,
+    strict: bool = False,
 ) -> bool:
     """Verify that joining *parts* reconstructs *source*.
 
@@ -50,13 +51,22 @@ def chunks_match_source(
         Optional language code. When provided, the per-language
         :meth:`LangOps.join` is tried first, which gives an accurate
         match for CJK and space-delimited languages alike.
+    strict:
+        When ``True``, the alphanumeric-only fallback is disabled. A
+        candidate that only matches after stripping punctuation — which
+        allows internal punctuation to drift — is rejected. Use this
+        when the caller cannot tolerate silent punctuation rearrangement
+        (e.g. LLM/remote chunkers that should trigger :func:`recover_pair`
+        first). Non-strict callers keep the old lenient behaviour.
 
     Fallbacks (applied in order) to tolerate common LLM output jitter:
 
-    1. ``" ".join(parts) == source`` — space-delimited languages.
-    2. ``"".join(parts) == source`` — CJK / no-space languages.
-    3. Alphanumeric-only equality — tolerates whitespace /
-       punctuation-spacing drift across the whole string.
+    1. ``ops.join(parts) == source`` — language-aware reconstruction
+       (only when *language* is given).
+    2. ``" ".join(parts) == source`` — space-delimited languages.
+    3. ``"".join(parts) == source`` — CJK / no-space languages.
+    4. *(non-strict only)* Alphanumeric-only equality — tolerates
+       whitespace/punctuation drift across the whole string.
     """
     if language is not None:
         ops = LangOps.for_language(normalize_language(language))
@@ -66,6 +76,8 @@ def chunks_match_source(
         return True
     if "".join(parts) == source:
         return True
+    if strict:
+        return False
     src_alnum = "".join(ch for ch in source.lower() if ch.isalnum())
     parts_alnum = "".join(ch for p in parts for ch in p.lower() if ch.isalnum())
     return src_alnum == parts_alnum
@@ -195,9 +207,9 @@ def recover_pair(
 
     first, second = fixed
     if first and not second:
-        second = re.sub(re.escape(first), "", source)
+        second = source.replace(first, "", 1)
     elif second and not first:
-        first = re.sub(re.escape(second), "", source)
+        first = source.replace(second, "", 1)
 
     sent_nospace = _collapse_ws(source)
 
@@ -213,12 +225,12 @@ def recover_pair(
         reversed_order = True
     else:
         if first:
-            candidate_second = re.sub(re.escape(first), "", source)
+            candidate_second = source.replace(first, "", 1)
             if _join_nospace(first, candidate_second) == sent_nospace:
                 second = candidate_second
                 good = True
         if not good and second:
-            candidate_first = re.sub(re.escape(second), "", source)
+            candidate_first = source.replace(second, "", 1)
             if _join_nospace(candidate_first, second) == sent_nospace:
                 first = candidate_first
                 good = True
