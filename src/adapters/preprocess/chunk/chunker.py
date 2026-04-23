@@ -15,10 +15,18 @@ Per-language flow, for each text:
 3. Validate each result via
    :func:`~adapters.preprocess.chunk.reconstruct.chunks_match_source`.
    Invalid → :attr:`on_failure` policy (keep = ``[text]``, raise).
+
+Mapping specs that omit ``max_len`` inherit the orchestrator's value
+automatically, so the outer threshold and backend target chunk size
+stay in sync by default. Explicit per-backend values are honored but a
+warning is logged when they disagree (particularly when a backend's
+``max_len`` is larger than the orchestrator's, which would let chunks
+slip past the skip gate).
 """
 
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import TYPE_CHECKING, Mapping
 
@@ -30,6 +38,7 @@ from adapters.preprocess._common import BackendSpecResolver
 from adapters.preprocess.chunk.registry import (
     Backend,
     BackendSpec,
+    ChunkBackendRegistry,
     resolve_backend_spec,
 )
 from adapters.preprocess.chunk.reconstruct import chunks_match_source
@@ -75,7 +84,53 @@ class Chunker:
 
         self._max_len = max_len
         self._on_failure: OnFailure = on_failure
-        self._resolver: BackendSpecResolver[BackendSpec, Backend] = BackendSpecResolver(backends, resolve_backend_spec)
+        self._resolver: BackendSpecResolver[BackendSpec, Backend] = BackendSpecResolver(
+            backends,
+            self._resolve_with_defaults,
+        )
+
+    # -- Spec resolution ---------------------------------------------------
+
+    def _resolve_with_defaults(self, spec: BackendSpec) -> Backend:
+        """Resolve *spec* with the orchestrator's ``max_len`` injected.
+
+        When *spec* is a ``{"library": ...}`` mapping and the selected
+        factory accepts a ``max_len`` keyword, the orchestrator's own
+        ``max_len`` is used as the default for any backend that doesn't
+        declare one. Explicit backend values are honored but a warning
+        is logged when they exceed the outer threshold — a configuration
+        in which the backend may emit chunks that would have been
+        short-circuited by the orchestrator.
+        """
+        if isinstance(spec, Mapping) and self._max_len is not None:
+            merged = self._inject_max_len(dict(spec))
+            return resolve_backend_spec(merged)
+        return resolve_backend_spec(spec)
+
+    def _inject_max_len(self, spec: dict[str, object]) -> dict[str, object]:
+        library = spec.get("library")
+        if not isinstance(library, str) or not ChunkBackendRegistry.is_registered(library):
+            return spec
+        factory = ChunkBackendRegistry._factories[library]
+        try:
+            params = inspect.signature(factory).parameters
+        except (TypeError, ValueError):
+            return spec
+        if "max_len" not in params:
+            return spec
+        if "max_len" not in spec:
+            spec["max_len"] = self._max_len
+        else:
+            explicit = spec["max_len"]
+            if isinstance(explicit, int) and explicit > self._max_len:
+                logger.warning(
+                    "Chunk backend %r has max_len=%d but orchestrator max_len=%d; "
+                    "backend may emit chunks the orchestrator would have skipped.",
+                    library,
+                    explicit,
+                    self._max_len,
+                )
+        return spec
 
     # -- Construction helpers ---------------------------------------------
 

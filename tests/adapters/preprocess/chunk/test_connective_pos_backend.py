@@ -15,17 +15,17 @@ class TestPosConnectiveBackend:
 
         assert "pos_connective" in ChunkBackendRegistry.names()
 
-    def test_invalid_min_context(self) -> None:
+    def test_invalid_min_words(self) -> None:
         from adapters.preprocess.chunk.backends.connective import pos_connective_backend
 
         with pytest.raises(ValueError):
-            pos_connective_backend(language="en", min_context=0)
+            pos_connective_backend(language="en", min_words=0)
 
     def test_en_split_at_but(self) -> None:
         from adapters.preprocess.chunk.backends.connective import pos_connective_backend
 
         try:
-            be = pos_connective_backend(language="en", min_context=3)
+            be = pos_connective_backend(language="en", min_words=3)
         except OSError:
             pytest.skip("spaCy en_core_web_md not installed")
         out = be(["I walked to the store but she stayed at home alone"])
@@ -35,7 +35,7 @@ class TestPosConnectiveBackend:
         from adapters.preprocess.chunk.backends.connective import pos_connective_backend
 
         try:
-            be = pos_connective_backend(language="en", min_context=5)
+            be = pos_connective_backend(language="en", min_words=5)
         except OSError:
             pytest.skip("spaCy en_core_web_md not installed")
         out = be(["I ran but she slept"])
@@ -46,7 +46,7 @@ class TestPosConnectiveBackend:
         from adapters.preprocess.chunk.backends.connective import pos_connective_backend
 
         try:
-            be = pos_connective_backend(language="en", min_context=2)
+            be = pos_connective_backend(language="en", min_words=2)
         except OSError:
             pytest.skip("spaCy en_core_web_md not installed")
         # "that book" is determiner — should not split here

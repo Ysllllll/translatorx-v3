@@ -5,7 +5,7 @@ the registry dispatch like every other chunk backend.
 
 Per-text flow:
 
-1. If the text is already within ``chunk_len`` (measured by
+1. If the text is already within ``max_len`` (measured by
    :meth:`LangOps.length`), pass it through untouched.
 2. Otherwise prompt the LLM to cut it into ``split_parts`` pieces,
    validate reconstruction via :func:`chunks_match_source`, and retry
@@ -78,7 +78,7 @@ def llm_backend(
     *,
     engine: "LLMEngine",
     language: str,
-    chunk_len: int = 90,
+    max_len: int = 90,
     max_depth: int = 4,
     max_concurrent: int = 8,
     max_retries: int = 2,
@@ -97,9 +97,12 @@ def llm_backend(
     language:
         BCP-47 / ISO code; drives :class:`LangOps` selection for length
         measurement and the rule-based fallback.
-    chunk_len:
+    max_len:
         Maximum per-chunk length (measured by :meth:`LangOps.length`).
-        Anything at or below this is passed through untouched.
+        Anything at or below this is passed through untouched. When
+        embedded in a :class:`~adapters.preprocess.chunk.chunker.Chunker`
+        without an explicit value, the orchestrator's own ``max_len``
+        is injected automatically.
     max_depth:
         Upper bound on recursive splits before giving up.
     max_concurrent:
@@ -120,7 +123,7 @@ def llm_backend(
     Raises
     ------
     ValueError
-        If ``split_parts < 2``, ``max_retries < 0``, ``chunk_len <= 0``,
+        If ``split_parts < 2``, ``max_retries < 0``, ``max_len <= 0``,
         or ``on_failure`` is not one of the accepted values.
     """
     if split_parts < 2:
@@ -129,15 +132,15 @@ def llm_backend(
         raise ValueError("max_retries must be >= 0")
     if on_failure not in ("rule", "keep", "raise"):
         raise ValueError(f"invalid on_failure: {on_failure!r}")
-    if chunk_len <= 0:
-        raise ValueError("chunk_len must be > 0")
+    if max_len <= 0:
+        raise ValueError("max_len must be > 0")
 
     ops = LangOps.for_language(normalize_language(language))
     system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(n=_cn_num(split_parts))
 
     def _handle_failure(text: str) -> list[str]:
         if on_failure == "rule":
-            return ops.split_by_length(text, chunk_len)
+            return ops.split_by_length(text, max_len)
         return resolve_on_failure(
             on_failure,
             keep_value=[text],
@@ -198,7 +201,7 @@ def llm_backend(
         return outcome.value
 
     async def _chunk_recursive(text: str, depth: int, length: Callable[[str], int]) -> list[str]:
-        if length(text) <= chunk_len or depth >= max_depth:
+        if length(text) <= max_len or depth >= max_depth:
             return [text]
         parts = await _llm_split(text)
         if parts is None:
@@ -207,7 +210,7 @@ def llm_backend(
                 return parts
         result: list[str] = []
         for part in parts:
-            if length(part) > chunk_len:
+            if length(part) > max_len:
                 result.extend(await _chunk_recursive(part, depth + 1, length))
             else:
                 result.append(part)
@@ -218,7 +221,7 @@ def llm_backend(
         length = ops.length
 
         async def _chunk_one(text: str) -> list[str]:
-            if length(text) <= chunk_len:
+            if length(text) <= max_len:
                 return [text]
             async with sem:
                 parts = await _chunk_recursive(text, depth=0, length=length)

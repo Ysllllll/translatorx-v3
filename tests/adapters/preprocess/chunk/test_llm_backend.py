@@ -96,27 +96,27 @@ class _NPartEngine:
 
 class TestLlmBackend:
     def test_short_text_no_split(self) -> None:
-        backend = llm_backend(engine=_FakeChunkEngine(), language="en", chunk_len=100)
+        backend = llm_backend(engine=_FakeChunkEngine(), language="en", max_len=100)
         assert backend(["Short text."]) == [["Short text."]]
 
     def test_long_text_splits(self) -> None:
-        backend = llm_backend(engine=_FakeChunkEngine(), language="en", chunk_len=30)
+        backend = llm_backend(engine=_FakeChunkEngine(), language="en", max_len=30)
         text = "This is a sentence that is definitely longer than thirty characters"
         result = backend([text])
         assert result == [["This is a sentence that", "is definitely longer", "than thirty characters"]]
 
     def test_batch_processing(self) -> None:
-        backend = llm_backend(engine=_FakeChunkEngine(), language="en", chunk_len=100)
+        backend = llm_backend(engine=_FakeChunkEngine(), language="en", max_len=100)
         assert backend(["short", "also short"]) == [["short"], ["also short"]]
 
     def test_max_depth_limits_recursion(self) -> None:
-        backend = llm_backend(engine=_FakeChunkEngine(), language="en", chunk_len=5, max_depth=1)
+        backend = llm_backend(engine=_FakeChunkEngine(), language="en", max_len=5, max_depth=1)
         text = "This is a longer text that needs splitting"
         result = backend([text])
         assert result == [["This is a longer", "text that needs splitting"]]
 
     def test_llm_failure_falls_back_to_rule(self) -> None:
-        backend = llm_backend(engine=_FailingChunkEngine(), language="en", chunk_len=20, on_failure="rule")
+        backend = llm_backend(engine=_FailingChunkEngine(), language="en", max_len=20, on_failure="rule")
         text = "This is a sentence that needs to be split by ops"
         result = backend([text])
         # rule fallback uses LangOps.split_by_length — produces multiple chunks, no single [text].
@@ -124,7 +124,7 @@ class TestLlmBackend:
         assert all(len(c) <= 20 or " " not in c for c in result[0])
 
     def test_rejects_content_changing_split(self) -> None:
-        backend = llm_backend(engine=_WordChangingEngine(), language="en", chunk_len=20, on_failure="rule")
+        backend = llm_backend(engine=_WordChangingEngine(), language="en", max_len=20, on_failure="rule")
         text = "This is a sentence that needs to be split somehow"
         # Reconstruction check fails at depth 0 → rule fallback; result must reconstruct.
         result = backend([text])[0]
@@ -135,14 +135,14 @@ class TestLlmBackend:
 class TestLlmBackendRetry:
     def test_retry_then_succeed(self) -> None:
         engine = _FlakyChunkEngine(fail_first=2)
-        backend = llm_backend(engine=engine, language="en", chunk_len=30, max_retries=2)
+        backend = llm_backend(engine=engine, language="en", max_len=30, max_retries=2)
         text = "This is a sentence that is definitely longer than thirty characters"
         result = backend([text])
         assert result == [["This is a sentence that", "is definitely longer", "than thirty characters"]]
 
     def test_retry_exhausted_then_rule(self) -> None:
         engine = _FailingChunkEngine()
-        backend = llm_backend(engine=engine, language="en", chunk_len=30, max_retries=2, on_failure="rule")
+        backend = llm_backend(engine=engine, language="en", max_len=30, max_retries=2, on_failure="rule")
         text = "This is a sentence that is definitely longer than thirty characters"
         result = backend([text])
         assert result[0] != [text]
@@ -150,7 +150,7 @@ class TestLlmBackendRetry:
 
     def test_max_retries_zero_single_attempt(self) -> None:
         engine = _FlakyChunkEngine(fail_first=1)
-        backend = llm_backend(engine=engine, language="en", chunk_len=30, max_retries=0, on_failure="keep")
+        backend = llm_backend(engine=engine, language="en", max_len=30, max_retries=0, on_failure="keep")
         text = "This is a sentence that is definitely longer than thirty characters"
         result = backend([text])
         assert result == [[text]]
@@ -159,12 +159,12 @@ class TestLlmBackendRetry:
 
 class TestLlmBackendOnFailure:
     def test_keep_returns_text_unchanged(self) -> None:
-        backend = llm_backend(engine=_FailingChunkEngine(), language="en", chunk_len=30, on_failure="keep")
+        backend = llm_backend(engine=_FailingChunkEngine(), language="en", max_len=30, on_failure="keep")
         text = "This is a sentence that is definitely longer than thirty characters"
         assert backend([text]) == [[text]]
 
     def test_raise_throws(self) -> None:
-        backend = llm_backend(engine=_FailingChunkEngine(), language="en", chunk_len=30, on_failure="raise")
+        backend = llm_backend(engine=_FailingChunkEngine(), language="en", max_len=30, on_failure="raise")
         with pytest.raises(RuntimeError):
             backend(["This is a sentence that is definitely longer than thirty characters"])
 
@@ -175,7 +175,7 @@ class TestLlmBackendOnFailure:
 
 class TestLlmBackendSplitParts:
     def test_three_way_split(self) -> None:
-        backend = llm_backend(engine=_NPartEngine(3), language="en", chunk_len=30, split_parts=3)
+        backend = llm_backend(engine=_NPartEngine(3), language="en", max_len=30, split_parts=3)
         text = "This is a sentence that is definitely longer than thirty characters"
         result = backend([text])
         assert result == [["This is a", "sentence that is", "definitely", "longer", "than thirty characters"]]
@@ -189,8 +189,8 @@ class TestLlmBackendCjkLength:
     def test_cjk_mixed_uses_ops_length(self) -> None:
         """Chinese CJK counts per-char via LangOps.length, not raw len()."""
         # A zh text of 10 CJK chars → ops.length == 10.
-        backend = llm_backend(engine=_FailingChunkEngine(), language="zh", chunk_len=8, on_failure="rule")
+        backend = llm_backend(engine=_FailingChunkEngine(), language="zh", max_len=8, on_failure="rule")
         text = "这是一个比较长的句子"  # 10 chars
         result = backend([text])
-        # chunk_len=8 with LangOps length 10 → split triggered (not passthrough).
+        # max_len=8 with LangOps length 10 → split triggered (not passthrough).
         assert result[0] != [text]

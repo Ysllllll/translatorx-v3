@@ -147,9 +147,9 @@ async def demo_llm_chunker() -> None:
             max_tokens=2048,
         )
     )
-    chunker = llm_backend(engine=engine, language="en", chunk_len=90, max_depth=4)
+    chunker = llm_backend(engine=engine, language="en", max_len=90, max_depth=4)
     print(f"    {ts()} backend:   llm (language=en)")
-    print(f"    {ts()} chunk_len: 90 chars, max_depth: 4")
+    print(f"    {ts()} max_len:   90 chars, max_depth: 4")
     print(f"    {ts()} input:     1 long text ({len(LONG_TEXT)} chars)")
 
     results = chunker([LONG_TEXT])
@@ -185,7 +185,7 @@ async def demo_full_pipeline(srt_files: list[Path]) -> None:
         )
     )
     punc_fn = PuncRestorer(backends={"en": {"library": "llm", "engine": engine}}).for_language("en")
-    chunk_fn = llm_backend(engine=engine, language="en", chunk_len=90, max_depth=4)
+    chunk_fn = llm_backend(engine=engine, language="en", max_len=90, max_depth=4)
 
     sub_obj = Subtitle(segments, language="en")
 

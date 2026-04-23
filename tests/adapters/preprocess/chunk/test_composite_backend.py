@@ -25,7 +25,7 @@ class TestCompositeBackend:
         def inner(texts):
             return [["ab", "cd"] for _ in texts]
 
-        backend = composite_backend(language="en", inner=inner, refine=refine, chunk_len=10)
+        backend = composite_backend(language="en", inner=inner, refine=refine, max_len=10)
         out = backend(["abcd"])
         assert out == [["ab", "cd"]]
         assert refine_calls == []
@@ -39,9 +39,9 @@ class TestCompositeBackend:
             # Split each oversize chunk into halves.
             return [[t[: len(t) // 2], t[len(t) // 2 :]] for t in texts]
 
-        backend = composite_backend(language="en", inner=inner, refine=refine, chunk_len=10)
+        backend = composite_backend(language="en", inner=inner, refine=refine, max_len=10)
         out = backend(["aaaaaaaaaabbbbbbbbbbbbbbbb"])
-        # First coarse chunk fits (10 == chunk_len); second (16 chars) is refined.
+        # First coarse chunk fits (10 == max_len); second (16 chars) is refined.
         assert out == [["aaaaaaaaaa", "bbbbbbbb", "bbbbbbbb"]]
 
     def test_inner_spec_inherits_language(self):
@@ -62,7 +62,7 @@ class TestCompositeBackend:
         original = ChunkBackendRegistry._factories.get("_test_inner")
         ChunkBackendRegistry._factories["_test_inner"] = factory
         try:
-            backend = composite_backend(language="zh", inner={"library": "_test_inner"}, refine=lambda texts: [[t] for t in texts], chunk_len=5)
+            backend = composite_backend(language="zh", inner={"library": "_test_inner"}, refine=lambda texts: [[t] for t in texts], max_len=5)
             backend(["你好世界"])
             assert calls["lang"] == "zh"
         finally:
@@ -71,6 +71,6 @@ class TestCompositeBackend:
             else:
                 ChunkBackendRegistry._factories["_test_inner"] = original
 
-    def test_invalid_chunk_len_raises(self):
-        with pytest.raises(ValueError, match="chunk_len"):
-            composite_backend(language="en", inner=lambda t: [[x] for x in t], refine=lambda t: [[x] for x in t], chunk_len=0)
+    def test_invalid_max_len_raises(self):
+        with pytest.raises(ValueError, match="max_len"):
+            composite_backend(language="en", inner=lambda t: [[x] for x in t], refine=lambda t: [[x] for x in t], max_len=0)

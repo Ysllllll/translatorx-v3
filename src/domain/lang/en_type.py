@@ -335,6 +335,16 @@ _CONNECTIVES: dict[str, frozenset[str]] = {
             "once",
             "whereas",
             "whilst",
+            "whenever",
+            "wherever",
+            "whether",
+            "however",
+            "therefore",
+            "meanwhile",
+            "nevertheless",
+            "nonetheless",
+            "moreover",
+            "furthermore",
         }
     ),
     # -- Russian 俄语 --
@@ -349,6 +359,10 @@ _CONNECTIVES: dict[str, frozenset[str]] = {
             "однако",  # however 然而
             "ибо",  # for / because 因为
             "чтобы",  # in order to 为了
+            "потому",  # because 因为
+            "зато",  # on the other hand 另一方面
+            "пока",  # while 当
+            "тогда",  # then 那么
         }
     ),
     # -- Spanish 西班牙语 --
@@ -364,6 +378,17 @@ _CONNECTIVES: dict[str, frozenset[str]] = {
             "además",
             "pues",
             "sino",
+            "mas",
+            "pero",
+            "aún",
+            "sin embargo",
+            "por lo tanto",
+            "por tanto",
+            "cuando",
+            "apenas",
+            "tras",
+            "antes",
+            "después",
         }
     ),
     # -- French 法语 --
@@ -380,7 +405,15 @@ _CONNECTIVES: dict[str, frozenset[str]] = {
             "puisque",
             "toutefois",
             "néanmoins",
-            "cependant",
+            "tandis",
+            "parce",
+            "car",
+            "comme",
+            "dès",
+            "avant",
+            "après",
+            "jusque",
+            "sinon",
         }
     ),
     # -- German 德语 --
@@ -399,6 +432,14 @@ _CONNECTIVES: dict[str, frozenset[str]] = {
             "nachdem",
             "bevor",
             "denn",
+            "sondern",
+            "deshalb",
+            "deswegen",
+            "trotzdem",
+            "damit",
+            "solange",
+            "sofern",
+            "zumal",
         }
     ),
     # -- Portuguese 葡萄牙语 --
@@ -415,6 +456,14 @@ _CONNECTIVES: dict[str, frozenset[str]] = {
             "contudo",
             "todavia",
             "pois",
+            "porém",
+            "logo",
+            "apesar",
+            "caso",
+            "antes",
+            "depois",
+            "desde",
+            "assim",
         }
     ),
     # -- Vietnamese 越南语 --
@@ -428,6 +477,14 @@ _CONNECTIVES: dict[str, frozenset[str]] = {
             "tuy",  # although 虽然
             "dù",  # although / even though 即使
             "mặc",  # although (normally "mặc dù") 虽然
+            "bởi",  # because 因为
+            "tại",  # because 因为
+            "do",  # because 由于
+            "song",  # but 但
+            "rồi",  # then 然后
+            "trước",  # before 之前
+            "sau",  # after 之后
+            "cho",  # in order to 为了
         }
     ),
 }

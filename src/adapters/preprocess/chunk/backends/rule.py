@@ -17,7 +17,7 @@ from adapters.preprocess.chunk.registry import Backend, ChunkBackendRegistry
 
 
 @ChunkBackendRegistry.register("rule")
-def rule_backend(*, language: str, chunk_len: int = 90) -> Backend:
+def rule_backend(*, language: str, max_len: int = 90) -> Backend:
     """Build a rule-based chunk backend for *language*.
 
     Parameters
@@ -25,21 +25,24 @@ def rule_backend(*, language: str, chunk_len: int = 90) -> Backend:
     language:
         BCP-47 / ISO code (``"en"``, ``"zh"``, ...). Drives tokenization
         behavior in :meth:`LangOps.split_by_length`.
-    chunk_len:
+    max_len:
         Maximum length per chunk (measured by :meth:`LangOps.length`).
+        When embedded in a :class:`~adapters.preprocess.chunk.chunker.Chunker`
+        without an explicit value, the orchestrator's own ``max_len``
+        is injected automatically so the two stay in sync.
 
     Raises
     ------
     ValueError
-        If ``chunk_len <= 0``.
+        If ``max_len <= 0``.
     """
-    if chunk_len <= 0:
-        raise ValueError("chunk_len must be > 0")
+    if max_len <= 0:
+        raise ValueError("max_len must be > 0")
 
     ops = LangOps.for_language(normalize_language(language))
 
     def _backend(texts: list[str]) -> list[list[str]]:
-        return [ops.split_by_length(t, chunk_len) if t.strip() else [t] for t in texts]
+        return [ops.split_by_length(t, max_len) if t.strip() else [t] for t in texts]
 
     return _backend
 

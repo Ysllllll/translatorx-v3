@@ -156,7 +156,7 @@ class App:
 
         lang = normalize_language(language)
         common_llm_kwargs = {
-            "chunk_len": cfg.chunk_len,
+            "max_len": cfg.chunk_len,
             "max_depth": cfg.chunk_max_depth,
             "max_retries": cfg.chunk_max_retries,
             "on_failure": cfg.chunk_on_failure,
@@ -181,7 +181,7 @@ class App:
             spec = {
                 "library": "composite",
                 "language": lang,
-                "chunk_len": cfg.chunk_len,
+                "max_len": cfg.chunk_len,
                 "inner": {
                     "library": "spacy",
                     "model": cfg.spacy_model or None,

@@ -31,6 +31,26 @@ _CONNECTIVES: frozenset[str] = frozenset(
         "비록",  # although 虽然
         "따라서",  # therefore 因此
         "그리고",  # and 并且
+        "왜냐하면",  # because 因为
+        "때문에",  # because 因为
+        "만일",  # if 如果
+        "만약에",  # if 如果
+        "그러나",  # but 但
+        "그럼에도",  # nevertheless 尽管如此
+        "그래도",  # still 还是
+        "결국",  # eventually 最终
+        "그리하여",  # thus 于是
+        "즉",  # that is 即
+        "다만",  # however 不过
+        "단",  # but 但
+        "물론",  # of course 当然
+        "한편",  # meanwhile 另一方面
+        "반면",  # on the other hand 反之
+        "반면에",  # on the other hand 反之
+        "게다가",  # moreover 而且
+        "더구나",  # furthermore 况且
+        "뿐만",  # not only 不仅
+        "아니면",  # or else 否则
     }
 )
 

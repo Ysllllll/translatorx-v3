@@ -2,7 +2,7 @@
 
 Two-stage backend: run an ``inner`` (coarse) backend on the full batch,
 then run a ``refine`` (fine) backend on the subset of produced chunks
-still exceeding ``chunk_len``. Reassembles each text's chunks in order.
+still exceeding ``max_len``. Reassembles each text's chunks in order.
 
 Strictly more general than any bespoke two-stage chunker — any coarse
 backend (spacy, rule, ...) can be composed with any refine backend
@@ -29,7 +29,7 @@ def composite_backend(
     language: str,
     inner: BackendSpec,
     refine: BackendSpec,
-    chunk_len: int = 90,
+    max_len: int = 90,
 ) -> Backend:
     """Build a composite coarse → refine backend.
 
@@ -45,18 +45,22 @@ def composite_backend(
     refine:
         Refinement backend spec (e.g. ``{"library": "llm", ...}``).
         Runs on any coarse output chunk whose length exceeds
-        *chunk_len*.
-    chunk_len:
+        *max_len*.
+    max_len:
         Length threshold (measured by :meth:`LangOps.length`) above
-        which a coarse chunk is forwarded to *refine*.
+        which a coarse chunk is forwarded to *refine*. When embedded in
+        a :class:`~adapters.preprocess.chunk.chunker.Chunker` without an
+        explicit value, the orchestrator's own ``max_len`` is injected
+        automatically so the composite and the outer threshold stay
+        aligned.
 
     Raises
     ------
     ValueError
-        If ``chunk_len <= 0``.
+        If ``max_len <= 0``.
     """
-    if chunk_len <= 0:
-        raise ValueError("chunk_len must be > 0")
+    if max_len <= 0:
+        raise ValueError("max_len must be > 0")
     inner_spec = _inject_language(inner, language)
     refine_spec = _inject_language(refine, language)
 
@@ -65,30 +69,25 @@ def composite_backend(
     ops = LangOps.for_language(normalize_language(language))
 
     def _backend(texts: list[str]) -> list[list[str]]:
-        # Stage 1: coarse split.
         coarse_chunks: list[list[str]] = list(coarse(texts))
         if len(coarse_chunks) != len(texts):
             raise RuntimeError(f"Composite inner backend returned {len(coarse_chunks)} lists, expected {len(texts)}")
 
-        # Stage 2: gather all oversized chunks across the batch, refine in one call.
         oversized: list[str] = []
         for chunks in coarse_chunks:
             for c in chunks:
-                if ops.length(c) > chunk_len:
+                if ops.length(c) > max_len:
                     oversized.append(c)
 
         if not oversized:
             return coarse_chunks
 
-        # Unique-preserve to avoid duplicate LLM calls when the same oversized
-        # chunk appears in multiple texts (rare, but cheap to defend against).
         unique_oversized = list(dict.fromkeys(oversized))
         refined = list(fine(unique_oversized))
         if len(refined) != len(unique_oversized):
             raise RuntimeError(f"Composite refine backend returned {len(refined)} lists, expected {len(unique_oversized)}")
         refine_map = dict(zip(unique_oversized, refined))
 
-        # Stage 3: reassemble.
         results: list[list[str]] = []
         for chunks in coarse_chunks:
             out: list[str] = []

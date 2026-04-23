@@ -6,7 +6,7 @@ connective words (English ``because`` / ``but`` / ``when``,
 Chinese ``因为`` / ``但是``, ...):
 
 * ``rule_connective`` — deterministic keyword match against
-  :attr:`LangOps.connectives`, with a minimum-context guard on each side.
+  :attr:`LangOps.connectives`, with a min-words-per-side guard.
   No external dependencies, fast.
 
 * ``pos_connective`` — spaCy POS + dependency-aware version. Matches
@@ -51,7 +51,7 @@ def _count_non_punct(tokens: list[str]) -> int:
     return n
 
 
-def _split_once(text: str, ops, connectives: frozenset[str], min_context: int) -> list[str]:
+def _split_once(text: str, ops, connectives: frozenset[str], min_words: int) -> list[str]:
     """Split *text* at the first qualifying connective token.
 
     Returns a list of 1 (no split) or 2 (split) pieces. Tokens scan
@@ -71,7 +71,7 @@ def _split_once(text: str, ops, connectives: frozenset[str], min_context: int) -
             continue
         left = _count_non_punct(tokens[:i])
         right = _count_non_punct(tokens[i + 1 :])
-        if left < min_context or right < min_context:
+        if left < min_words or right < min_words:
             continue
         left_text = ops.join(tokens[:i]).strip()
         right_text = ops.join(tokens[i:]).strip()
@@ -81,7 +81,7 @@ def _split_once(text: str, ops, connectives: frozenset[str], min_context: int) -
     return [text]
 
 
-def _split_by_connectives(text: str, ops, min_context: int) -> list[str]:
+def _split_by_connectives(text: str, ops, min_words: int) -> list[str]:
     """Iteratively split *text* at connectives until stable."""
     connectives = ops.connectives
     if not connectives:
@@ -94,7 +94,7 @@ def _split_by_connectives(text: str, ops, min_context: int) -> list[str]:
         changed = False
         new_pieces: list[str] = []
         for piece in pieces:
-            sub = _split_once(piece, ops, connectives, min_context)
+            sub = _split_once(piece, ops, connectives, min_words)
             if len(sub) > 1:
                 changed = True
             new_pieces.extend(sub)
@@ -105,7 +105,7 @@ def _split_by_connectives(text: str, ops, min_context: int) -> list[str]:
 
 
 @ChunkBackendRegistry.register("rule_connective")
-def rule_connective_backend(*, language: str, min_context: int = 5) -> Backend:
+def rule_connective_backend(*, language: str, min_words: int = 5) -> Backend:
     """Build a keyword-based connective splitter for *language*.
 
     Uses :attr:`LangOps.connectives`. Languages without a populated
@@ -116,13 +116,13 @@ def rule_connective_backend(*, language: str, min_context: int = 5) -> Backend:
     language:
         BCP-47 / ISO code driving token segmentation and the connective
         lexicon.
-    min_context:
+    min_words:
         Minimum number of non-punctuation tokens that must exist on each
         side of the connective for a split to occur. Defaults to ``5``,
         matching the legacy implementation.
     """
-    if min_context < 1:
-        raise ValueError("min_context must be >= 1")
+    if min_words < 1:
+        raise ValueError("min_words must be >= 1")
     ops = LangOps.for_language(normalize_language(language))
 
     def _backend(texts: list[str]) -> list[list[str]]:
@@ -131,7 +131,7 @@ def rule_connective_backend(*, language: str, min_context: int = 5) -> Backend:
             if not text.strip():
                 out.append([text])
                 continue
-            out.append(_split_by_connectives(text, ops, min_context))
+            out.append(_split_by_connectives(text, ops, min_words))
         return out
 
     return _backend
@@ -168,6 +168,13 @@ _POS_RULES: dict[str, tuple[frozenset[str], str, frozenset[str], frozenset[str],
         frozenset({"mark"}),
         frozenset({"NOUN", "PROPN"}),
         frozenset({"case"}),
+    ),
+    "ko": (
+        frozenset({"만약", "비록", "왜냐하면", "그러나", "하지만", "때문에"}),
+        "VERB",
+        frozenset({"mark", "advcl"}),
+        frozenset({"NOUN", "PROPN"}),
+        frozenset({"det", "case"}),
     ),
     "fr": (
         frozenset({"que", "qui", "où"}),
@@ -218,24 +225,24 @@ class _PosConnectiveSplitter:
     _instances: ClassVar[dict[tuple[str, str], "_PosConnectiveSplitter"]] = {}
     _lock: ClassVar[threading.Lock] = threading.Lock()
 
-    def __init__(self, model_name: str, language: str, min_context: int) -> None:
+    def __init__(self, model_name: str, language: str, min_words: int) -> None:
         import spacy
 
         logger.info("Loading spaCy model %r for pos_connective (%s) ...", model_name, language)
         self._nlp = spacy.load(model_name)
         self._language = language
         self._ops = LangOps.for_language(language)
-        self._min_context = min_context
+        self._min_words = min_words
         self._infer_lock = threading.Lock()
 
     @classmethod
-    def get(cls, model: str, language: str, min_context: int) -> "_PosConnectiveSplitter":
+    def get(cls, model: str, language: str, min_words: int) -> "_PosConnectiveSplitter":
         key = (model, language)
         if key not in cls._instances:
             with cls._lock:
                 if key not in cls._instances:
-                    cls._instances[key] = cls(model, language, min_context)
-        # min_context may differ per call; keep last value as default but
+                    cls._instances[key] = cls(model, language, min_words)
+        # min_words may differ per call; keep last value as default but
         # the __call__ path lets callers override.
         return cls._instances[key]
 
@@ -275,9 +282,9 @@ class _PosConnectiveSplitter:
                     # Skip contractions like "isn't" → next token starts with '
                     if token.i + 1 < len(doc) and doc[token.i + 1].text.startswith(("'", "’")):
                         continue
-                    left_words = [w.text for w in doc[max(0, token.i - self._min_context) : token.i] if not w.is_punct]
-                    right_words = [w.text for w in doc[token.i + 1 : token.i + 1 + self._min_context] if not w.is_punct]
-                    if len(left_words) >= self._min_context and len(right_words) >= self._min_context:
+                    left_words = [w.text for w in doc[max(0, token.i - self._min_words) : token.i] if not w.is_punct]
+                    right_words = [w.text for w in doc[token.i + 1 : token.i + 1 + self._min_words] if not w.is_punct]
+                    if len(left_words) >= self._min_words and len(right_words) >= self._min_words:
                         new_sentences.append(doc[start : token.i].text.strip())
                         start = token.i
                         split_occurred = True
@@ -307,14 +314,14 @@ class _PosConnectiveSplitter:
 
 
 @ChunkBackendRegistry.register("pos_connective")
-def pos_connective_backend(*, language: str, min_context: int = 5, model: str | None = None) -> Backend:
+def pos_connective_backend(*, language: str, min_words: int = 5, model: str | None = None) -> Backend:
     """Build a spaCy POS-aware connective splitter for *language*.
 
     Parameters
     ----------
     language:
         BCP-47 / ISO code (``"en"``, ``"zh"``, ...).
-    min_context:
+    min_words:
         Minimum non-punctuation tokens required on each side of the
         connective. Defaults to ``5``.
     model:
@@ -323,8 +330,8 @@ def pos_connective_backend(*, language: str, min_context: int = 5, model: str | 
         :data:`~adapters.preprocess.chunk.backends.spacy.DEFAULT_MODELS_BY_LANG`
         (falling back to the multilingual ``xx_sent_ud_sm``).
     """
-    if min_context < 1:
-        raise ValueError("min_context must be >= 1")
+    if min_words < 1:
+        raise ValueError("min_words must be >= 1")
 
     from adapters.preprocess.chunk.backends.spacy import (
         DEFAULT_MODELS_BY_LANG,
@@ -333,7 +340,7 @@ def pos_connective_backend(*, language: str, min_context: int = 5, model: str | 
 
     lang = normalize_language(language)
     chosen = model or DEFAULT_MODELS_BY_LANG.get(lang, FALLBACK_MODEL)
-    splitter = _PosConnectiveSplitter.get(chosen, lang, min_context)
+    splitter = _PosConnectiveSplitter.get(chosen, lang, min_words)
 
     def _backend(texts: list[str]) -> list[list[str]]:
         return splitter(texts)
