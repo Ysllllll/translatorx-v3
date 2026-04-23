@@ -233,7 +233,7 @@ def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | 
     print("Expected: each sentence pipeline splits into clause chunks at")
     print("inner punctuation (, ; :). Clause count >= 1 per sentence.")
     print("=" * 60)
-    sub3 = sub2b.clauses()
+    sub3 = sub2b.clauses(merge_under=90)
     _print_subtitle_state(sub3, label="step4")
     total_clauses = sum(len(p.result()) for p in sub3._pipelines)  # noqa: SLF001
     print(f"  ✓ total clauses across all sentences: {total_clauses}")

@@ -61,6 +61,11 @@ class TestEnglishSplitter(SplitterTestBase):
         # Edge cases
         assert _ops.split_clauses("") == []
 
+    def test_clauses_merge_under_does_not_create_overlong_chunks(self) -> None:
+        result = _ops.chunk("alpha beta gamma, delta epsilon zeta, eta theta iota.").clauses(merge_under=30).result()
+        assert result == ["alpha beta gamma,", "delta epsilon zeta,", "eta theta iota."]
+        assert all(_ops.length(chunk) <= 30 for chunk in result)
+
     def test_split_by_length(self) -> None:
         # Basic split
         assert _ops.split_by_length("Hello world", max_len=20) == ["Hello world"]

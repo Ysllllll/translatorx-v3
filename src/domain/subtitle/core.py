@@ -236,7 +236,8 @@ class Subtitle:
         """Split each chunk into clauses (sentence-aware).
 
         Args:
-            merge_under: If given, merge back clauses shorter than this.
+            merge_under: If given, merge adjacent clauses while the
+                merged chunk stays within this threshold.
         """
         return self._with_pipelines([p.clauses(merge_under=merge_under) for p in self._pipelines])
 

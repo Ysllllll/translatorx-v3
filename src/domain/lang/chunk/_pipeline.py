@@ -103,8 +103,8 @@ class TextPipeline:
         """Split each group into clauses (sentence boundaries included).
 
         Args:
-            merge_under: If given, merge back clauses shorter than this
-                threshold after splitting.  Prevents overly short chunks.
+            merge_under: If given, merge adjacent clauses while the
+                merged chunk stays within this threshold.
         """
 
         def _split_fn(group):
@@ -116,7 +116,7 @@ class TextPipeline:
             )
             sub_groups = split_tokens_by_boundaries(group, boundaries)
             if merge_under is not None and len(sub_groups) > 1:
-                sub_groups = _merge_short_groups(sub_groups, self._ops, merge_under)
+                sub_groups = merge_token_groups(sub_groups, self._ops, merge_under)
             return sub_groups
 
         return self._split(_split_fn)
@@ -145,41 +145,3 @@ class TextPipeline:
     def result(self) -> list[str]:
         """Return the current list of text fragments."""
         return [self._ops.join(g) for g in self._groups]
-
-
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _merge_short_groups(
-    groups: list[list[str]],
-    ops: _BaseOps,
-    min_length: int,
-) -> list[list[str]]:
-    """Merge groups shorter than *min_length* into their neighbors.
-
-    Accumulates groups left-to-right until the accumulated length
-    reaches *min_length*, then starts a new accumulator.  Any trailing
-    short chunk is folded into the last full group.
-    """
-    if not groups:
-        return groups
-
-    result: list[list[str]] = []
-    acc: list[str] = []
-
-    for group in groups:
-        acc = acc + group if acc else list(group)
-        if ops.length(ops.join(acc)) >= min_length:
-            result.append(acc)
-            acc = []
-
-    if acc:
-        if result:
-            result[-1] = result[-1] + acc
-        else:
-            result.append(acc)
-
-    return result
