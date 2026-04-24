@@ -415,6 +415,51 @@ Key invariants:
 - **Cancel discipline** — `finally` blocks use `asyncio.shield()` for Store flushes so in-flight work is persisted
 - **No print** — all logging goes through `logger` + `ProgressReporter`; demos are the only place stdout is used directly
 
+## Project-specific extras
+
+### Entry points (pyproject.toml)
+
+```bash
+translatorx-serve   # FastAPI server (uvicorn)
+translatorx-worker  # ARQ background worker (redis)
+```
+
+### Optional dependency groups
+
+```bash
+pip install -e ".[service]"        # FastAPI + uvicorn + redis
+pip install -e ".[worker]"         # arq + redis
+pip install -e ".[observability]"  # prometheus + opentelemetry
+pip install -e ".[test]"           # pytest + pytest-asyncio + fakeredis
+pip install -e ".[demos]"          # rich
+```
+
+### Frontend (`frontend/`)
+
+Minimal React admin UI (Vite + TypeScript). Talks to the FastAPI service layer.
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+### Tools (`tools/`)
+
+CLI inspection utilities for SRT and WhisperX files — `inspect_srt.py`, `inspect_whisperx.py`, `inspect_any.py`. Report parse errors, cleaning stats, and word-timing diagnostics.
+
+### Benchmark (`benchmark/`)
+
+`validate_subtitles.py` — multiprocessing validation of the subtitle pipeline against real-world files. Scans `zzz_subtitle` directories, runs parse + chain + timing round-trip checks.
+
+```bash
+python benchmark/validate_subtitles.py /path/to/course_data --workers 8
+```
+
+### Docs (`docs/`)
+
+- `ARCHITECTURE_LAYERS.md` — layer dependency rules and rationale
+- `ARCHITECTURE_SCALING.md` — scaling / deployment patterns
+- `ADAPTER_BACKENDS_GUIDE.md` — how to add new preprocess backends
+
 ## Fonts
 
 Pixel-length tests require system fonts. `conftest.py` tries in order:

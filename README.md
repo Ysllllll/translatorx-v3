@@ -99,8 +99,8 @@ LLM 服务（自由选择 OpenAI 兼容端点）：
 ## 测试
 
 ```bash
-pytest tests/ -q                                # ~8s, 813 通过 / 2 skip
-pytest tests/runtime_tests/ -v                  # 只跑 runtime 层
+pytest tests/ -q                                # 全量
+pytest tests/adapters/ -v                       # 只跑 adapters 层
 pytest tests/ --cov=src --cov-report=term       # 覆盖率
 ```
 
@@ -110,16 +110,18 @@ pytest tests/ --cov=src --cov-report=term       # 覆盖率
 |---|---|
 | `demos/demo_lang_ops.py` | 分词 / 分句 / ChunkPipeline |
 | `demos/demo_subtitle.py` | SRT 解析 / Word 对齐 / Subtitle 重组 |
+| `demos/demo_preprocess_pipeline.py` | 标点恢复 + 分块流水线 (step-by-step 自检) |
 | `demos/demo_checker.py`  | 翻译质量检查 |
 | `demos/demo_media.py`    | yt-dlp 下载 + ffmpeg 提取 |
 | `demos/demo_llm_ops.py`  | LLM 引擎 + 上下文 + translate_with_verify (需要 LLM) |
 | `demos/demo_app.py`      | 端到端 6 场景 (需要 LLM) |
+| `demos/demo_service.py`  | FastAPI 服务演示 |
 
 ## 当前进度
 
 - ✅ 翻译子系统（批量 + 流式）端到端可用
-- ⬜ 转录 (Stage 6 — Transcriber/Align Processor)
-- ⬜ 配音 / TTS (Stage 6 — TTSProcessor + VoicePicker)
-- ⬜ HTTP 服务 / 多用户 / 鉴权 / 限流 (Stage 7 — FastAPI + SSE)
+- ✅ 转录 (Transcriber adapters — WhisperX / OpenAI / HTTP remote)
+- ✅ TTS (Edge-TTS / OpenAI-TTS / ElevenLabs)
+- ✅ HTTP 服务 / 多用户 / 鉴权 / 限流 (FastAPI + SSE + Redis)
 
 设计决策完整记录见 `processor-architecture-memo.md` (D-001..D-068)。
