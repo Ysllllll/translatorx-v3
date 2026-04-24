@@ -100,7 +100,7 @@ async def run(
     segments = parse_srt(sanitize_srt(srt_text))
     print(f"[client] will send {len(segments)} segments to {url}")
 
-    async with connect(url) as ws:
+    async with connect(url, ping_interval=30, ping_timeout=120) as ws:
         reader = asyncio.create_task(_read_loop(ws))
 
         wall0 = time.perf_counter()
@@ -130,9 +130,11 @@ async def run(
         await ws.send(json.dumps({"type": "flush"}))
         await ws.send(json.dumps({"type": "close"}))
 
-        # Wait for server-side "done" / connection close.
+        # Wait for server-side "done" / connection close. Use a
+        # large timeout because real backends (HF / spaCy / LLM) can
+        # take a while on the first request.
         try:
-            await asyncio.wait_for(reader, timeout=30.0)
+            await asyncio.wait_for(reader, timeout=600.0)
         except asyncio.TimeoutError:
             print("[client] timed out waiting for server to finish")
             reader.cancel()

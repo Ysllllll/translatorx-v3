@@ -241,9 +241,14 @@ class PreprocessProcessor:
             # scopes downstream ops to a sentence-level pipeline so
             # ``.records()`` yields one enriched record (chunks stay *inside*
             # the sentence instead of being promoted to their own records).
-            sub = Subtitle(list(rec.segments), language=self._language)
-            sub = sub.sentences().clauses(merge_under=self._merge_under).transform(self._chunk_fn, scope="chunk")
-            records = sub.records()
+            def _run(rec=rec) -> list[SentenceRecord]:
+                sub = Subtitle(list(rec.segments), language=self._language)
+                sub = sub.sentences().clauses(merge_under=self._merge_under).transform(self._chunk_fn, scope="chunk")
+                return sub.records()
+
+            # chunk_fn may invoke blocking LLM / spaCy I/O — off-load so
+            # the event loop keeps responding to WS pings during long runs.
+            records = await asyncio.to_thread(_run)
             if not records:
                 continue
             extra = dict(rec.extra or {})
@@ -282,6 +287,28 @@ def _record_to_dict(rec: SentenceRecord) -> dict[str, Any]:
 # ── FastAPI app + WebSocket endpoint ────────────────────────────────
 
 
+# Process-wide caches: share state across connections *and* with
+# ``--warmup`` so real punc/chunk models load exactly once.
+_punc_cache: dict[str, Callable[[list[str]], list[list[str]]]] = {}
+_chunk_cache: dict[tuple[str, int], Callable[[list[str]], list[list[str]]]] = {}
+_cache_lock = asyncio.Lock()
+
+
+async def _get_punc(language: str, real: bool) -> Callable[[list[str]], list[list[str]]]:
+    async with _cache_lock:
+        if language not in _punc_cache:
+            _punc_cache[language] = await asyncio.to_thread(build_punc_fn, language, real)
+        return _punc_cache[language]
+
+
+async def _get_chunk(language: str, real: bool, engine_url: str | None, max_len: int) -> Callable[[list[str]], list[list[str]]]:
+    key = (language, max_len)
+    async with _cache_lock:
+        if key not in _chunk_cache:
+            _chunk_cache[key] = await asyncio.to_thread(build_chunk_fn, language, real, engine_url, max_len)
+        return _chunk_cache[key]
+
+
 def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
     app = FastAPI(title="translatorx-v3 · stream-preprocess demo")
 
@@ -303,33 +330,61 @@ def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
     ) -> None:
         await ws.accept()
 
-        punc_fn = build_punc_fn(language, real) if restore_punc else None
-        chunk_fn = build_chunk_fn(language, real, engine_url, max_len)
+        # Backend init may take time on first call — warm synchronously
+        # before sending "ready" so the client knows we're usable. Client
+        # should use a generous connect/read timeout.
+        try:
+            punc_fn = await _get_punc(language, real) if restore_punc else None
+            chunk_fn = await _get_chunk(language, real, engine_url, max_len)
+        except Exception as exc:  # noqa: BLE001
+            try:
+                await ws.send_text(json.dumps({"type": "error", "message": f"backend init failed: {exc!r}"}))
+                await ws.close(code=1011)
+            except Exception:  # noqa: BLE001
+                pass
+            return
+
         source = PushQueueSource(language=language)
         punc_buf = PuncBufferStage(punc_fn=punc_fn, downstream=source, window=window) if punc_fn is not None else None
         proc = PreprocessProcessor(language=language, chunk_fn=chunk_fn)
 
-        await ws.send_text(
-            json.dumps(
-                {
-                    "type": "ready",
-                    "language": language,
-                    "restore_punc": restore_punc,
-                    "max_len": max_len,
-                    "window": window,
-                }
+        try:
+            await ws.send_text(
+                json.dumps(
+                    {
+                        "type": "ready",
+                        "language": language,
+                        "restore_punc": restore_punc,
+                        "max_len": max_len,
+                        "window": window,
+                    }
+                )
             )
-        )
+        except (WebSocketDisconnect, RuntimeError):
+            # Peer vanished before we even sent ready — nothing to do.
+            return
 
-        # Pump: read from source.read() → processor → ws.send
-        pump_done = asyncio.Event()
+        # Shared disconnect flag so the pump stops pushing after the
+        # socket closes (otherwise send_text raises WebSocketDisconnect
+        # and kills the ASGI handler).
+        disconnected = asyncio.Event()
 
         async def pump() -> None:
             try:
                 async for out in proc.process(source.read()):
-                    await ws.send_text(json.dumps(_record_to_dict(out)))
-            finally:
-                pump_done.set()
+                    if disconnected.is_set():
+                        break
+                    try:
+                        await ws.send_text(json.dumps(_record_to_dict(out)))
+                    except (WebSocketDisconnect, RuntimeError):
+                        disconnected.set()
+                        break
+            except Exception as exc:  # noqa: BLE001
+                if not disconnected.is_set():
+                    try:
+                        await ws.send_text(json.dumps({"type": "error", "message": f"pump crashed: {exc!r}"}))
+                    except Exception:  # noqa: BLE001
+                        pass
 
         pump_task = asyncio.create_task(pump())
 
@@ -347,11 +402,19 @@ def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
 
         try:
             while True:
-                raw = await ws.receive_text()
+                try:
+                    raw = await ws.receive_text()
+                except (WebSocketDisconnect, RuntimeError):
+                    # RuntimeError("WebSocket is not connected") fires when
+                    # the peer closes abruptly — treat same as disconnect.
+                    break
                 try:
                     msg = json.loads(raw)
                 except json.JSONDecodeError:
-                    await ws.send_text(json.dumps({"type": "error", "message": "invalid JSON"}))
+                    try:
+                        await ws.send_text(json.dumps({"type": "error", "message": "invalid JSON"}))
+                    except (WebSocketDisconnect, RuntimeError):
+                        break
                     continue
                 mtype = msg.get("type")
                 if mtype == "segment":
@@ -362,22 +425,33 @@ def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
                 elif mtype == "close":
                     break
                 else:
-                    await ws.send_text(json.dumps({"type": "error", "message": f"unknown type: {mtype!r}"}))
-        except WebSocketDisconnect:
-            pass
+                    try:
+                        await ws.send_text(json.dumps({"type": "error", "message": f"unknown type: {mtype!r}"}))
+                    except (WebSocketDisconnect, RuntimeError):
+                        break
         finally:
             # drain any trailing buffered segments, then signal EOF
             try:
                 if punc_buf is not None:
-                    await punc_buf.flush()
+                    try:
+                        await punc_buf.flush()
+                    except Exception:  # noqa: BLE001
+                        pass
                 await source.close()
-                await asyncio.shield(pump_task)
-            finally:
-                await proc.aclose()
                 try:
-                    await ws.send_text(json.dumps({"type": "done"}))
-                except Exception:  # noqa: BLE001  (already-closed socket is fine)
-                    pass
+                    # Unbounded-ish drain: real LLM chunker can be slow
+                    # and the client explicitly asked for all records.
+                    await asyncio.wait_for(asyncio.shield(pump_task), timeout=600.0)
+                except asyncio.TimeoutError:
+                    pump_task.cancel()
+            finally:
+                disconnected.set()
+                await proc.aclose()
+                for _msg in ({"type": "done"},):
+                    try:
+                        await ws.send_text(json.dumps(_msg))
+                    except Exception:  # noqa: BLE001
+                        pass
                 try:
                     await ws.close()
                 except Exception:  # noqa: BLE001
@@ -396,11 +470,42 @@ def main() -> None:
         default=None,
         help="LLM engine base_url for chunk stage (requires --real).",
     )
+    parser.add_argument(
+        "--warmup",
+        nargs="*",
+        default=None,
+        metavar="LANG",
+        help="Pre-load backends for given language(s) at startup so the "
+        "first client doesn't wait for HF/spaCy model load. "
+        "Pass without values to default to 'en'.",
+    )
+    parser.add_argument(
+        "--warmup-max-len",
+        type=int,
+        default=60,
+        help="max_len to use when pre-building chunkers for --warmup.",
+    )
     args = parser.parse_args()
 
     app = build_app(real=args.real, engine_url=args.engine)
+
+    if args.warmup is not None:
+        langs = args.warmup or ["en"]
+        print(f"[server] warmup: loading backends for {langs} ...")
+        for lang in langs:
+            _punc_cache[lang] = build_punc_fn(lang, args.real)
+            _chunk_cache[(lang, args.warmup_max_len)] = build_chunk_fn(lang, args.real, args.engine, args.warmup_max_len)
+        print("[server] warmup done")
+
     print(f"[server] listening on ws://{args.host}:{args.port}/ws/preprocess")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        log_level="info",
+        ws_ping_interval=30.0,
+        ws_ping_timeout=120.0,
+    )
 
 
 if __name__ == "__main__":
