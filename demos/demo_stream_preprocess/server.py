@@ -241,19 +241,21 @@ class PreprocessProcessor:
             # scopes downstream ops to a sentence-level pipeline so
             # ``.records()`` yields one enriched record (chunks stay *inside*
             # the sentence instead of being promoted to their own records).
-            def _run(rec=rec) -> list[SentenceRecord]:
-                sub = Subtitle(list(rec.segments), language=self._language)
-                sub = sub.sentences().clauses(merge_under=self._merge_under).transform(self._chunk_fn, scope="chunk")
-                return sub.records()
-
-            # chunk_fn may invoke blocking LLM / spaCy I/O — off-load so
-            # the event loop keeps responding to WS pings during long runs.
-            records = await asyncio.to_thread(_run)
+            #
+            # chunk_fn may invoke blocking LLM / spaCy I/O, so we off-load
+            # the whole build to a worker thread — otherwise the event loop
+            # can't answer WS pings during a long LLM call.
+            records = await asyncio.to_thread(self._build_records, rec)
             if not records:
                 continue
             extra = dict(rec.extra or {})
             for new in records:
                 yield replace(new, extra=dict(extra))
+
+    def _build_records(self, rec: SentenceRecord) -> list[SentenceRecord]:
+        sub = Subtitle(list(rec.segments), language=self._language)
+        sub = sub.sentences().clauses(merge_under=self._merge_under).transform(self._chunk_fn, scope="chunk")
+        return sub.records()
 
     async def aclose(self) -> None:
         return None
@@ -309,6 +311,31 @@ async def _get_chunk(language: str, real: bool, engine_url: str | None, max_len:
         return _chunk_cache[key]
 
 
+# Three categories of "the WebSocket blew up" we care about:
+#   - WebSocketDisconnect : starlette raises this on a clean close
+#   - RuntimeError        : raised by starlette's receive_text/send_text
+#                           when the socket is already closed at the
+#                           protocol level ("WebSocket is not connected")
+#   - ConnectionError     : lower-level TCP hang-up
+_WS_DEAD = (WebSocketDisconnect, RuntimeError, ConnectionError)
+
+
+async def _safe_send(ws: WebSocket, payload: dict[str, Any]) -> bool:
+    """Send ``payload`` as JSON. Return ``False`` if the socket is dead."""
+    try:
+        await ws.send_text(json.dumps(payload))
+        return True
+    except _WS_DEAD:
+        return False
+
+
+async def _safe_close(ws: WebSocket, code: int = 1000) -> None:
+    try:
+        await ws.close(code=code)
+    except _WS_DEAD:
+        pass
+
+
 def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
     app = FastAPI(title="translatorx-v3 · stream-preprocess demo")
 
@@ -330,43 +357,35 @@ def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
     ) -> None:
         await ws.accept()
 
-        # Backend init may take time on first call — warm synchronously
-        # before sending "ready" so the client knows we're usable. Client
-        # should use a generous connect/read timeout.
+        # Backend init may take time on first call. We've offloaded the
+        # blocking HF / spaCy load to a worker thread inside _get_*, so
+        # the event loop stays responsive while one connection warms up.
         try:
             punc_fn = await _get_punc(language, real) if restore_punc else None
             chunk_fn = await _get_chunk(language, real, engine_url, max_len)
         except Exception as exc:  # noqa: BLE001
-            try:
-                await ws.send_text(json.dumps({"type": "error", "message": f"backend init failed: {exc!r}"}))
-                await ws.close(code=1011)
-            except Exception:  # noqa: BLE001
-                pass
+            await _safe_send(ws, {"type": "error", "message": f"backend init failed: {exc!r}"})
+            await _safe_close(ws, code=1011)
             return
 
         source = PushQueueSource(language=language)
         punc_buf = PuncBufferStage(punc_fn=punc_fn, downstream=source, window=window) if punc_fn is not None else None
         proc = PreprocessProcessor(language=language, chunk_fn=chunk_fn)
 
-        try:
-            await ws.send_text(
-                json.dumps(
-                    {
-                        "type": "ready",
-                        "language": language,
-                        "restore_punc": restore_punc,
-                        "max_len": max_len,
-                        "window": window,
-                    }
-                )
-            )
-        except (WebSocketDisconnect, RuntimeError):
-            # Peer vanished before we even sent ready — nothing to do.
-            return
+        if not await _safe_send(
+            ws,
+            {
+                "type": "ready",
+                "language": language,
+                "restore_punc": restore_punc,
+                "max_len": max_len,
+                "window": window,
+            },
+        ):
+            return  # peer vanished before we even sent ready
 
-        # Shared disconnect flag so the pump stops pushing after the
-        # socket closes (otherwise send_text raises WebSocketDisconnect
-        # and kills the ASGI handler).
+        # Shared flag so the pump stops pushing once we know the socket
+        # is gone (otherwise send_text keeps raising after disconnect).
         disconnected = asyncio.Event()
 
         async def pump() -> None:
@@ -374,17 +393,12 @@ def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
                 async for out in proc.process(source.read()):
                     if disconnected.is_set():
                         break
-                    try:
-                        await ws.send_text(json.dumps(_record_to_dict(out)))
-                    except (WebSocketDisconnect, RuntimeError):
+                    if not await _safe_send(ws, _record_to_dict(out)):
                         disconnected.set()
                         break
             except Exception as exc:  # noqa: BLE001
                 if not disconnected.is_set():
-                    try:
-                        await ws.send_text(json.dumps({"type": "error", "message": f"pump crashed: {exc!r}"}))
-                    except Exception:  # noqa: BLE001
-                        pass
+                    await _safe_send(ws, {"type": "error", "message": f"pump crashed: {exc!r}"})
 
         pump_task = asyncio.create_task(pump())
 
@@ -400,22 +414,21 @@ def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
             else:
                 await source.feed(seg)
 
+        # ── main recv loop ──
         try:
             while True:
                 try:
                     raw = await ws.receive_text()
-                except (WebSocketDisconnect, RuntimeError):
-                    # RuntimeError("WebSocket is not connected") fires when
-                    # the peer closes abruptly — treat same as disconnect.
+                except _WS_DEAD:
                     break
+
                 try:
                     msg = json.loads(raw)
                 except json.JSONDecodeError:
-                    try:
-                        await ws.send_text(json.dumps({"type": "error", "message": "invalid JSON"}))
-                    except (WebSocketDisconnect, RuntimeError):
+                    if not await _safe_send(ws, {"type": "error", "message": "invalid JSON"}):
                         break
                     continue
+
                 mtype = msg.get("type")
                 if mtype == "segment":
                     await _feed_segment(msg)
@@ -424,38 +437,28 @@ def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
                         await punc_buf.flush()
                 elif mtype == "close":
                     break
-                else:
-                    try:
-                        await ws.send_text(json.dumps({"type": "error", "message": f"unknown type: {mtype!r}"}))
-                    except (WebSocketDisconnect, RuntimeError):
-                        break
+                elif not await _safe_send(ws, {"type": "error", "message": f"unknown type: {mtype!r}"}):
+                    break
         finally:
-            # drain any trailing buffered segments, then signal EOF
-            try:
-                if punc_buf is not None:
-                    try:
-                        await punc_buf.flush()
-                    except Exception:  # noqa: BLE001
-                        pass
-                await source.close()
+            # ── drain: let the pump finish any records still in flight ──
+            if punc_buf is not None:
                 try:
-                    # Unbounded-ish drain: real LLM chunker can be slow
-                    # and the client explicitly asked for all records.
-                    await asyncio.wait_for(asyncio.shield(pump_task), timeout=600.0)
-                except asyncio.TimeoutError:
-                    pump_task.cancel()
-            finally:
-                disconnected.set()
-                await proc.aclose()
-                for _msg in ({"type": "done"},):
-                    try:
-                        await ws.send_text(json.dumps(_msg))
-                    except Exception:  # noqa: BLE001
-                        pass
-                try:
-                    await ws.close()
+                    await punc_buf.flush()
                 except Exception:  # noqa: BLE001
                     pass
+            await source.close()
+            try:
+                # Real LLM chunker can be slow. Client requested all
+                # records, so give the pump a generous window.
+                await asyncio.wait_for(asyncio.shield(pump_task), timeout=600.0)
+            except asyncio.TimeoutError:
+                pump_task.cancel()
+
+            # ── teardown ──
+            disconnected.set()
+            await proc.aclose()
+            await _safe_send(ws, {"type": "done"})
+            await _safe_close(ws)
 
     return app
 
