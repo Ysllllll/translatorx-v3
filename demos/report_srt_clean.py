@@ -69,8 +69,9 @@ def _discover(root: str, pattern: str) -> list[Path]:
 # ---------------------------------------------------------------------------
 
 
-def _render_summary_table(report: SC.Report, path: str) -> None:
+def _render_summary_table(report: SC.Report, path: str, *, disabled: set[str] | None = None) -> None:
     """One row per changed cue: # | time | rules | before | after."""
+    disabled = disabled or set()
     table = Table(
         title=f"[bold]{path}[/bold]",
         title_justify="left",
@@ -85,18 +86,20 @@ def _render_summary_table(report: SC.Report, path: str) -> None:
     table.add_column("after", overflow="fold", max_width=60, style="green")
 
     for cr in report.cues:
-        if not cr.steps:
+        visible = [h for h in cr.steps if h.rule_id not in disabled]
+        if not visible:
             continue
         time_s = f"{cr.start_ms_in / 1000:.2f}→{cr.end_ms_in / 1000:.2f}"
-        rules = ", ".join(h.rule_id for h in cr.steps)
+        rules = ", ".join(h.rule_id for h in visible)
         table.add_row(str(cr.index_in), time_s, rules, cr.text_in, cr.text_out)
 
     _console.print(table)
-    _console.print(_summary_panel(report, path))
+    _console.print(_summary_panel(report, path, disabled=disabled))
 
 
-def _render_detail_table(report: SC.Report, path: str) -> None:
+def _render_detail_table(report: SC.Report, path: str, *, disabled: set[str] | None = None) -> None:
     """Expand each cue into: in / step1..N / out rows with rule + reason + text."""
+    disabled = disabled or set()
     table = Table(
         title=f"[bold]{path}[/bold]",
         title_justify="left",
@@ -112,22 +115,24 @@ def _render_detail_table(report: SC.Report, path: str) -> None:
     table.add_column("text", overflow="fold", max_width=70)
 
     for cr in report.cues:
-        if not cr.steps:
+        visible = [h for h in cr.steps if h.rule_id not in disabled]
+        if not visible:
             continue
         time_s = f"{cr.start_ms_in / 1000:.2f}→{cr.end_ms_in / 1000:.2f}"
         # 'in' row
         table.add_row(str(cr.index_in), time_s, "in", "", "", cr.text_in)
-        for idx, h in enumerate(cr.steps, 1):
+        for idx, h in enumerate(visible, 1):
             reason = SC._RULE_REASONS.get(h.rule_id, "")
             table.add_row("", "", f"step{idx}", h.rule_id, reason, h.after)
         # 'out' row
         table.add_row("", "", "[bold green]out[/bold green]", "", "", f"[green]{cr.text_out}[/green]")
 
     _console.print(table)
-    _console.print(_summary_panel(report, path))
+    _console.print(_summary_panel(report, path, disabled=disabled))
 
 
-def _summary_panel(report: SC.Report, path: str) -> str:
+def _summary_panel(report: SC.Report, path: str, *, disabled: set[str] | None = None) -> str:
+    disabled = disabled or set()
     changed = sum(1 for c in report.cues if c.steps)
     pct = (changed / report.cues_in * 100) if report.cues_in else 0.0
     from collections import Counter
@@ -136,7 +141,11 @@ def _summary_panel(report: SC.Report, path: str) -> str:
     for c in report.cues:
         for h in c.steps:
             counts[h.rule_id] += 1
-    rules = ", ".join(f"[magenta]{r}[/magenta]×{n}" for r, n in sorted(counts.items()))
+    rule_parts = []
+    for r, n in sorted(counts.items()):
+        marker = " [dim](hidden)[/dim]" if r in disabled else ""
+        rule_parts.append(f"[magenta]{r}[/magenta]×{n}{marker}")
+    rules = ", ".join(rule_parts)
     return (
         f"[bold]─── FILE SUMMARY ───[/bold]\n"
         f"path:            {path}\n"
@@ -223,6 +232,13 @@ def main() -> int:
         default=0,
         help="Cap number of printed reports (0 = no cap). Useful with --all.",
     )
+    p.add_argument(
+        "--disable-rules",
+        nargs="+",
+        default=[],
+        metavar="RULE",
+        help="Hide these rule IDs from the rendered table (recording is unaffected). Example: --disable-rules C7 C8",
+    )
 
     args = p.parse_args()
 
@@ -243,6 +259,7 @@ def main() -> int:
         args.jsonl_out.mkdir(parents=True, exist_ok=True)
 
     wanted = set(args.require_rule)
+    disabled = set(args.disable_rules)
     printed = 0
     skipped_unchanged = 0
     skipped_rule = 0
@@ -267,7 +284,7 @@ def main() -> int:
         rel = str(path)
         if args.max_print == 0 or printed < args.max_print:
             renderer = _render_detail_table if args.detail else _render_summary_table
-            renderer(report, rel)
+            renderer(report, rel, disabled=disabled)
             print()
             printed += 1
 

@@ -683,7 +683,8 @@ def clean_with_report(content: str) -> tuple[list[Cue], Report]:
 # ---------------------------------------------------------------------------
 
 
-def _format_summary(report: Report, path: str | None = None) -> str:
+def _format_summary(report: Report, path: str | None = None, *, disable_rules: set[str] | None = None) -> str:
+    disabled = disable_rules or set()
     lines = ["─── FILE SUMMARY " + "─" * 56]
     if path:
         lines.append(f"path:            {path}")
@@ -698,7 +699,8 @@ def _format_summary(report: Report, path: str | None = None) -> str:
     lines.append(f"cues modified:   {n_mod}   ({pct:.1f}%)")
     if report.rule_counts:
         items = sorted(report.rule_counts.items(), key=lambda kv: (-kv[1], kv[0]))
-        lines.append("rules triggered: " + ", ".join(f"{k}×{v}" for k, v in items))
+        rendered = ", ".join(f"{k}×{v}" + (" (hidden)" if k in disabled else "") for k, v in items)
+        lines.append("rules triggered: " + rendered)
     return "\n".join(lines)
 
 
@@ -708,19 +710,38 @@ def format_report(
     path: str | None = None,
     level: str = "full",
     only_modified: bool = True,
+    disable_rules: set[str] | None = None,
 ) -> str:
     """Format a report as human-readable text.
 
     ``level`` in {"minimal", "result", "full"}.
+
+    ``disable_rules`` — render-time filter only. Hides ``RuleHit`` whose
+    ``rule_id`` is in the set; the underlying ``Report`` is unchanged.
+    A cue whose every step is disabled becomes "unmodified" for filtering
+    purposes (skipped when ``only_modified=True``).
     """
     if level not in ("minimal", "result", "full"):
         raise ValueError(f"unknown level: {level!r}")
 
+    disabled = disable_rules or set()
+
     def _esc(s: str) -> str:
         return s.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
 
+    def _visible_steps(rep: CueReport) -> list[RuleHit]:
+        return [h for h in rep.steps if h.rule_id not in disabled]
+
     parts: list[str] = []
     for rep in report.cues:
+        visible = _visible_steps(rep)
+        # When `only_modified=True`, a cue is "interesting" iff at least one
+        # visible step remains. Disabling rules can make a cue effectively
+        # unmodified for rendering purposes, even though its underlying
+        # ``text_in`` and ``text_out`` differ — that change came from a
+        # rule the caller chose to hide.
+        if only_modified and not visible and rep.modified:
+            continue
         if only_modified and not rep.modified:
             continue
         ts_out = f"{_ms_to_ts(rep.start_ms_out)} --> {_ms_to_ts(rep.end_ms_out)}" if rep.index_out is not None else "<dropped>"
@@ -732,20 +753,21 @@ def format_report(
             block.append(f"  + {_esc(rep.text_out)}")
         elif level == "result":
             block.append(f"  in:   {_esc(rep.text_in)}")
-            for h in rep.steps:
+            for h in visible:
                 block.append(f"  after {h.rule_id}: {_esc(h.after)}")
             block.append(f"  out:  {_esc(rep.text_out)}")
         else:  # full
             block.append(f"  in:   {_esc(rep.text_in)}")
-            for h in rep.steps:
+            for h in visible:
                 block.append(f"  step {h.rule_id}  [{h.reason}]")
                 block.append(f"           → {_esc(h.after)}")
             block.append(f"  out:  {_esc(rep.text_out)}")
         parts.append("\n".join(block))
 
+    summary = _format_summary(report, path, disable_rules=disabled)
     if parts:
-        return "\n\n".join(parts) + "\n\n" + _format_summary(report, path) + "\n"
-    return _format_summary(report, path) + "\n"
+        return "\n\n".join(parts) + "\n\n" + summary + "\n"
+    return summary + "\n"
 
 
 def report_to_jsonl(report: Report, *, path: str | None = None) -> list[str]:

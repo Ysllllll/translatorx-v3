@@ -152,3 +152,42 @@ Tom &amp; Jerry
     _, report = SC.clean_with_report(src)
     rule_ids = {h.rule_id for c in report.cues for h in c.steps}
     assert "C10" in rule_ids
+
+
+def test_disable_rules_renders_filtered_only():
+    src = """1
+00:00:01,000 --> 00:00:02,000
+Tom &amp; Jerry  say  hello
+
+2
+00:00:03,000 --> 00:00:04,000
+hello ,  world
+"""
+    _, report = SC.clean_with_report(src)
+    full = SC.format_report(report, level="result")
+    # C8 (multi-space) appears in both cues
+    assert "C8" in full
+    assert "C10" in full
+
+    filtered = SC.format_report(report, level="result", disable_rules={"C8", "C10"})
+    # C8 / C10 should not appear in step lines
+    assert "after C8:" not in filtered
+    assert "after C10:" not in filtered
+    # Underlying report still has the steps recorded
+    rule_ids = {h.rule_id for c in report.cues for h in c.steps}
+    assert {"C8", "C10"} <= rule_ids
+    # rules-triggered line should mark them as hidden
+    assert "(hidden)" in filtered
+
+
+def test_disable_rules_only_modified_skips_fully_hidden_cues():
+    src = """1
+00:00:01,000 --> 00:00:02,000
+hello,world
+"""
+    # Only C7 fires here. Disabling C7 should make the cue look unmodified.
+    _, report = SC.clean_with_report(src)
+    out = SC.format_report(report, level="minimal", disable_rules={"C7"}, only_modified=True)
+    # No cue header (#1) in body, only the summary
+    assert "#1" not in out
+    assert "FILE SUMMARY" in out
