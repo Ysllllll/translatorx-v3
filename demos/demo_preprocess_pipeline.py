@@ -148,9 +148,16 @@ def _print_subtitle_state(sub: Subtitle, *, label: str) -> None:
             print(f"      words[0:6]: {head}{tail}  span=[{words[0].start:.2f}, {words[-1].end:.2f}]")
 
 
-def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | None) -> None:
+def run_pipeline(
+    srt_text: str,
+    *,
+    language: str,
+    real: bool,
+    engine_url: str | None,
+    max_len: int,
+) -> None:
     segments = parse_srt(sanitize_srt(srt_text))
-    print(f"\nInput: {len(segments)} SRT segments, language={language}")
+    print(f"\nInput: {len(segments)} SRT segments, language={language}, max_len={max_len}")
 
     punc_fn = None
     if real:
@@ -159,12 +166,12 @@ def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | 
         punc_fn = _mock_punc_restore
 
     if real:
-        chunk_fn = build_real_chunker(language, engine_url=engine_url, max_len=60)
+        chunk_fn = build_real_chunker(language, engine_url=engine_url, max_len=max_len)
     else:
         ops = LangOps.for_language(language)
 
         def chunk_fn(texts: list[str]) -> list[list[str]]:
-            return [ops.split_by_length(t, 60) for t in texts]
+            return [ops.split_by_length(t, max_len) for t in texts]
 
     # ── STEP 0: raw SRT segments ──────────────────────────────────
     print("\n" + "=" * 60)
@@ -234,14 +241,14 @@ def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | 
     print("Expected: each sentence pipeline splits into clause chunks at")
     print("inner punctuation (, ; :). Clause count >= 1 per sentence.")
     print("=" * 60)
-    sub3 = sub2b.clauses(merge_under=90)
+    sub3 = sub2b.clauses(merge_under=max_len)
     _print_subtitle_state(sub3, label="step4")
     total_clauses = sum(len(p.result()) for p in sub3._pipelines)  # noqa: SLF001
     print(f"  ✓ total clauses across all sentences: {total_clauses}")
 
     # ── STEP 5: .transform(chunk, scope='chunk') ──────────────────
     print("\n" + "=" * 60)
-    print("STEP 5 — .transform(chunk_fn, scope='chunk')  [max_len=60]")
+    print(f"STEP 5 — .transform(chunk_fn, scope='chunk')  [max_len={max_len}]")
     print("Expected: each clause is passed individually to chunk_fn. Clauses")
     print("already <= max_len pass through unchanged; longer ones are split.")
     print("=" * 60)
@@ -249,23 +256,23 @@ def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | 
     _print_subtitle_state(sub4, label="step5")
     ops = LangOps.for_language(language)
     total_out = sum(len(p.result()) for p in sub4._pipelines)  # noqa: SLF001
-    over = [c for p in sub4._pipelines for c in p.result() if ops.length(c) > 60]  # noqa: SLF001
+    over = [c for p in sub4._pipelines for c in p.result() if ops.length(c) > max_len]  # noqa: SLF001
     print(f"  ✓ total output chunks: {total_out}")
     if over:
-        print(f"  ⚠ {len(over)} chunks still > 60 (chunk_fn may have left long pieces): {over[:2]}")
+        print(f"  ⚠ {len(over)} chunks still > {max_len} (chunk_fn may have left long pieces): {over[:2]}")
     else:
         print("  ✓ self-check: all chunks within max_len")
 
     # ── STEP 6: .merge(max_len) — recombine short chunks ──────────
     print("\n" + "=" * 60)
-    print("STEP 6 — .merge(max_len=60)")
+    print(f"STEP 6 — .merge(max_len={max_len})")
     print("Expected: adjacent chunks within the same pipeline are greedily")
     print("recombined up to max_len. This is the second half of the standard")
     print("split→merge pair: chunk_fn tends to leave short tails (e.g. a")
     print("comma-clause like 'and so on'); merging folds them back into")
     print("neighbours so we ship fewer, better-sized segments.")
     print("=" * 60)
-    sub5 = sub4.merge(60)
+    sub5 = sub4.merge(max_len)
     _print_subtitle_state(sub5, label="step6")
     merged_total = sum(len(p.result()) for p in sub5._pipelines)  # noqa: SLF001
     print(f"  ✓ total output chunks: {merged_total} (was {total_out} before merge)")
@@ -335,7 +342,15 @@ def main() -> None:
     parser.add_argument("--language", default="en", help="Language code (default: en).")
     parser.add_argument("--real", action="store_true", help="Use real backends (ner + spacy + rule).")
     parser.add_argument(
-        "--engine", default=None, help="LLM engine base_url for chunk stage (e.g. http://localhost:26592/v1). Requires --real."
+        "--engine",
+        default=None,
+        help="LLM engine base_url for chunk stage (e.g. http://localhost:26592/v1). Requires --real.",
+    )
+    parser.add_argument(
+        "--max-len",
+        type=int,
+        default=60,
+        help="Target chunk size (drives clauses/chunk/merge together). Default: 60.",
     )
     args = parser.parse_args()
 
@@ -351,7 +366,13 @@ def main() -> None:
         print(f"LLM engine: {args.engine}")
     print("=" * 60)
 
-    run_pipeline(srt_text, language=args.language, real=args.real, engine_url=args.engine)
+    run_pipeline(
+        srt_text,
+        language=args.language,
+        real=args.real,
+        engine_url=args.engine,
+        max_len=args.max_len,
+    )
 
 
 if __name__ == "__main__":

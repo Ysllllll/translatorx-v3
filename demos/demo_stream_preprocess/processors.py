@@ -88,12 +88,10 @@ class PreprocessProcessor:
         language: str,
         chunk_fn: Callable[[list[str]], list[list[str]]],
         max_len: int = 60,
-        merge_under: int = 90,
     ) -> None:
         self._language = language
         self._chunk_fn = chunk_fn
         self._max_len = max_len
-        self._merge_under = merge_under
 
     def fingerprint(self) -> str:
         return "demo"
@@ -114,18 +112,14 @@ class PreprocessProcessor:
                 yield replace(new, extra=dict(extra))
 
     def _build_records(self, rec: SentenceRecord) -> list[SentenceRecord]:
-        # ``.sentences()`` scopes downstream ops to a sentence-level
-        # pipeline so ``.records()`` yields one enriched record (chunks
-        # stay *inside* the sentence instead of being promoted to their
-        # own records).
-        #
-        # The final ``.merge(max_len)`` is the standard split→merge pair:
-        # ``transform(chunk_fn, scope="chunk")`` can leave adjacent
-        # short chunks (e.g. one-clause tail fragments) that fit well
-        # within ``max_len`` when recombined. Without the merge we'd
-        # ship more, shorter segments than necessary.
+        # Single length budget drives the whole pipeline: clauses short
+        # enough to fit individually are merged back by clauses(...),
+        # longer ones are cut by chunk_fn, and merge(max_len) folds
+        # adjacent short tails. All three knobs therefore use the same
+        # number — ``self._max_len`` — so the target chunk size is
+        # configured in exactly one place.
         sub = Subtitle(list(rec.segments), language=self._language)
-        sub = sub.sentences().clauses(merge_under=self._merge_under).transform(self._chunk_fn, scope="chunk").merge(self._max_len)
+        sub = sub.sentences().clauses(merge_under=self._max_len).transform(self._chunk_fn, scope="chunk").merge(self._max_len)
         return sub.records()
 
     async def aclose(self) -> None:

@@ -103,14 +103,26 @@ That's why the punc test has a `flush_partial` case.
 sub = Subtitle(list(rec.segments), language=self._language)
 sub = (
     sub.sentences()
-       .clauses(merge_under=self._merge_under)
+       .clauses(merge_under=self._max_len)
        .transform(self._chunk_fn, scope="chunk")
        .merge(self._max_len)
 )
 return sub.records()
 ```
 
-Two bookends, each with a clear job.
+Two bookends and one length budget, each with a clear job.
+
+### One `max_len` for the whole pipeline
+
+The three length-aware stages (`clauses(merge_under=...)`, the
+`chunk_fn` invoked by `transform`, and `.merge(...)`) all take a
+length threshold. The demo passes `self._max_len` to all three so the
+target chunk size is configured in exactly one place. Splitting this
+across two or three independent knobs is an easy way to ship code
+that *looks* like it parameterises everything but actually drifts
+— e.g. `clauses(merge_under=90)` combined with `merge(60)` means the
+clause stage merges things back together that the merge stage would
+have kept separate, then re-splits them, wasting cycles.
 
 ### `.sentences()` first — scoping
 
