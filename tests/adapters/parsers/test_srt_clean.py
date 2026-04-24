@@ -111,3 +111,44 @@ def test_sdh_brackets_and_music_preserved():
     # SDH brackets + music note preserved (non-destructive cleaning)
     assert "\u266a" in cues[0].text
     assert "[Applause]" in cues[0].text
+
+
+def test_c10_html_entity_decode():
+    src = """1
+00:00:01,000 --> 00:00:02,000
+Tom &amp; Jerry&nbsp;say &lt;hi&gt; &#169; 2024
+
+2
+00:00:03,000 --> 00:00:04,000
+&lt;p&gt;should decode first, then be stripped&lt;/p&gt;
+
+3
+00:00:05,000 --> 00:00:06,000
+&unknownentity; stays
+
+4
+00:00:07,000 --> 00:00:08,000
+smart quotes &ldquo;ok&rdquo; and &mdash; dash
+"""
+    cues = SC.clean(src)
+    # &amp; -> &, &nbsp; -> ASCII space (via C2), &lt;/&gt; -> </>, &#169; -> (c)
+    assert cues[0].text == "Tom & Jerry say <hi> \u00a9 2024"
+    # entity-encoded tags decode then C6 strips the real tag
+    assert cues[1].text == "should decode first, then be stripped"
+    # unknown entity left intact
+    assert "&unknownentity;" in cues[2].text
+    # named smart-quote entities decoded to ASCII
+    assert '"ok"' in cues[3].text
+    # idempotence
+    dumped = SC.dump(cues)
+    assert SC.dump(SC.clean(dumped)) == dumped
+
+
+def test_c10_appears_in_report():
+    src = """1
+00:00:01,000 --> 00:00:02,000
+Tom &amp; Jerry
+"""
+    _, report = SC.clean_with_report(src)
+    rule_ids = {h.rule_id for c in report.cues for h in c.steps}
+    assert "C10" in rule_ids

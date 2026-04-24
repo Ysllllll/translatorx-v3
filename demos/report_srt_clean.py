@@ -46,9 +46,17 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from adapters.parsers import srt_clean as SC  # noqa: E402
+from rich.console import Console  # noqa: E402
+from rich.table import Table  # noqa: E402
+from rich import box  # noqa: E402
 
 
 DEFAULT_GLOB = "*/*/zzz_subtitle/*.srt"
+
+# Console prints to stdout; rich handles CJK width, truncation, and wrapping
+# automatically. We use `soft_wrap=False` + `overflow="fold"` so long lines
+# wrap inside their cells rather than truncating.
+_console = Console(soft_wrap=False, highlight=False)
 
 
 def _discover(root: str, pattern: str) -> list[Path]:
@@ -57,143 +65,69 @@ def _discover(root: str, pattern: str) -> list[Path]:
 
 
 # ---------------------------------------------------------------------------
-# Table rendering (Style B — multi-line cells with real newlines)
+# Table rendering via rich.Table (handles CJK widths properly)
 # ---------------------------------------------------------------------------
 
 
-def _wrap_lines(text: str, width: int) -> list[str]:
-    """Preserve real newlines, hard-wrap each physical line to `width`."""
-    out: list[str] = []
-    for line in text.split("\n"):
-        while len(line) > width:
-            out.append(line[:width])
-            line = line[width:]
-        out.append(line)
-    return out or [""]
-
-
-def _border(widths: list[int], kind: str) -> str:
-    # kind: top | mid | bot
-    left, joint, right = {
-        "top": ("╭", "┬", "╮"),
-        "mid": ("├", "┼", "┤"),
-        "bot": ("╰", "┴", "╯"),
-    }[kind]
-    return left + joint.join("─" * (w + 2) for w in widths) + right
-
-
-def _row(cells: list[str], widths: list[int]) -> str:
-    parts = [f" {c.ljust(w)} " for c, w in zip(cells, widths)]
-    return "│" + "│".join(parts) + "│"
-
-
-def _render_summary_table(report: SC.Report, path: str) -> str:
+def _render_summary_table(report: SC.Report, path: str) -> None:
     """One row per changed cue: # | time | rules | before | after."""
-    headers = ["#", "time", "rules", "before", "after"]
-    widths = [4, 19, 18, 48, 48]
+    table = Table(
+        title=f"[bold]{path}[/bold]",
+        title_justify="left",
+        box=box.ROUNDED,
+        show_lines=True,
+        expand=False,
+    )
+    table.add_column("#", justify="right", no_wrap=True, style="cyan")
+    table.add_column("time", no_wrap=True, style="dim")
+    table.add_column("rules", no_wrap=True, style="magenta")
+    table.add_column("before", overflow="fold", max_width=60)
+    table.add_column("after", overflow="fold", max_width=60, style="green")
 
-    lines = [_border(widths, "top"), _row(headers, widths), _border(widths, "mid")]
-    first = True
     for cr in report.cues:
         if not cr.steps:
             continue
-        if not first:
-            lines.append(_border(widths, "mid"))
-        first = False
-
         time_s = f"{cr.start_ms_in / 1000:.2f}→{cr.end_ms_in / 1000:.2f}"
         rules = ", ".join(h.rule_id for h in cr.steps)
-        left = _wrap_lines(cr.text_in, widths[3])
-        right = _wrap_lines(cr.text_out, widths[4])
-        n = max(len(left), len(right))
-        for i in range(n):
-            lines.append(
-                _row(
-                    [
-                        str(cr.index_in) if i == 0 else "",
-                        time_s if i == 0 else "",
-                        rules if i == 0 else "",
-                        left[i] if i < len(left) else "",
-                        right[i] if i < len(right) else "",
-                    ],
-                    widths,
-                )
-            )
-    lines.append(_border(widths, "bot"))
-    lines.append(_format_summary(report, path))
-    return "\n".join(lines)
+        table.add_row(str(cr.index_in), time_s, rules, cr.text_in, cr.text_out)
+
+    _console.print(table)
+    _console.print(_summary_panel(report, path))
 
 
-def _render_detail_table(report: SC.Report, path: str) -> str:
+def _render_detail_table(report: SC.Report, path: str) -> None:
     """Expand each cue into: in / step1..N / out rows with rule + reason + text."""
-    headers = ["#", "time", "phase", "rule", "reason", "text"]
-    widths = [4, 19, 6, 4, 26, 60]
+    table = Table(
+        title=f"[bold]{path}[/bold]",
+        title_justify="left",
+        box=box.ROUNDED,
+        show_lines=True,
+        expand=False,
+    )
+    table.add_column("#", justify="right", no_wrap=True, style="cyan")
+    table.add_column("time", no_wrap=True, style="dim")
+    table.add_column("phase", no_wrap=True, style="yellow")
+    table.add_column("rule", no_wrap=True, style="magenta")
+    table.add_column("reason", overflow="fold", max_width=40)
+    table.add_column("text", overflow="fold", max_width=70)
 
-    lines = [_border(widths, "top"), _row(headers, widths), _border(widths, "mid")]
-    first = True
     for cr in report.cues:
         if not cr.steps:
             continue
-        if not first:
-            lines.append(_border(widths, "mid"))
-        first = False
-
         time_s = f"{cr.start_ms_in / 1000:.2f}→{cr.end_ms_in / 1000:.2f}"
-
-        # 'in' row with original text (may be multi-line)
-        in_lines = _wrap_lines(cr.text_in, widths[5])
-        for i, tl in enumerate(in_lines):
-            lines.append(
-                _row(
-                    [
-                        str(cr.index_in) if i == 0 else "",
-                        time_s if i == 0 else "",
-                        "in" if i == 0 else "",
-                        "",
-                        "",
-                        tl,
-                    ],
-                    widths,
-                )
-            )
-
-        # One set of rows per step
+        # 'in' row
+        table.add_row(str(cr.index_in), time_s, "in", "", "", cr.text_in)
         for idx, h in enumerate(cr.steps, 1):
             reason = SC._RULE_REASONS.get(h.rule_id, "")
-            step_lines = _wrap_lines(h.after, widths[5])
-            reason_lines = _wrap_lines(reason, widths[4])
-            rows = max(len(step_lines), len(reason_lines))
-            for i in range(rows):
-                lines.append(
-                    _row(
-                        [
-                            "",
-                            "",
-                            f"step{idx}" if i == 0 else "",
-                            h.rule_id if i == 0 else "",
-                            reason_lines[i] if i < len(reason_lines) else "",
-                            step_lines[i] if i < len(step_lines) else "",
-                        ],
-                        widths,
-                    )
-                )
+            table.add_row("", "", f"step{idx}", h.rule_id, reason, h.after)
+        # 'out' row
+        table.add_row("", "", "[bold green]out[/bold green]", "", "", f"[green]{cr.text_out}[/green]")
 
-        # 'out' row with final text
-        out_lines = _wrap_lines(cr.text_out, widths[5])
-        for i, tl in enumerate(out_lines):
-            lines.append(
-                _row(
-                    ["", "", "out" if i == 0 else "", "", "", tl],
-                    widths,
-                )
-            )
-
-    lines.append(_border(widths, "bot"))
-    lines.append(_format_summary(report, path))
-    return "\n".join(lines)
+    _console.print(table)
+    _console.print(_summary_panel(report, path))
 
 
-def _format_summary(report: SC.Report, path: str) -> str:
+def _summary_panel(report: SC.Report, path: str) -> str:
     changed = sum(1 for c in report.cues if c.steps)
     pct = (changed / report.cues_in * 100) if report.cues_in else 0.0
     from collections import Counter
@@ -202,12 +136,12 @@ def _format_summary(report: SC.Report, path: str) -> str:
     for c in report.cues:
         for h in c.steps:
             counts[h.rule_id] += 1
-    rules = ", ".join(f"{r}×{n}" for r, n in sorted(counts.items()))
+    rules = ", ".join(f"[magenta]{r}[/magenta]×{n}" for r, n in sorted(counts.items()))
     return (
-        f"\n─── FILE SUMMARY ───\n"
+        f"[bold]─── FILE SUMMARY ───[/bold]\n"
         f"path:            {path}\n"
         f"cues in / out:   {report.cues_in} / {report.cues_out}\n"
-        f"cues modified:   {changed}   ({pct:.1f}%)\n"
+        f"cues modified:   [cyan]{changed}[/cyan]   ({pct:.1f}%)\n"
         f"rules triggered: {rules or '(none)'}\n"
     )
 
@@ -333,7 +267,7 @@ def main() -> int:
         rel = str(path)
         if args.max_print == 0 or printed < args.max_print:
             renderer = _render_detail_table if args.detail else _render_summary_table
-            print(renderer(report, rel))
+            renderer(report, rel)
             print()
             printed += 1
 
