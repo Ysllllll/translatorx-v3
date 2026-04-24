@@ -1,10 +1,17 @@
-"""Data types for SRT cleaning."""
+"""Data types for SRT cleaning.
+
+``CueReport`` / ``Report`` are kept as SRT-specialized dataclasses (rather
+than the generic :class:`engine.report.ItemReport`) because callers depend
+on the specific fields (``start_ms_in``, ``text_out`` etc.) for their own
+rendering. See :mod:`adapters.parsers.srt.pipeline` for how we bridge
+between the engine's generic tracker output and these dataclasses.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .._reporting import RuleHit
+from ..engine import RuleHit
 
 __all__ = [
     "Cue",
@@ -19,7 +26,7 @@ __all__ = [
 
 @dataclass
 class Cue:
-    """One SRT cue. Immutable from the outside after parse; we mutate during clean."""
+    """One SRT cue. Mutated in-place during timestamp rules."""
 
     start_ms: int
     end_ms: int
@@ -29,7 +36,7 @@ class Cue:
 
 @dataclass
 class CueReport:
-    """Report for a single cue: input, output, and every rule that touched it."""
+    """Per-cue report: input, output, and every rule that touched it."""
 
     index_in: int
     index_out: int | None
@@ -48,7 +55,7 @@ class CueReport:
 
 @dataclass
 class Report:
-    """Full cleaning report for one SRT content."""
+    """Full SRT cleaning report."""
 
     cues: list[CueReport]
     cues_in: int

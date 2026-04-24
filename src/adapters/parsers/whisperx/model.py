@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .._reporting import RuleHit
+from ..engine import RuleHit
 
 __all__ = ["WordReport", "WhisperXReport", "RuleHit"]
 
 
 @dataclass
 class WordReport:
-    """Report for a single input word: input, output, and every rule that touched it."""
+    """Per-input word: original, final, and every rule that touched it."""
 
     index_in: int
     index_out: int | None

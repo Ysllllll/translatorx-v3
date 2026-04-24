@@ -1,11 +1,14 @@
-"""WhisperX sanitization rules — each rule supports an optional tracker.
+"""WhisperX sanitization rules as :class:`engine.Rule` ``[dict]`` instances.
 
-A tracker is a ``dict[int, list[RuleHit]]`` keyed by the **origin index** of
-each input word (its position in the raw ``word_segments`` list). Rules take
-both ``words`` and a parallel ``origins`` list so hits can be attributed back
-to the original input word even after dicts are replaced / merged / dropped.
+Each rule operates on a raw ``word_segments`` list (list of dicts). A
+rule's ``origin`` id is the word's index in the original input, stable
+across every transformation (drops, merges, splits, replacements). This
+is what lets :class:`~engine.RecordingTracker` attribute rule hits back
+to the correct input word for report generation.
 
-Each rule returns ``(new_words, new_origins)``.
+Legacy helpers ``_dedup_untimed`` / ``_interpolate_timestamps`` /
+``_attach_punctuation`` / ``_collapse_repeats`` / ``_replace_long_words``
+are retained as thin wrappers for tests that import them directly.
 """
 
 from __future__ import annotations
@@ -13,7 +16,8 @@ from __future__ import annotations
 import re
 import string
 
-from .._reporting import RuleHit
+from ..engine import Rule
+from ..engine.rule import RuleHit
 
 
 _WORD_REASONS: dict[str, str] = {
@@ -40,228 +44,272 @@ def _fmt(word: dict) -> str:
 # ── W1: dedup untimed ──────────────────────────────────────────────────
 
 
-def w1_dedup_untimed(
-    words: list[dict],
-    origins: list[int],
-    track: dict[int, list[RuleHit]] | None = None,
-) -> tuple[list[dict], list[int]]:
-    if not words:
-        return words, origins
-    result: list[dict] = [words[0]]
-    new_origins: list[int] = [origins[0]]
-    for w, o in zip(words[1:], origins[1:]):
-        prev = result[-1]
-        if prev.get("start") is None and w.get("start") is None and prev["word"] == w["word"]:
-            if track is not None:
-                track.setdefault(o, []).append(RuleHit("W1", _reason("W1"), _fmt(w), "<dropped>"))
-            continue
-        result.append(w)
-        new_origins.append(o)
-    return result, new_origins
+class W1DedupUntimed(Rule[dict]):
+    id = "W1"
+    reason = _reason("W1")
+    lookahead = 1
+
+    def apply(self, items, origins, *, tracker):
+        if not items:
+            return items, origins
+        result: list[dict] = [items[0]]
+        new_origins: list[int] = [origins[0]]
+        for w, o in zip(items[1:], origins[1:]):
+            prev = result[-1]
+            if prev.get("start") is None and w.get("start") is None and prev["word"] == w["word"]:
+                tracker.fire(self.id, self.reason, before=_fmt(w), after="<dropped>", origin=o)
+                continue
+            result.append(w)
+            new_origins.append(o)
+        return result, new_origins
 
 
 # ── W2: interpolate timestamps ────────────────────────────────────────
 
 
-def w2_interpolate_timestamps(
-    words: list[dict],
-    origins: list[int],
-    track: dict[int, list[RuleHit]] | None = None,
-) -> tuple[list[dict], list[int]]:
-    if not words:
-        return words, origins
+class W2InterpolateTimestamps(Rule[dict]):
+    id = "W2"
+    reason = _reason("W2")
+    # Conservative upper bound; W2 scans forward to the next timed word.
+    lookahead = 10
 
-    result: list[dict] = []
-    new_origins: list[int] = []
-    total_duration = 0.0
-    total_chars = 1e-7
+    def apply(self, items, origins, *, tracker):
+        if not items:
+            return items, origins
 
-    for idx, (word, origin) in enumerate(zip(words, origins)):
-        if word.get("start") is not None:
-            result.append(word)
+        result: list[dict] = []
+        new_origins: list[int] = []
+        total_duration = 0.0
+        total_chars = 1e-7
+
+        for idx, (word, origin) in enumerate(zip(items, origins)):
+            if word.get("start") is not None:
+                result.append(word)
+                new_origins.append(origin)
+                total_duration += word["end"] - word["start"]
+                total_chars += len(word["word"])
+                continue
+
+            prev_end = result[-1]["end"] if result else 0.0
+            next_start = None
+            for j in range(idx + 1, len(items)):
+                if items[j].get("start") is not None:
+                    next_start = items[j]["start"]
+                    break
+
+            if next_start is not None and abs(prev_end - next_start) < 1e-6:
+                if result:
+                    steal = min(1.0, result[-1]["end"] - result[-1]["start"]) * 0.01
+                    prev_end = prev_end - steal
+                    result[-1] = {**result[-1], "end": prev_end}
+
+            char_rate = total_duration / total_chars
+            estimated = char_rate * len(word["word"])
+            upper = next_start if next_start is not None else prev_end + estimated
+            end = min(upper, prev_end + estimated)
+
+            before = _fmt(word)
+            patched = {**word, "start": prev_end, "end": end, "score": 0.0}
+            result.append(patched)
             new_origins.append(origin)
-            total_duration += word["end"] - word["start"]
+            tracker.fire(self.id, self.reason, before=before, after=_fmt(patched), origin=origin)
+            total_duration += end - prev_end
             total_chars += len(word["word"])
-            continue
 
-        prev_end = result[-1]["end"] if result else 0.0
-        next_start = None
-        for j in range(idx + 1, len(words)):
-            if words[j].get("start") is not None:
-                next_start = words[j]["start"]
-                break
-
-        if next_start is not None and abs(prev_end - next_start) < 1e-6:
-            if result:
-                steal = min(1.0, result[-1]["end"] - result[-1]["start"]) * 0.01
-                prev_end = prev_end - steal
-                result[-1] = {**result[-1], "end": prev_end}
-
-        char_rate = total_duration / total_chars
-        estimated = char_rate * len(word["word"])
-        upper = next_start if next_start is not None else prev_end + estimated
-        end = min(upper, prev_end + estimated)
-
-        before = _fmt(word)
-        patched = {**word, "start": prev_end, "end": end, "score": 0.0}
-        result.append(patched)
-        new_origins.append(origin)
-        if track is not None:
-            track.setdefault(origin, []).append(RuleHit("W2", _reason("W2"), before, _fmt(patched)))
-        total_duration += end - prev_end
-        total_chars += len(word["word"])
-
-    return result, new_origins
+        return result, new_origins
 
 
 # ── W3: collapse repeats ──────────────────────────────────────────────
 
 
-def w3_collapse_repeats(
-    words: list[dict],
-    origins: list[int],
-    pattern_len: int = 2,
-    min_repeats: int = 4,
-    track: dict[int, list[RuleHit]] | None = None,
-) -> tuple[list[dict], list[int]]:
-    if not words:
-        return words, origins
+class W3CollapseRepeats(Rule[dict]):
+    id = "W3"
+    reason = _reason("W3")
 
-    result: list[dict] = []
-    new_origins: list[int] = []
-    i = 0
-    n = len(words)
+    def __init__(self, *, pattern_len: int = 2, min_repeats: int = 4) -> None:
+        self._pattern_len = pattern_len
+        self._min_repeats = min_repeats
+        self.lookahead = pattern_len * min_repeats
 
-    while i < n:
-        repeat_count = 1
-        j = i + pattern_len
-        while j + pattern_len <= n:
-            match = True
-            for k in range(pattern_len):
-                if words[j + k]["word"] != words[i + k]["word"]:
-                    match = False
+    def apply(self, items, origins, *, tracker):
+        if not items:
+            return items, origins
+        pattern_len = self._pattern_len
+        min_repeats = self._min_repeats
+        result: list[dict] = []
+        new_origins: list[int] = []
+        i = 0
+        n = len(items)
+
+        while i < n:
+            repeat_count = 1
+            j = i + pattern_len
+            while j + pattern_len <= n:
+                match = True
+                for k in range(pattern_len):
+                    if items[j + k]["word"] != items[i + k]["word"]:
+                        match = False
+                        break
+                if not match:
                     break
-            if not match:
-                break
-            repeat_count += 1
-            j += pattern_len
+                repeat_count += 1
+                j += pattern_len
 
-        if repeat_count >= min_repeats:
-            result.extend(words[i : i + pattern_len])
-            new_origins.extend(origins[i : i + pattern_len])
-            if track is not None:
+            if repeat_count >= min_repeats:
+                result.extend(items[i : i + pattern_len])
+                new_origins.extend(origins[i : i + pattern_len])
                 for k in range(i + pattern_len, j):
-                    track.setdefault(origins[k], []).append(RuleHit("W3", _reason("W3"), _fmt(words[k]), "<collapsed repeat>"))
-            i = j
-        else:
-            result.append(words[i])
-            new_origins.append(origins[i])
-            i += 1
+                    tracker.fire(
+                        self.id,
+                        self.reason,
+                        before=_fmt(items[k]),
+                        after="<collapsed repeat>",
+                        origin=origins[k],
+                    )
+                i = j
+            else:
+                result.append(items[i])
+                new_origins.append(origins[i])
+                i += 1
 
-    return result, new_origins
+        return result, new_origins
 
 
 # ── W4: replace long words ────────────────────────────────────────────
 
 
-def w4_replace_long_words(
-    words: list[dict],
-    origins: list[int],
-    max_len: int = 30,
-    track: dict[int, list[RuleHit]] | None = None,
-) -> tuple[list[dict], list[int]]:
-    result: list[dict] = []
-    new_origins: list[int] = []
-    for w, o in zip(words, origins):
-        text = w["word"].strip()
-        if len(text) <= max_len:
-            result.append(w)
-            new_origins.append(o)
-            continue
+class W4ReplaceLongWords(Rule[dict]):
+    id = "W4"
+    reason = _reason("W4")
+    lookahead = 0
 
-        alpha_words = re.findall(r"[A-Za-z]+", text)
-        all_upper = all(aw == aw.upper() for aw in alpha_words) if alpha_words else False
+    def __init__(self, *, max_len: int = 30) -> None:
+        self._max_len = max_len
 
-        if all_upper or len(text) > 50:
-            before = _fmt(w)
-            patched = {**w, "word": "..."}
-            result.append(patched)
-            new_origins.append(o)
-            if track is not None:
-                track.setdefault(o, []).append(RuleHit("W4", _reason("W4"), before, _fmt(patched)))
-        else:
-            result.append(w)
-            new_origins.append(o)
-    return result, new_origins
+    def apply(self, items, origins, *, tracker):
+        max_len = self._max_len
+        result: list[dict] = []
+        new_origins: list[int] = []
+        for w, o in zip(items, origins):
+            text = w["word"].strip()
+            if len(text) <= max_len:
+                result.append(w)
+                new_origins.append(o)
+                continue
+
+            alpha_words = re.findall(r"[A-Za-z]+", text)
+            all_upper = all(aw == aw.upper() for aw in alpha_words) if alpha_words else False
+
+            if all_upper or len(text) > 50:
+                before = _fmt(w)
+                patched = {**w, "word": "..."}
+                result.append(patched)
+                new_origins.append(o)
+                tracker.fire(self.id, self.reason, before=before, after=_fmt(patched), origin=o)
+            else:
+                result.append(w)
+                new_origins.append(o)
+        return result, new_origins
 
 
 # ── W5: attach punctuation ────────────────────────────────────────────
 
 
-def w5_attach_punctuation(
-    words: list[dict],
-    origins: list[int],
-    track: dict[int, list[RuleHit]] | None = None,
-) -> tuple[list[dict], list[int]]:
-    if not words:
-        return words, origins
+class W5AttachPunctuation(Rule[dict]):
+    id = "W5"
+    reason = _reason("W5")
+    lookahead = 1
 
-    result: list[dict] = []
-    new_origins: list[int] = []
-    for w, o in zip(words, origins):
-        text = w["word"].strip()
-        if text and all(c in string.punctuation for c in text) and result:
-            prev = result[-1]
-            before_prev = _fmt(prev)
-            merged = {
-                **prev,
-                "word": prev["word"] + w["word"],
-                "end": w["end"],
-            }
-            result[-1] = merged
-            if track is not None:
-                track.setdefault(o, []).append(RuleHit("W5", _reason("W5"), _fmt(w), f"<merged into {merged['word']!r}>"))
-                track.setdefault(new_origins[-1], []).append(RuleHit("W5", _reason("W5"), before_prev, _fmt(merged)))
-        else:
-            result.append(w)
-            new_origins.append(o)
-    return result, new_origins
+    def apply(self, items, origins, *, tracker):
+        if not items:
+            return items, origins
+
+        result: list[dict] = []
+        new_origins: list[int] = []
+        for w, o in zip(items, origins):
+            text = w["word"].strip()
+            if text and all(c in string.punctuation for c in text) and result:
+                prev = result[-1]
+                before_prev = _fmt(prev)
+                merged = {
+                    **prev,
+                    "word": prev["word"] + w["word"],
+                    "end": w["end"],
+                }
+                result[-1] = merged
+                tracker.fire(
+                    self.id,
+                    self.reason,
+                    before=_fmt(w),
+                    after=f"<merged into {merged['word']!r}>",
+                    origin=o,
+                )
+                tracker.fire(
+                    self.id,
+                    self.reason,
+                    before=before_prev,
+                    after=_fmt(merged),
+                    origin=new_origins[-1],
+                )
+            else:
+                result.append(w)
+                new_origins.append(o)
+        return result, new_origins
 
 
-# ── Legacy private names — kept as thin wrappers for backward compat ──
+# ── Legacy callable wrappers (imported by existing tests) ─────────────
+
+
+class _NullTracker:
+    __slots__ = ()
+
+    def fire(self, *args, **kwargs) -> None:
+        return None
+
+
+class _TrackShim:
+    """Adapter that writes engine hits into a legacy ``dict[int, list[RuleHit]]``."""
+
+    __slots__ = ("_track",)
+
+    def __init__(self, track: dict[int, list[RuleHit]]) -> None:
+        self._track = track
+
+    def fire(self, rule_id, reason, *, before, after, origin):
+        self._track.setdefault(origin, []).append(RuleHit(rule_id, reason, before, after))
+
+
+def _apply_rule(rule: Rule[dict], words: list[dict]) -> list[dict]:
+    out, _ = rule.apply(list(words), list(range(len(words))), tracker=_NullTracker())
+    return out
 
 
 def _dedup_untimed(words: list[dict]) -> list[dict]:
-    out, _ = w1_dedup_untimed(list(words), list(range(len(words))))
-    return out
+    return _apply_rule(W1DedupUntimed(), words)
 
 
 def _interpolate_timestamps(words: list[dict]) -> list[dict]:
-    out, _ = w2_interpolate_timestamps(list(words), list(range(len(words))))
-    return out
+    return _apply_rule(W2InterpolateTimestamps(), words)
 
 
 def _collapse_repeats(words: list[dict], pattern_len: int = 2, min_repeats: int = 4) -> list[dict]:
-    out, _ = w3_collapse_repeats(list(words), list(range(len(words))), pattern_len, min_repeats)
-    return out
+    return _apply_rule(W3CollapseRepeats(pattern_len=pattern_len, min_repeats=min_repeats), words)
 
 
 def _replace_long_words(words: list[dict], max_len: int = 30) -> list[dict]:
-    out, _ = w4_replace_long_words(list(words), list(range(len(words))), max_len)
-    return out
+    return _apply_rule(W4ReplaceLongWords(max_len=max_len), words)
 
 
 def _attach_punctuation(words: list[dict]) -> list[dict]:
-    out, _ = w5_attach_punctuation(list(words), list(range(len(words))))
-    return out
+    return _apply_rule(W5AttachPunctuation(), words)
 
 
 __all__ = [
-    "w1_dedup_untimed",
-    "w2_interpolate_timestamps",
-    "w3_collapse_repeats",
-    "w4_replace_long_words",
-    "w5_attach_punctuation",
+    "W1DedupUntimed",
+    "W2InterpolateTimestamps",
+    "W3CollapseRepeats",
+    "W4ReplaceLongWords",
+    "W5AttachPunctuation",
     "_dedup_untimed",
     "_interpolate_timestamps",
     "_collapse_repeats",

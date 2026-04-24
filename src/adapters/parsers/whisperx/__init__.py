@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
-from .._reporting import RuleHit
-from .facade import parse_whisperx, read_whisperx
-from .report import format_report, report_to_jsonl, summary
+from ..engine import RuleHit
+from .model import WhisperXReport, WordReport
+from .pipeline import (
+    default_pipeline,
+    format_report,
+    report_to_jsonl,
+    sanitize,
+    sanitize_stream,
+    sanitize_whisperx,
+    sanitize_whisperx_with_report,
+    sanitize_with_report,
+    summary,
+)
 from .rules import (
     _attach_punctuation,
     _collapse_repeats,
@@ -12,16 +22,15 @@ from .rules import (
     _interpolate_timestamps,
     _replace_long_words,
 )
-from .sanitize import sanitize, sanitize_whisperx, sanitize_with_report
-from .types import WhisperXReport, WordReport
-
-# Alias to match the package-level re-export name.
-sanitize_whisperx_with_report = sanitize_with_report
+from .serde import parse_whisperx, read_whisperx
 
 __all__ = [
+    "sanitize",
     "sanitize_whisperx",
     "sanitize_whisperx_with_report",
     "sanitize_with_report",
+    "sanitize_stream",
+    "default_pipeline",
     "parse_whisperx",
     "read_whisperx",
     "WordReport",
@@ -30,7 +39,6 @@ __all__ = [
     "format_report",
     "report_to_jsonl",
     "summary",
-    # Legacy private exports retained for existing tests.
     "_dedup_untimed",
     "_interpolate_timestamps",
     "_attach_punctuation",

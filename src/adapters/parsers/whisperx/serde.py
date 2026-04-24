@@ -1,4 +1,4 @@
-"""Backward-compatible WhisperX facade: JSON parse + file read adapters."""
+"""WhisperX JSON parse + file read adapters."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ from pathlib import Path
 
 from domain.model import Word
 
-from .sanitize import sanitize_whisperx
+from .pipeline import sanitize_whisperx
 
 
 def parse_whisperx(data: dict) -> list[Word]:
-    """Parse a WhisperX JSON dict into sanitized ``Word`` objects."""
+    """Parse a WhisperX JSON dict into sanitized :class:`Word` objects."""
     ws = data.get("word_segments")
     if ws is None:
         raise KeyError("Missing 'word_segments' in WhisperX JSON")
@@ -21,7 +21,7 @@ def parse_whisperx(data: dict) -> list[Word]:
 
 
 def read_whisperx(path: str | Path) -> list[Word]:
-    """Read a WhisperX JSON file and return sanitized ``Word`` objects."""
+    """Read a WhisperX JSON file and return sanitized :class:`Word` objects."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     return parse_whisperx(data)
 

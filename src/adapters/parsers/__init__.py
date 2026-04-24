@@ -1,11 +1,25 @@
 """Subtitle file parsers — SRT, WhisperX JSON."""
 
-from .srt import CleanOptions, CleanResult, Issue, clean_srt, clean_srt_or_false, parse_srt, read_srt, sanitize_srt
+from __future__ import annotations
+
+from .engine import NULL_TRACKER, NullTracker, Pipeline, RecordingTracker, RuleHit, Session
+from .srt import (
+    CleanOptions,
+    CleanResult,
+    Issue,
+    clean_srt,
+    clean_srt_or_false,
+    clean_stream,
+    parse_srt,
+    read_srt,
+    sanitize_srt,
+)
 from .whisperx import (
     WhisperXReport,
     WordReport,
     parse_whisperx,
     read_whisperx,
+    sanitize_stream,
     sanitize_whisperx,
     sanitize_whisperx_with_report,
 )
@@ -16,6 +30,7 @@ __all__ = [
     "sanitize_srt",
     "clean_srt",
     "clean_srt_or_false",
+    "clean_stream",
     "CleanOptions",
     "CleanResult",
     "Issue",
@@ -23,6 +38,14 @@ __all__ = [
     "read_whisperx",
     "sanitize_whisperx",
     "sanitize_whisperx_with_report",
+    "sanitize_stream",
     "WordReport",
     "WhisperXReport",
+    # Engine re-exports (stable public API).
+    "Pipeline",
+    "Session",
+    "RecordingTracker",
+    "NullTracker",
+    "NULL_TRACKER",
+    "RuleHit",
 ]
