@@ -1,83 +1,154 @@
 # demo_stream_preprocess — 流式预处理演示
 
 WebSocket 服务端 + 模拟客户端，用来验证**浏览器插件场景**中
-“边抓字幕、边送到后端做标点恢复 + 分句 + 细切”的前半段流水线。
+"边抓字幕、边送到后端做标点恢复 + 分句 + 细切" 的前半段流水线。
 
 ## 架构
 
 ```
-客户端 (浏览器插件 / Python client)                                ↓   WebSocket
-                         {type:"segment", start, end, text}                                ↓
-   ┌─────────── server.py ─────────────────────┐
-   │ PuncBufferStage  (可选，累积N条做标点恢复)  │
-   │          ↓                                 │
-   │ PushQueueSource (Subtitle.stream 切完整句) │
-   │          ↓                                 │
-   │ PreprocessProcessor  (.clauses + chunk)    │
-   └────────── ↓  {type:"record", ...} ─────────┘
-                         ↑   WebSocket
-客户端（打印或再走翻译）
+    Client  (browser extension / python client.py)
+      │  ▲
+      │  │
+ segment  record
+ flush    error
+ close    done
+      │  │
+      ▼  │
+  ┌───── server.py (uvicorn + FastAPI) ──────────┐
+  │                                              │
+  │  ws_app.py  ── /ws/preprocess endpoint       │
+  │      │                                       │
+  │      ▼                                       │
+  │  PuncBufferStage   (opt) buffer N cues,      │
+  │      │             run PuncRestorer,         │
+  │      │             emit merged Segment       │
+  │      ▼                                       │
+  │  PushQueueSource   cut on sentence-          │
+  │      │             ending punctuation,       │
+  │      │             yield SentenceRecord      │
+  │      ▼                                       │
+  │  PreprocessProcessor  .sentences()           │
+  │      │                .clauses()             │
+  │      │                .transform(chunk_fn)   │
+  │      ▼                                       │
+  │   enriched SentenceRecord ───► back to WS    │
+  │                                              │
+  └──────────────────────────────────────────────┘
 ```
 
-- **`PuncBufferStage`**：原始 ASR 没有标点，会让 `Subtitle.stream()`
-  永远不切句。所以服务端先缓冲 `window` 条 cue，合并后丢给
-  `PuncRestorer`，恢复好标点再送入 `PushQueueSource`。
-- **`PushQueueSource`**（`src/adapters/sources/push.py`）：以 asyncio
-  队列为 backing store，每完成一整句就 yield 一个 `SentenceRecord`。
-- **`PreprocessProcessor`**：对每条完成的 `SentenceRecord` 再跑
-  `clauses()` + `transform(chunk_fn, scope="chunk")`，把长 clause
-  按 `max_len` 细切。符合现有 `Processor` 契约的精简版。
+Module layout inside `demos/demo_stream_preprocess/`:
 
-## 消息协议
+| file              | responsibility                                                       |
+|-------------------|----------------------------------------------------------------------|
+| `backends.py`     | punc / chunk factory (mock + real)                                   |
+| `processors.py`   | `PuncBufferStage`, `PreprocessProcessor`                             |
+| `ws_app.py`       | FastAPI app, WS endpoint, `_safe_send/_safe_close`, process cache    |
+| `server.py`       | thin CLI (argparse + uvicorn)                                        |
+| `client.py`       | standalone test client (synthesises 4 cues or streams a real SRT)    |
 
-客户端 → 服务端（JSON）：
+Why the split:
 
-| `type`    | 字段                              | 说明                       |
-|-----------|----------------------------------|----------------------------|
-| `segment` | `start, end, text, speaker?`     | 推送一条字幕               |
-| `flush`   | —                                | 立即 drain 缓冲窗口        |
-| `close`   | —                                | 结束流，服务端将 flush+done |
+- `PuncBufferStage` — raw ASR has no punctuation, so `PushQueueSource`
+  would never see a sentence boundary. We buffer `window` cues, run
+  `PuncRestorer` on the joined text, and push one merged `Segment`
+  whose span covers the whole window.
+- `PushQueueSource` (`src/adapters/sources/push.py`) — async-queue
+  backed `Source` that cuts on sentence-ending punctuation and yields
+  a `SentenceRecord`.
+- `PreprocessProcessor` — per record: `.sentences()` first (scopes the
+  rest to sentence level), then `.clauses()` + chunked `transform`.
 
-服务端 → 客户端：
+## Message protocol
 
-| `type`   | 字段                                                         |
-|----------|-------------------------------------------------------------|
-| `ready`  | `language, restore_punc, window, max_len`                   |
-| `record` | `id, start, end, src_text, segments[{start,end,text,words}]` |
-| `error`  | `message`                                                   |
-| `done`   | —                                                           |
+Client → server (JSON):
 
-查询串（连接时）：`language=en&restore_punc=true&max_len=60&window=4`
+| `type`    | fields                           | notes                              |
+|-----------|----------------------------------|------------------------------------|
+| `segment` | `start, end, text, speaker?`     | push one ASR cue                   |
+| `flush`   | —                                | force-drain the punc buffer window |
+| `close`   | —                                | end of stream                      |
 
-## 运行
+Server → client:
 
-### 1. mock 模式（无外部依赖）
+| `type`   | fields                                                          |
+|----------|----------------------------------------------------------------|
+| `ready`  | `language, restore_punc, window, max_len`                      |
+| `record` | `id, start, end, src_text, segments[{start,end,text,words}]`   |
+| `error`  | `message`                                                      |
+| `done`   | —                                                              |
 
-终端 A：
+WS query string (set on connect):
+`language=en&restore_punc=true&max_len=60&window=4`
+
+## Running
+
+### 1. Mock backends (zero external deps)
+
+Terminal A:
+
 ```bash
 python demos/demo_stream_preprocess/server.py
+# → listens on ws://127.0.0.1:8765/ws/preprocess
 ```
 
-终端 B：
+Terminal B:
+
 ```bash
 python demos/demo_stream_preprocess/client.py
-# 或用真 SRT + 实时节奏
-python demos/demo_stream_preprocess/client.py --srt /path/to/foo.srt --paced
+# synthesises 4 cues, prints the resulting records, exits
+
+# or stream a real SRT with realistic pacing:
+python demos/demo_stream_preprocess/client.py \
+        --srt /path/to/foo.srt --paced --flush-every 10
 ```
 
-### 2. 真 backend
+### 2. Real backends
 
 ```bash
+LLM_MODEL=Qwen/Qwen3-32B \
 python demos/demo_stream_preprocess/server.py \
         --real \
-        --engine http://localhost:26592/v1
+        --engine http://localhost:26592/v1 \
+        --warmup en
 ```
 
-`--real` 会：
-- 用 `deepmultilingualpunctuation` 做标点恢复（需 `pip install`）。
-- 用 `spacy` + LLM + rule 三段式 composite chunker。
+With `--real`:
 
-### 3. 从浏览器 JS 调用
+- Punc restore uses `deepmultilingualpunctuation` (installed via `pip`).
+- Chunker is a composite pipeline: `spacy` → `llm` → `rule`.
+- First load of each model takes several seconds; `--warmup LANG [LANG...]`
+  pays that cost once at startup instead of on the first connection.
+- Models are cached process-wide, so subsequent connections in the
+  same server reuse the loaded instances.
+
+### 3. CLI reference
+
+`server.py`:
+
+| flag                  | default     | meaning                                          |
+|-----------------------|-------------|--------------------------------------------------|
+| `--host HOST`         | `127.0.0.1` | bind address                                     |
+| `--port PORT`         | `8765`      | listen port                                      |
+| `--real`              | off         | use real punc + real chunk backends              |
+| `--engine URL`        | —           | OpenAI-compatible LLM base URL (needs `--real`)  |
+| `--warmup [LANG...]`  | —           | pre-load backends at startup (default: `en`)     |
+| `--warmup-max-len N`  | `60`        | chunk `max_len` to warm with                     |
+
+`client.py`:
+
+| flag                 | default     | meaning                                             |
+|----------------------|-------------|-----------------------------------------------------|
+| `--host HOST`        | `127.0.0.1` | server host                                         |
+| `--port PORT`        | `8765`      | server port                                         |
+| `--language LANG`    | `en`        | WS query language                                   |
+| `--srt FILE`         | —           | stream a real SRT file instead of synthetic cues    |
+| `--paced`            | off         | sleep between cues to mimic real-time speech        |
+| `--flush-every N`    | off         | send `flush` every N cues                           |
+| `--no-restore-punc`  | off         | skip server-side punc restore (SRT already punct'd) |
+| `--max-len N`        | `60`        | WS query `max_len`                                  |
+| `--window N`         | `4`         | WS query `window` (punc buffer size)                |
+
+### 4. From browser JS
 
 ```js
 const ws = new WebSocket("ws://127.0.0.1:8765/ws/preprocess?language=en");
@@ -85,17 +156,22 @@ ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ws.onopen = () => {
     ws.send(JSON.stringify({type:"segment", start:1.0, end:4.5,
                             text:"hello everyone welcome to the course"}));
-    // ... 更多 segment
+    // ... more segments
     ws.send(JSON.stringify({type:"close"}));
 };
 ```
 
-## 注意事项
+## Notes
 
-- 当前 demo **不持久化**（`Processor` 契约中的 `store/video_key/ctx`
-  省略）。要接入真实 pipeline，请用 `StreamingOrchestrator`
-  （`src/application/orchestrator/video.py:243`）。
-- `PuncBufferStage` 合并后丢失了窗口内单 cue 的文本→时间微对齐；
-  词级 `words` 透传未动。若 ASR 已带单词时间戳，
-  `SentenceRecord.segments[*].words` 会正常聚到对应 chunk 上。
-- 想关闭标点恢复（SRT 已带标点）：客户端加 `--no-restore-punc`。
+- This demo **does not persist** (`Store` / `VideoKey` / `ctx` from the
+  full `Processor` contract are omitted). To run this inside a real
+  pipeline, wire the same stages into `StreamingOrchestrator`
+  (`src/application/orchestrator/video.py:243`).
+- `PuncBufferStage` loses per-cue text→time granularity inside a
+  window; word-level `words` pass through unchanged. If ASR already
+  emits word timestamps, `SentenceRecord.segments[*].words` still
+  aggregates correctly onto each chunk.
+- To skip restore (already-punctuated SRT), pass `--no-restore-punc`
+  on the client side.
+- See [`WALKTHROUGH.md`](./WALKTHROUGH.md) for a step-by-step tour of
+  the demo and the design decisions behind each piece.
