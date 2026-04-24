@@ -34,9 +34,21 @@ import json
 import time
 from urllib.parse import urlencode
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.rule import Rule
+from rich.table import Table
 from websockets.asyncio.client import connect
 
 from adapters.parsers import parse_srt, sanitize_srt
+
+console = Console()
+
+
+def _truncate(s: str, n: int = 100) -> str:
+    s = s.replace("\n", "⏎")
+    return s if len(s) <= n else s[: n - 1] + "…"
+
 
 SAMPLE_SRT = """\
 1
@@ -58,35 +70,54 @@ lets get started with some historical context
 
 
 async def _read_loop(ws) -> None:
-    """Print every server-sent message until the socket closes."""
+    """Render every server-sent message with rich until the socket closes."""
     try:
         async for raw in ws:
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
-                print(f"[client] <raw> {raw!r}")
+                console.print(f"[dim][client] <raw>[/dim] {raw!r}")
                 continue
             mtype = msg.get("type")
             if mtype == "ready":
-                print(
-                    f"[server] ready (lang={msg.get('language')}, "
-                    f"restore_punc={msg.get('restore_punc')}, "
-                    f"window={msg.get('window')}, max_len={msg.get('max_len')})"
+                console.print(
+                    Panel.fit(
+                        f"[bold]language[/bold]: {msg.get('language')}  •  "
+                        f"[bold]restore_punc[/bold]: {msg.get('restore_punc')}  •  "
+                        f"[bold]window[/bold]: {msg.get('window')}  •  "
+                        f"[bold]max_len[/bold]: {msg.get('max_len')}",
+                        title="[green]server ready[/green]",
+                        border_style="green",
+                    )
                 )
             elif mtype == "record":
-                print(f"[record #{msg.get('id')}]  [{msg.get('start'):.2f} → {msg.get('end'):.2f}]  chunks={len(msg.get('segments', []))}")
-                print(f"    src_text: {msg.get('src_text')!r}")
-                for i, seg in enumerate(msg.get("segments", [])):
-                    print(f"    [{i}] {seg['start']:.2f}-{seg['end']:.2f} ({len(seg['text']):3d}) {seg['text']!r}")
+                segs = msg.get("segments", [])
+                table = Table(show_header=True, header_style="bold magenta", expand=True)
+                table.add_column("#", justify="right", width=4)
+                table.add_column("start", justify="right", width=7)
+                table.add_column("end", justify="right", width=7)
+                table.add_column("len", justify="right", width=4)
+                table.add_column("text", overflow="fold", ratio=1)
+                for i, seg in enumerate(segs):
+                    table.add_row(
+                        str(i),
+                        f"{seg['start']:.2f}",
+                        f"{seg['end']:.2f}",
+                        str(len(seg["text"])),
+                        _truncate(seg["text"], 160),
+                    )
+                title = f"[bold]record #{msg.get('id')}[/bold]  [{msg.get('start'):.2f} → {msg.get('end'):.2f}]  chunks={len(segs)}"
+                subtitle = f"src_text: {_truncate(str(msg.get('src_text')), 140)!r}"
+                console.print(Panel(table, title=title, subtitle=subtitle, border_style="blue"))
             elif mtype == "error":
-                print(f"[server error] {msg.get('message')}")
+                console.print(f"[bold red][server error][/bold red] {msg.get('message')}")
             elif mtype == "done":
-                print("[server] done")
+                console.print(Rule("[green]server done[/green]", style="green"))
                 break
             else:
-                print(f"[client] <unknown> {msg!r}")
+                console.print(f"[dim][client] <unknown>[/dim] {msg!r}")
     except Exception as exc:  # noqa: BLE001
-        print(f"[client] read loop ended: {exc!r}")
+        console.print(f"[dim][client] read loop ended: {exc!r}[/dim]")
 
 
 async def run(
@@ -97,7 +128,7 @@ async def run(
     flush_every: int,
 ) -> None:
     segments = parse_srt(sanitize_srt(srt_text))
-    print(f"[client] will send {len(segments)} segments to {url}")
+    console.print(f"[dim][client][/dim] will send [cyan]{len(segments)}[/cyan] segments to [cyan]{url}[/cyan]")
 
     async with connect(url, ping_interval=30, ping_timeout=120) as ws:
         reader = asyncio.create_task(_read_loop(ws))
@@ -135,7 +166,7 @@ async def run(
         try:
             await asyncio.wait_for(reader, timeout=600.0)
         except asyncio.TimeoutError:
-            print("[client] timed out waiting for server to finish")
+            console.print("[yellow][client] timed out waiting for server to finish[/yellow]")
             reader.cancel()
 
 

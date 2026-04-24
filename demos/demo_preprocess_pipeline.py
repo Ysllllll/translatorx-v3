@@ -30,10 +30,62 @@ import argparse
 import os
 import time
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.rule import Rule
+from rich.table import Table
+from rich.text import Text
+
 from adapters.parsers import parse_srt, sanitize_srt
 from adapters.preprocess import Chunker, PuncRestorer
 from domain.lang import LangOps
 from domain.subtitle import Subtitle
+
+console = Console()
+
+
+def _truncate(s: str, n: int = 80) -> str:
+    s = s.replace("\n", "⏎")
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def _step_header(step: str, title: str, expected: str) -> None:
+    """Render a STEP heading + short explanation."""
+    console.print()
+    console.print(Rule(f"[bold cyan]{step}[/bold cyan] — [bold]{title}[/bold]", style="cyan"))
+    console.print(Text(expected, style="dim"))
+
+
+def _render_subtitle_state(sub: Subtitle, *, label: str, ops: LangOps | None = None) -> None:
+    """Render every TextPipeline + its word slice inside *sub* as a Table."""
+    pipelines = sub._pipelines  # noqa: SLF001
+    words_per = sub._words  # noqa: SLF001
+
+    table = Table(
+        title=f"[dim]state:{label}[/dim]  •  {len(pipelines)} pipeline(s)",
+        title_justify="left",
+        show_header=True,
+        header_style="bold magenta",
+        row_styles=["", "dim"],
+        expand=True,
+    )
+    table.add_column("pipe", justify="right", width=4)
+    table.add_column("chunk", justify="right", width=5)
+    table.add_column("len", justify="right", width=4)
+    table.add_column("text", overflow="fold", ratio=1)
+    table.add_column("words", justify="right", width=5)
+    table.add_column("span", justify="right", width=14)
+
+    for i, (pipe, words) in enumerate(zip(pipelines, words_per)):
+        chunks = pipe.result()
+        for j, c in enumerate(chunks):
+            length = ops.length(c) if ops else len(c)
+            words_cell = str(len(words)) if j == 0 else ""
+            span_cell = ""
+            if j == 0 and words:
+                span_cell = f"{words[0].start:.2f}-{words[-1].end:.2f}"
+            table.add_row(str(i), str(j), str(length), _truncate(c, 140), words_cell, span_cell)
+    console.print(table)
 
 
 # ── mock backends（默认启用，无外部依赖）────────────────────────────
@@ -65,7 +117,7 @@ def build_real_punc_restorer(language: str) -> PuncRestorer | None:
             threshold=90,
         ).for_language(language)
     except Exception as exc:  # noqa: BLE001
-        print(f"  [punc] real backend unavailable ({exc!r}), using mock")
+        console.print(f"  [yellow][punc][/yellow] real backend unavailable ([dim]{exc!r}[/dim]), using mock")
         return None
 
 
@@ -78,7 +130,7 @@ def build_real_chunker(language: str, engine_url: str | None, max_len: int = 90)
     if availability.spacy_is_available():
         stages.append({"library": "spacy"})
     else:
-        print("  [chunk] spaCy missing, skipping that stage")
+        console.print("  [yellow][chunk][/yellow] spaCy missing, skipping that stage")
 
     if engine_url:
         # Real LLM engine for the middle stage.
@@ -108,7 +160,7 @@ def build_real_chunker(language: str, engine_url: str | None, max_len: int = 90)
             }
         )
     else:
-        print("  [chunk] no engine_url, LLM stage skipped")
+        console.print("  [yellow][chunk][/yellow] no engine_url, LLM stage skipped")
 
     # Hard backstop — guarantees no chunk exceeds max_len.
     stages.append({"library": "rule", "max_len": max_len})
@@ -132,22 +184,6 @@ def build_real_chunker(language: str, engine_url: str | None, max_len: int = 90)
 # ── pipeline ──────────────────────────────────────────────────────
 
 
-def _print_subtitle_state(sub: Subtitle, *, label: str) -> None:
-    """Dump every TextPipeline + its word slice inside *sub*."""
-    pipelines = sub._pipelines  # noqa: SLF001
-    words_per = sub._words  # noqa: SLF001
-    print(f"\n  [state:{label}] {len(pipelines)} pipeline(s)")
-    for i, (pipe, words) in enumerate(zip(pipelines, words_per)):
-        chunks = pipe.result()
-        print(f"    pipeline[{i}] chunks={len(chunks)} words={len(words)}")
-        for j, c in enumerate(chunks):
-            print(f"      chunk[{j}]: {c!r}")
-        if words:
-            head = " ".join(w.word for w in words[:6])
-            tail = "" if len(words) <= 6 else f" ... (+{len(words) - 6})"
-            print(f"      words[0:6]: {head}{tail}  span=[{words[0].start:.2f}, {words[-1].end:.2f}]")
-
-
 def run_pipeline(
     srt_text: str,
     *,
@@ -157,7 +193,15 @@ def run_pipeline(
     max_len: int,
 ) -> None:
     segments = parse_srt(sanitize_srt(srt_text))
-    print(f"\nInput: {len(segments)} SRT segments, language={language}, max_len={max_len}")
+    ops = LangOps.for_language(language)
+
+    console.print(
+        Panel.fit(
+            f"[bold]input[/bold]: {len(segments)} SRT segment(s)  •  [bold]language[/bold]: {language}  •  [bold]max_len[/bold]: {max_len}",
+            title="preprocess pipeline",
+            border_style="green",
+        )
+    )
 
     punc_fn = None
     if real:
@@ -168,141 +212,149 @@ def run_pipeline(
     if real:
         chunk_fn = build_real_chunker(language, engine_url=engine_url, max_len=max_len)
     else:
-        ops = LangOps.for_language(language)
 
         def chunk_fn(texts: list[str]) -> list[list[str]]:
             return [ops.split_by_length(t, max_len) for t in texts]
 
     # ── STEP 0: raw SRT segments ──────────────────────────────────
-    print("\n" + "=" * 60)
-    print("STEP 0 — raw SRT segments (input)")
-    print("Expected: one Segment per SRT cue, lowercase, no punctuation.")
-    print("=" * 60)
+    _step_header("STEP 0", "raw SRT segments (input)", "Expected: one Segment per SRT cue, lowercase, no punctuation.")
+    raw = Table(show_header=True, header_style="bold magenta", expand=True)
+    raw.add_column("#", justify="right", width=4)
+    raw.add_column("start", justify="right", width=7)
+    raw.add_column("end", justify="right", width=7)
+    raw.add_column("text", overflow="fold", ratio=1)
     for i, seg in enumerate(segments):
-        print(f"  [{i}] {seg.start:6.2f}-{seg.end:6.2f}  {seg.text!r}")
+        raw.add_row(str(i), f"{seg.start:.2f}", f"{seg.end:.2f}", _truncate(seg.text, 140))
+    console.print(raw)
 
     # ── STEP 1: Subtitle() — one flat pipeline ────────────────────
-    print("\n" + "=" * 60)
-    print("STEP 1 — Subtitle(segments, language=...)")
-    print("Expected: exactly 1 pipeline holding the joined text + all words (no split yet).")
-    print("=" * 60)
+    _step_header(
+        "STEP 1",
+        "Subtitle(segments, language=...)",
+        "Expected: exactly 1 pipeline holding the joined text + all words (no split yet).",
+    )
     t0 = time.perf_counter()
     sub0 = Subtitle(segments, language=language)
-    _print_subtitle_state(sub0, label="step1")
+    _render_subtitle_state(sub0, label="step1", ops=ops)
     assert len(sub0._pipelines) == 1, "expected 1 pipeline before sentences()"  # noqa: SLF001
-    print("  ✓ self-check: single pipeline")
+    console.print("[green]✓[/green] self-check: single pipeline")
 
     # ── STEP 2: .sentences() — split by sentence boundaries ───────
-    print("\n" + "=" * 60)
-    print("STEP 2 — .sentences()")
-    print("Expected: split into per-sentence pipelines based on sentence-ending")
-    print("punctuation. When input is raw lowercase with NO punctuation, this")
-    print("step finds no boundaries and keeps 1 pipeline. After punc restore")
-    print("a second .sentences() call will produce real splits.")
-    print("=" * 60)
+    _step_header(
+        "STEP 2",
+        ".sentences()",
+        "Expected: split into per-sentence pipelines based on sentence-ending\n"
+        "punctuation. Raw lowercase with NO punctuation → no boundaries → 1 pipeline.\n"
+        "After STEP 3 (punc restore) a second .sentences() call will produce real splits.",
+    )
     sub1 = sub0.sentences()
-    _print_subtitle_state(sub1, label="step2")
+    _render_subtitle_state(sub1, label="step2", ops=ops)
     if len(sub1._pipelines) == 1:  # noqa: SLF001
-        print("  ⚠ only 1 pipeline — input had no sentence punctuation, expected.")
+        console.print("[yellow]⚠[/yellow] only 1 pipeline — input had no sentence punctuation, expected.")
     else:
-        print(f"  ✓ split into {len(sub1._pipelines)} sentence pipelines")  # noqa: SLF001
+        console.print(f"[green]✓[/green] split into {len(sub1._pipelines)} sentence pipelines")  # noqa: SLF001
 
     # ── STEP 3: .transform(punc, scope='joined') ──────────────────
-    print("\n" + "=" * 60)
-    print("STEP 3 — .transform(punc_fn, scope='joined')")
-    print("Expected: joins each pipeline's chunks into one string, sends through")
-    print("punc backend, rebuilds pipeline. Output text should contain . , ? !")
-    print("=" * 60)
+    _step_header(
+        "STEP 3",
+        ".transform(punc_fn, scope='joined')",
+        "Expected: joins each pipeline's chunks into one string, sends through\n"
+        "punc backend, rebuilds pipeline. Output text should contain . , ? !",
+    )
     sub2 = sub1.transform(punc_fn, scope="joined")
-    _print_subtitle_state(sub2, label="step3")
+    _render_subtitle_state(sub2, label="step3", ops=ops)
     all_text = " ".join(c for p in sub2._pipelines for c in p.result())  # noqa: SLF001
-    has_punct = any(c in all_text for c in ".,?!")
-    if has_punct:
-        print("  ✓ self-check: punctuation present after restore")
+    if any(c in all_text for c in ".,?!"):
+        console.print("[green]✓[/green] self-check: punctuation present after restore")
     else:
-        print("  ⚠ self-check: no punctuation found — backend may have failed silently")
+        console.print("[yellow]⚠[/yellow] self-check: no punctuation found — backend may have failed silently")
 
     # ── STEP 3b: .sentences() again — now with punctuation ────────
-    print("\n" + "=" * 60)
-    print("STEP 3b — .sentences() (second call, post-punc)")
-    print("Expected: punctuation now present → real sentence splits.")
-    print("=" * 60)
+    _step_header(
+        "STEP 3b",
+        ".sentences() (second call, post-punc)",
+        "Expected: punctuation now present → real sentence splits.",
+    )
     sub2b = sub2.sentences()
-    _print_subtitle_state(sub2b, label="step3b")
+    _render_subtitle_state(sub2b, label="step3b", ops=ops)
     n_sent = len(sub2b._pipelines)  # noqa: SLF001
     if n_sent > 1:
-        print(f"  ✓ split into {n_sent} sentence pipelines")
+        console.print(f"[green]✓[/green] split into {n_sent} sentence pipelines")
     else:
-        print("  ⚠ still 1 pipeline — no sentence boundaries detected")
+        console.print("[yellow]⚠[/yellow] still 1 pipeline — no sentence boundaries detected")
 
     # ── STEP 4: .clauses() — sentence-aware clause splitting ──────
-    print("\n" + "=" * 60)
-    print("STEP 4 — .clauses()")
-    print("Expected: each sentence pipeline splits into clause chunks at")
-    print("inner punctuation (, ; :). Clause count >= 1 per sentence.")
-    print("=" * 60)
+    _step_header(
+        "STEP 4",
+        f".clauses(merge_under={max_len})",
+        "Expected: each sentence pipeline splits into clause chunks at\n"
+        "inner punctuation (, ; :). Clauses shorter than max_len are merged back.",
+    )
     sub3 = sub2b.clauses(merge_under=max_len)
-    _print_subtitle_state(sub3, label="step4")
+    _render_subtitle_state(sub3, label="step4", ops=ops)
     total_clauses = sum(len(p.result()) for p in sub3._pipelines)  # noqa: SLF001
-    print(f"  ✓ total clauses across all sentences: {total_clauses}")
+    console.print(f"[green]✓[/green] total clauses across all sentences: {total_clauses}")
 
     # ── STEP 5: .transform(chunk, scope='chunk') ──────────────────
-    print("\n" + "=" * 60)
-    print(f"STEP 5 — .transform(chunk_fn, scope='chunk')  [max_len={max_len}]")
-    print("Expected: each clause is passed individually to chunk_fn. Clauses")
-    print("already <= max_len pass through unchanged; longer ones are split.")
-    print("=" * 60)
+    _step_header(
+        "STEP 5",
+        f".transform(chunk_fn, scope='chunk')  [max_len={max_len}]",
+        "Expected: each clause is passed individually to chunk_fn. Clauses\n"
+        "already <= max_len pass through unchanged; longer ones are split.",
+    )
     sub4 = sub3.transform(chunk_fn, scope="chunk")
-    _print_subtitle_state(sub4, label="step5")
-    ops = LangOps.for_language(language)
+    _render_subtitle_state(sub4, label="step5", ops=ops)
     total_out = sum(len(p.result()) for p in sub4._pipelines)  # noqa: SLF001
     over = [c for p in sub4._pipelines for c in p.result() if ops.length(c) > max_len]  # noqa: SLF001
-    print(f"  ✓ total output chunks: {total_out}")
+    console.print(f"[green]✓[/green] total output chunks: {total_out}")
     if over:
-        print(f"  ⚠ {len(over)} chunks still > {max_len} (chunk_fn may have left long pieces): {over[:2]}")
+        console.print(f"[yellow]⚠[/yellow] {len(over)} chunks still > {max_len}: {over[:2]}")
     else:
-        print("  ✓ self-check: all chunks within max_len")
+        console.print("[green]✓[/green] self-check: all chunks within max_len")
 
     # ── STEP 6: .merge(max_len) — recombine short chunks ──────────
-    print("\n" + "=" * 60)
-    print(f"STEP 6 — .merge(max_len={max_len})")
-    print("Expected: adjacent chunks within the same pipeline are greedily")
-    print("recombined up to max_len. This is the second half of the standard")
-    print("split→merge pair: chunk_fn tends to leave short tails (e.g. a")
-    print("comma-clause like 'and so on'); merging folds them back into")
-    print("neighbours so we ship fewer, better-sized segments.")
-    print("=" * 60)
+    _step_header(
+        "STEP 6",
+        f".merge(max_len={max_len})",
+        "Expected: adjacent chunks within the same pipeline are greedily\n"
+        "recombined up to max_len. Second half of the split→merge pair:\n"
+        "chunk_fn leaves short tails; merge folds them back into neighbours.",
+    )
     sub5 = sub4.merge(max_len)
-    _print_subtitle_state(sub5, label="step6")
+    _render_subtitle_state(sub5, label="step6", ops=ops)
     merged_total = sum(len(p.result()) for p in sub5._pipelines)  # noqa: SLF001
-    print(f"  ✓ total output chunks: {merged_total} (was {total_out} before merge)")
+    console.print(f"[green]✓[/green] total output chunks: {merged_total} (was {total_out} before merge)")
 
     # ── STEP 7: .records() — assemble SentenceRecords ─────────────
-    print("\n" + "=" * 60)
-    print("STEP 7 — .records()")
-    print("Expected: one SentenceRecord per pipeline. Each record carries")
-    print("src_text (joined final chunks), start/end (from word span), and")
-    print("segments (one Segment per output chunk, timing re-aligned to words).")
-    print("=" * 60)
+    _step_header(
+        "STEP 7",
+        ".records()",
+        "Expected: one SentenceRecord per pipeline. Each carries src_text,\nstart/end (word span), and segments (one per output chunk).",
+    )
     records = sub5.records()
     elapsed = time.perf_counter() - t0
-    print(f"  got {len(records)} SentenceRecord(s) in {elapsed:.3f}s end-to-end")
+    console.print(f"[dim]got {len(records)} SentenceRecord(s) in {elapsed:.3f}s end-to-end[/dim]")
 
     for i, rec in enumerate(records, 1):
-        print(f"\n─── SentenceRecord #{i}  [{rec.start:.2f}s → {rec.end:.2f}s]")
-        print(f"  src_text: {rec.src_text!r}")
-        print(f"  segments ({len(rec.segments)}):")
+        inner = Table(show_header=True, header_style="bold magenta", expand=True)
+        inner.add_column("#", justify="right", width=4)
+        inner.add_column("start", justify="right", width=7)
+        inner.add_column("end", justify="right", width=7)
+        inner.add_column("len", justify="right", width=4)
+        inner.add_column("text", overflow="fold", ratio=1)
+        inner.add_column("words", justify="right", width=5)
         for j, seg in enumerate(rec.segments):
-            spk = f" spk={seg.speaker}" if seg.speaker else ""
-            print(f"    [{j}] {seg.start:6.2f}-{seg.end:6.2f}{spk} ({len(seg.text)}) {seg.text!r}")
-            if seg.words:
-                words_preview = " ".join(w.word for w in seg.words[:8])
-                more = f" ... (+{len(seg.words) - 8})" if len(seg.words) > 8 else ""
-                print(f"         words[{len(seg.words)}]: {words_preview}{more}")
-        if rec.translations:
-            print(f"  translations: {rec.translations!r}")
-        if rec.alignment:
-            print(f"  alignment: {rec.alignment!r}")
+            inner.add_row(
+                str(j),
+                f"{seg.start:.2f}",
+                f"{seg.end:.2f}",
+                str(ops.length(seg.text)),
+                _truncate(seg.text, 140),
+                str(len(seg.words)),
+            )
+        title = f"[bold]SentenceRecord #{i}[/bold]  [{rec.start:.2f}s → {rec.end:.2f}s]"
+        subtitle = f"src_text: {_truncate(rec.src_text, 120)!r}"
+        console.print(Panel(inner, title=title, subtitle=subtitle, border_style="blue"))
 
 
 # ── sample data ───────────────────────────────────────────────────
@@ -360,11 +412,14 @@ def main() -> None:
     else:
         srt_text = SAMPLE_SRT
 
-    print("=" * 60)
-    print(f"Mode: {'REAL' if args.real else 'MOCK'}")
-    if args.real and args.engine:
-        print(f"LLM engine: {args.engine}")
-    print("=" * 60)
+    mode_text = "REAL" if args.real else "MOCK"
+    engine_text = f"\nLLM engine: [cyan]{args.engine}[/cyan]" if (args.real and args.engine) else ""
+    console.print(
+        Panel.fit(
+            f"[bold]Mode[/bold]: [yellow]{mode_text}[/yellow]{engine_text}",
+            border_style="yellow",
+        )
+    )
 
     run_pipeline(
         srt_text,
