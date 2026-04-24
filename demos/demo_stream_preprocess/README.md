@@ -56,7 +56,8 @@ Why the split:
   backed `Source` that cuts on sentence-ending punctuation and yields
   a `SentenceRecord`.
 - `PreprocessProcessor` — per record: `.sentences()` first (scopes the
-  rest to sentence level), then `.clauses()` + chunked `transform`.
+  rest to sentence level), then `.clauses()` + chunked `transform` +
+  `.merge(max_len)` to recombine short tails. Standard split→merge.
 
 ## Message protocol
 

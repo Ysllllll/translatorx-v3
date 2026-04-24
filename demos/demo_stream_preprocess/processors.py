@@ -87,10 +87,12 @@ class PreprocessProcessor:
         *,
         language: str,
         chunk_fn: Callable[[list[str]], list[list[str]]],
+        max_len: int = 60,
         merge_under: int = 90,
     ) -> None:
         self._language = language
         self._chunk_fn = chunk_fn
+        self._max_len = max_len
         self._merge_under = merge_under
 
     def fingerprint(self) -> str:
@@ -116,8 +118,14 @@ class PreprocessProcessor:
         # pipeline so ``.records()`` yields one enriched record (chunks
         # stay *inside* the sentence instead of being promoted to their
         # own records).
+        #
+        # The final ``.merge(max_len)`` is the standard split→merge pair:
+        # ``transform(chunk_fn, scope="chunk")`` can leave adjacent
+        # short chunks (e.g. one-clause tail fragments) that fit well
+        # within ``max_len`` when recombined. Without the merge we'd
+        # ship more, shorter segments than necessary.
         sub = Subtitle(list(rec.segments), language=self._language)
-        sub = sub.sentences().clauses(merge_under=self._merge_under).transform(self._chunk_fn, scope="chunk")
+        sub = sub.sentences().clauses(merge_under=self._merge_under).transform(self._chunk_fn, scope="chunk").merge(self._max_len)
         return sub.records()
 
     async def aclose(self) -> None:

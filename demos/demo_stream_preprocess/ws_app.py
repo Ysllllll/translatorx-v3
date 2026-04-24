@@ -163,7 +163,7 @@ def build_app(*, real: bool, engine_url: str | None) -> FastAPI:
 
         source = PushQueueSource(language=language)
         punc_buf = PuncBufferStage(punc_fn=punc_fn, downstream=source, window=window) if punc_fn is not None else None
-        proc = PreprocessProcessor(language=language, chunk_fn=chunk_fn)
+        proc = PreprocessProcessor(language=language, chunk_fn=chunk_fn, max_len=max_len)
 
         if not await _safe_send(
             ws,

@@ -97,7 +97,7 @@ That's why the punc test has a `flush_partial` case.
 
 ---
 
-## 4. Why `.sentences()` first in `PreprocessProcessor._build_records`?
+## 4. Why `.sentences()` first, `.merge(max_len)` last?
 
 ```python
 sub = Subtitle(list(rec.segments), language=self._language)
@@ -105,21 +105,47 @@ sub = (
     sub.sentences()
        .clauses(merge_under=self._merge_under)
        .transform(self._chunk_fn, scope="chunk")
+       .merge(self._max_len)
 )
 return sub.records()
 ```
 
-The critical line is `.sentences()`. Without it, each chunk produced
-by `transform()` becomes its own `SentenceRecord` — `records()` would
-return N records per sentence instead of one.
+Two bookends, each with a clear job.
+
+### `.sentences()` first — scoping
+
+Without it, each chunk produced by `transform()` becomes its own
+`SentenceRecord` — `records()` would return N records per sentence
+instead of one.
 
 With `.sentences()`, the pipeline becomes **sentence-scoped**: every
-subsequent operation (clauses, transform) stays *inside* one
+subsequent operation (clauses, transform, merge) stays *inside* one
 sentence. So you get exactly one record per sentence, whose
 `segments` are the length-bounded chunks.
 
+### `.merge(max_len)` last — split→merge symmetry
+
+`transform(chunk_fn, scope="chunk")` is the "split" half: it cuts
+clauses into fragments no longer than `max_len`. That's optimal when
+looking at each clause in isolation, but adjacent chunks across
+clause boundaries often leave short tails (`"and so on,"`, `"right?"`)
+that fit comfortably under `max_len` if you stitch them back in.
+
+`.merge(max_len)` is the greedy pass that does that: walks the final
+chunk list in order, concatenating neighbours as long as the result
+fits. It never crosses sentence boundaries (sentence-scoped) and it
+never un-does a split that chunk_fn made mandatory — only the
+optional fragments get folded.
+
+The standard preprocess pipeline is therefore always **split → merge**.
+Skipping the merge ships more, shorter segments than necessary and
+(in the translation stage) burns more context/tokens on glue tokens
+like "and".
+
 This is the single biggest gotcha when learning the `Subtitle` API —
-the scope system looks invisible until you miss it.
+the scope system looks invisible until you miss it, and the
+split-without-merge anti-pattern looks fine in unit tests because
+the individual chunk lengths all pass.
 
 ---
 

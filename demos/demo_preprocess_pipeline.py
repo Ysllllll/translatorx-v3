@@ -1,4 +1,4 @@
-"""preprocess — 完整预处理流水线示例（punc restore → clauses → chunk）。
+"""preprocess — 完整预处理流水线示例（punc restore → clauses → chunk → merge）。
 
 Pipeline shape (mini):
 
@@ -7,6 +7,7 @@ Pipeline shape (mini):
         .transform(restore_punc, scope="joined")   # 整句还原标点
         .clauses()
         .transform(chunk_fn, scope="chunk")        # 超长 clause 再细切
+        .merge(max_len)                            # 相邻短 chunk 合并回长度上限
         .records()
 
 用于 benchmark 大量 SRT 文件的参考流程。默认使用 mock backends 跑通，
@@ -255,14 +256,28 @@ def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | 
     else:
         print("  ✓ self-check: all chunks within max_len")
 
-    # ── STEP 6: .records() — assemble SentenceRecords ─────────────
+    # ── STEP 6: .merge(max_len) — recombine short chunks ──────────
     print("\n" + "=" * 60)
-    print("STEP 6 — .records()")
+    print("STEP 6 — .merge(max_len=60)")
+    print("Expected: adjacent chunks within the same pipeline are greedily")
+    print("recombined up to max_len. This is the second half of the standard")
+    print("split→merge pair: chunk_fn tends to leave short tails (e.g. a")
+    print("comma-clause like 'and so on'); merging folds them back into")
+    print("neighbours so we ship fewer, better-sized segments.")
+    print("=" * 60)
+    sub5 = sub4.merge(60)
+    _print_subtitle_state(sub5, label="step6")
+    merged_total = sum(len(p.result()) for p in sub5._pipelines)  # noqa: SLF001
+    print(f"  ✓ total output chunks: {merged_total} (was {total_out} before merge)")
+
+    # ── STEP 7: .records() — assemble SentenceRecords ─────────────
+    print("\n" + "=" * 60)
+    print("STEP 7 — .records()")
     print("Expected: one SentenceRecord per pipeline. Each record carries")
     print("src_text (joined final chunks), start/end (from word span), and")
     print("segments (one Segment per output chunk, timing re-aligned to words).")
     print("=" * 60)
-    records = sub4.records()
+    records = sub5.records()
     elapsed = time.perf_counter() - t0
     print(f"  got {len(records)} SentenceRecord(s) in {elapsed:.3f}s end-to-end")
 
@@ -272,7 +287,7 @@ def run_pipeline(srt_text: str, *, language: str, real: bool, engine_url: str | 
         print(f"  segments ({len(rec.segments)}):")
         for j, seg in enumerate(rec.segments):
             spk = f" spk={seg.speaker}" if seg.speaker else ""
-            print(f"    [{j}] {seg.start:6.2f}-{seg.end:6.2f}{spk}  {seg.text!r}")
+            print(f"    [{j}] {seg.start:6.2f}-{seg.end:6.2f}{spk} ({len(seg.text)}) {seg.text!r}")
             if seg.words:
                 words_preview = " ".join(w.word for w in seg.words[:8])
                 more = f" ... (+{len(seg.words) - 8})" if len(seg.words) > 8 else ""
@@ -302,6 +317,12 @@ in this lecture we will cover the basics neural networks transformers and modern
 4
 00:00:14,500 --> 00:00:17,000
 lets get started with some historical context
+"""
+
+SAMPLE_SRT = """\
+1
+00:00:01,000 --> 00:00:04,500
+If the retrieve context is very long, this results in a very long prompt and can thus be costly where retrieval to return, say 10,000 tokens.
 """
 
 

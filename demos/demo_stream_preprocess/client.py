@@ -77,7 +77,7 @@ async def _read_loop(ws) -> None:
                 print(f"[record #{msg.get('id')}]  [{msg.get('start'):.2f} → {msg.get('end'):.2f}]  chunks={len(msg.get('segments', []))}")
                 print(f"    src_text: {msg.get('src_text')!r}")
                 for i, seg in enumerate(msg.get("segments", [])):
-                    print(f"    [{i}] {seg['start']:.2f}-{seg['end']:.2f}  {seg['text']!r}")
+                    print(f"    [{i}] {seg['start']:.2f}-{seg['end']:.2f} ({len(seg['text']):3d}) {seg['text']!r}")
             elif mtype == "error":
                 print(f"[server error] {msg.get('message')}")
             elif mtype == "done":

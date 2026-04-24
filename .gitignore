@@ -9,3 +9,7 @@ playground*
 demo_data/
 demo_workspace/
 .vscode/
+
+# stray runtime artifacts
+error.log
+demos/demo_stream_preprocess/test.srt
