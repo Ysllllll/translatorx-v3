@@ -199,6 +199,72 @@ class Cue:
     note: str = ""  # non-fatal diagnostics: "overlap", "interpolated", ...
 
 
+@dataclass
+class RuleHit:
+    """A single rule firing on a cue."""
+
+    rule_id: str  # e.g. "E2", "C5", "C6", "T1", ...
+    reason: str  # Chinese one-liner explaining why the rule fired
+    before: str  # serialized snapshot before the rule (text, or "HH:MM,mmm --> ...")
+    after: str  # serialized snapshot after the rule
+
+
+@dataclass
+class CueReport:
+    """Report for a single cue: input, output, and every rule that touched it."""
+
+    index_in: int  # 1-based index in the raw file (None if block_without_timestamp)
+    index_out: int | None  # 1-based index in the cleaned file; None if dropped
+    start_ms_in: int
+    end_ms_in: int
+    start_ms_out: int
+    end_ms_out: int
+    text_in: str  # raw text AS IT APPEARED in the source file (may contain \n)
+    text_out: str  # text after full cleaning
+    steps: list[RuleHit]
+
+    @property
+    def modified(self) -> bool:
+        return bool(self.steps)
+
+
+@dataclass
+class Report:
+    """Full cleaning report for one SRT content."""
+
+    cues: list[CueReport]
+    cues_in: int
+    cues_out: int
+    rule_counts: dict[str, int]
+
+
+# Rule catalog: rule_id → Chinese reason. Used for both text + timestamp + entry
+# rules. Keeping them in one place keeps format/jsonl output consistent.
+_RULE_REASONS: dict[str, str] = {
+    "E2": "多行文本用空格拼成单行",
+    "E3": "首尾空白修剪",
+    "E4": "清洗后文本为空，丢弃此条目",
+    "C1": "剥离零宽/控制/双向标记等不可见字符",
+    "C2": "各类 NBSP/全角空白规整为 ASCII 空格",
+    "C3": "智能引号规整为 ASCII 引号",
+    "C4": "单字符省略号 '…' 规整为 '...'",
+    "C5": "连续点号（2 个或 ≥4 个）规整为 '...'",
+    "C6": "剥离 HTML 标签 (i/b/u/s/br/em/strong/font/p/span/div)（格式标记，非内容）",
+    "C7": "标点附着：移除标点前空白 / 标点后字母前补空格",
+    "C8": "连续空格压缩为单个空格",
+    "C9": "Tab 转空格，剩余不可打印控制字符移除",
+    "T1": "零时长 cue，从邻近空档借用时长",
+    "T2": "轻微重叠，下调前一条 end 到后一条 start",
+    "T3": "时间戳非法（负值或越界），丢弃此条目",
+    "T4": "时间戳截断到最大允许值",
+    "N1": "按顺序重编号 1..N",
+}
+
+
+def _rule(rule_id: str) -> str:
+    return _RULE_REASONS.get(rule_id, "")
+
+
 # ---------------------------------------------------------------------------
 # Parse
 # ---------------------------------------------------------------------------
@@ -328,6 +394,359 @@ def _fix_timestamps(cues: list[Cue]) -> list[Cue]:
             c.end_ms = c.start_ms + 1
 
     return cues
+
+
+def _clean_text_tracked(text: str, steps: list[RuleHit] | None = None) -> str:
+    """Same as ``_clean_text`` but optionally records a RuleHit per fired rule.
+
+    Passing ``steps=None`` runs the fast path (no tracking, no allocation).
+    """
+    if steps is None:
+        return _clean_text(text)
+
+    def _apply(rule_id: str, new_text: str, cur: str) -> str:
+        if new_text != cur:
+            steps.append(RuleHit(rule_id, _rule(rule_id), cur, new_text))
+        return new_text
+
+    cur = text
+    cur = _apply("C1", _INVISIBLE_RE.sub("", cur), cur)
+    cur = _apply("C2", cur.translate(_WHITESPACE_MAP), cur)
+    cur = _apply("C3", cur.translate(_SMART_QUOTE_MAP), cur)
+    cur = _apply("C4", _ELLIPSIS_RE.sub("...", cur), cur)
+    cur = _apply("C6", _HTML_TAG_RE.sub("", cur), cur)
+    # C9: tab → space, then drop remaining non-printable controls
+    c9_mid = cur.replace("\t", " ")
+    c9_mid = "".join(ch for ch in c9_mid if ch == " " or unicodedata.category(ch)[0] != "C")
+    cur = _apply("C9", c9_mid, cur)
+    cur = _apply("C8", _MULTI_SPACE_RE.sub(" ", cur), cur)
+    # C7 combined (space-before-punct + comma-like spacing)
+    c7_mid = _SPACE_BEFORE_PUNCT_RE.sub(r"\1", cur)
+    c7_mid = _COMMA_LIKE_RE.sub(r"\1\2 ", c7_mid)
+    cur = _apply("C7", c7_mid, cur)
+    cur = _apply("C5", _DOT_RUN_RE.sub("...", cur), cur)
+    cur = _apply("C8", _MULTI_SPACE_RE.sub(" ", cur), cur)
+    cur = _apply("E3", cur.strip(), cur)
+    return cur
+
+
+def _fix_timestamps_tracked(
+    cues: list[Cue],
+    cue_steps: dict[int, list[RuleHit]] | None,
+) -> list[Cue]:
+    """Same logic as ``_fix_timestamps`` but also records T1/T2/T3 hits.
+
+    Uses id() of each Cue as the key into ``cue_steps`` so that reports can
+    be matched back to CueReport records after renumbering.
+    """
+    track = cue_steps is not None
+
+    def _ts(c: Cue) -> str:
+        return f"{_ms_to_ts(c.start_ms)} --> {_ms_to_ts(c.end_ms)}"
+
+    # T3 — drop negatives / impossibles.
+    out: list[Cue] = []
+    for c in cues:
+        if 0 <= c.start_ms <= c.end_ms and c.end_ms < 360_000_000:
+            out.append(c)
+        elif track:
+            cue_steps.setdefault(id(c), []).append(RuleHit("T3", _rule("T3"), _ts(c), "<dropped>"))
+    cues = out
+
+    # T1 — fix zero-duration.
+    for i, c in enumerate(cues):
+        if c.end_ms > c.start_ms:
+            continue
+        before = _ts(c)
+        nxt = cues[i + 1] if i + 1 < len(cues) else None
+        gap_next = (nxt.start_ms - c.end_ms) if nxt else 500
+        if gap_next > 5:
+            c.end_ms = c.start_ms + min(_MIN_DURATION_MS, gap_next - 1)
+        else:
+            prev = cues[i - 1] if i > 0 else None
+            gap_prev = (c.start_ms - prev.end_ms) if prev else 500
+            if gap_prev > 5:
+                c.start_ms = max(0, c.start_ms - min(_MIN_DURATION_MS, gap_prev - 1))
+            c.end_ms = max(c.end_ms, c.start_ms + 1)
+        c.note = "interpolated"
+        if track:
+            cue_steps.setdefault(id(c), []).append(RuleHit("T1", _rule("T1"), before, _ts(c)))
+
+    # T2 — fix small overlaps.
+    for i in range(len(cues) - 1):
+        a, b = cues[i], cues[i + 1]
+        if a.end_ms <= b.start_ms:
+            continue
+        overlap = a.end_ms - b.start_ms
+        if overlap <= _MAX_OVERLAP_FIX_MS and b.start_ms > a.start_ms:
+            before = _ts(a)
+            a.end_ms = b.start_ms
+            if track:
+                cue_steps.setdefault(id(a), []).append(RuleHit("T2", _rule("T2"), before, _ts(a)))
+        else:
+            a.note = (a.note + " overlap").strip()
+
+    # Final guarantee: every cue has at least 1ms of duration.
+    for c in cues:
+        if c.end_ms <= c.start_ms:
+            c.end_ms = c.start_ms + 1
+
+    return cues
+
+
+def _parse_with_raw(content: str) -> tuple[list[Cue], list[str]]:
+    """Like ``parse`` but also returns the raw pre-join text of each cue.
+
+    raw_texts[i] is the multi-line text exactly as it appeared in the source
+    (newlines intact), suitable for the E2 report step.
+    """
+    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")
+    cues: list[Cue] = []
+    raws: list[str] = []
+    for block in re.split(r"\n\s*\n", content):
+        lines = [ln for ln in block.split("\n") if ln.strip() != ""]
+        if len(lines) < 2:
+            continue
+        ts_line_idx = None
+        ts_match = None
+        for i in (1, 0):
+            if i < len(lines):
+                m = _TIMESTAMP_RE.search(lines[i])
+                if m:
+                    ts_line_idx = i
+                    ts_match = m
+                    break
+        if ts_match is None:
+            continue
+        try:
+            start = _ts_to_ms(*ts_match.group(1, 2, 3, 4))
+            end = _ts_to_ms(*ts_match.group(5, 6, 7, 8))
+        except ValueError:
+            continue
+        text_lines = lines[ts_line_idx + 1 :]
+        if not text_lines:
+            continue
+        raws.append("\n".join(text_lines))
+        cues.append(Cue(start_ms=start, end_ms=end, text=" ".join(text_lines)))
+    return cues, raws
+
+
+def clean_with_report(content: str) -> tuple[list[Cue], Report]:
+    """Run ``clean`` while also building a per-cue Report.
+
+    Always collects the full step trace. The caller picks a verbosity level
+    at render time via ``format_report(level=...)``.
+    """
+    cues, raws = _parse_with_raw(content)
+    reports: list[CueReport] = []
+    cue_to_report: dict[int, CueReport] = {}
+
+    for i, (c, raw_text) in enumerate(zip(cues, raws), start=1):
+        steps: list[RuleHit] = []
+        # Synthesise E2 step if multi-line join actually changed the text.
+        if raw_text != c.text:
+            steps.append(RuleHit("E2", _rule("E2"), raw_text, c.text))
+        start_in, end_in, text_in = c.start_ms, c.end_ms, raw_text
+        # Text cleaning
+        c.text = _clean_text_tracked(c.text, steps)
+        rep = CueReport(
+            index_in=i,
+            index_out=None,  # filled in after filtering + renumber
+            start_ms_in=start_in,
+            end_ms_in=end_in,
+            start_ms_out=c.start_ms,
+            end_ms_out=c.end_ms,
+            text_in=text_in,
+            text_out=c.text,
+            steps=steps,
+        )
+        reports.append(rep)
+        cue_to_report[id(c)] = rep
+
+    # E4 — drop empties. Record before drop.
+    kept: list[Cue] = []
+    for c in cues:
+        rep = cue_to_report[id(c)]
+        if c.text:
+            kept.append(c)
+        else:
+            rep.steps.append(RuleHit("E4", _rule("E4"), rep.text_out or "<empty>", "<dropped>"))
+    cues = kept
+
+    # Timestamp fixes (record into the same reports via id()).
+    ts_steps: dict[int, list[RuleHit]] = {}
+    cues = _fix_timestamps_tracked(cues, ts_steps)
+    for cid, hits in ts_steps.items():
+        if cid in cue_to_report:
+            cue_to_report[cid].steps.extend(hits)
+
+    # Final drop of any residual zero-duration cues.
+    kept2: list[Cue] = []
+    for c in cues:
+        if c.text and c.end_ms > c.start_ms:
+            kept2.append(c)
+        else:
+            rep = cue_to_report.get(id(c))
+            if rep is not None:
+                rep.steps.append(RuleHit("E4", _rule("E4"), rep.text_out or "<empty>", "<dropped>"))
+    cues = kept2
+
+    # Finalize: N1 renumber + fill index_out/start_ms_out/end_ms_out
+    for new_idx, c in enumerate(cues, start=1):
+        rep = cue_to_report[id(c)]
+        rep.index_out = new_idx
+        rep.start_ms_out = c.start_ms
+        rep.end_ms_out = c.end_ms
+        rep.text_out = c.text
+
+    # rule_counts
+    rule_counts: dict[str, int] = {}
+    for rep in reports:
+        for h in rep.steps:
+            rule_counts[h.rule_id] = rule_counts.get(h.rule_id, 0) + 1
+
+    report = Report(
+        cues=reports,
+        cues_in=len(reports),
+        cues_out=len(cues),
+        rule_counts=rule_counts,
+    )
+    return cues, report
+
+
+# ---------------------------------------------------------------------------
+# Report rendering
+# ---------------------------------------------------------------------------
+
+
+def _format_summary(report: Report, path: str | None = None) -> str:
+    lines = ["─── FILE SUMMARY " + "─" * 56]
+    if path:
+        lines.append(f"path:            {path}")
+    dropped = report.cues_in - report.cues_out
+    lines.append(
+        f"cues in / out:   {report.cues_in} / {report.cues_out}    (-{dropped} dropped)"
+        if dropped
+        else f"cues in / out:   {report.cues_in} / {report.cues_out}"
+    )
+    n_mod = sum(1 for r in report.cues if r.modified)
+    pct = n_mod * 100.0 / max(1, report.cues_in)
+    lines.append(f"cues modified:   {n_mod}   ({pct:.1f}%)")
+    if report.rule_counts:
+        items = sorted(report.rule_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        lines.append("rules triggered: " + ", ".join(f"{k}×{v}" for k, v in items))
+    return "\n".join(lines)
+
+
+def format_report(
+    report: Report,
+    *,
+    path: str | None = None,
+    level: str = "full",
+    only_modified: bool = True,
+) -> str:
+    """Format a report as human-readable text.
+
+    ``level`` in {"minimal", "result", "full"}.
+    """
+    if level not in ("minimal", "result", "full"):
+        raise ValueError(f"unknown level: {level!r}")
+
+    def _esc(s: str) -> str:
+        return s.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+
+    parts: list[str] = []
+    for rep in report.cues:
+        if only_modified and not rep.modified:
+            continue
+        ts_out = f"{_ms_to_ts(rep.start_ms_out)} --> {_ms_to_ts(rep.end_ms_out)}" if rep.index_out is not None else "<dropped>"
+        idx_label = f"#{rep.index_in}" + (f"→{rep.index_out}" if rep.index_out else " <dropped>")
+        header = f"{idx_label}  {ts_out}"
+        block = [header]
+        if level == "minimal":
+            block.append(f"  - {_esc(rep.text_in)}")
+            block.append(f"  + {_esc(rep.text_out)}")
+        elif level == "result":
+            block.append(f"  in:   {_esc(rep.text_in)}")
+            for h in rep.steps:
+                block.append(f"  after {h.rule_id}: {_esc(h.after)}")
+            block.append(f"  out:  {_esc(rep.text_out)}")
+        else:  # full
+            block.append(f"  in:   {_esc(rep.text_in)}")
+            for h in rep.steps:
+                block.append(f"  step {h.rule_id}  [{h.reason}]")
+                block.append(f"           → {_esc(h.after)}")
+            block.append(f"  out:  {_esc(rep.text_out)}")
+        parts.append("\n".join(block))
+
+    if parts:
+        return "\n\n".join(parts) + "\n\n" + _format_summary(report, path) + "\n"
+    return _format_summary(report, path) + "\n"
+
+
+def report_to_jsonl(report: Report, *, path: str | None = None) -> list[str]:
+    """Serialize a report to a list of JSONL lines (one per modified cue + summary).
+
+    Each cue line has shape::
+
+        {"type": "cue", "path": ..., "index_in": 37, "index_out": 37,
+         "start_in": 195207, "end_in": 198320,
+         "start_out": 195207, "end_out": 198320,
+         "text_in": "...", "text_out": "...",
+         "steps": [{"rule": "C6", "reason": "剥离 HTML ...", "before": "...", "after": "..."}, ...]}
+
+    Final line is the summary::
+
+        {"type": "summary", "path": ..., "cues_in": 424, "cues_out": 423,
+         "cues_modified": 41, "rule_counts": {"C6": 17, "C7": 23, ...}}
+    """
+    import json
+
+    lines: list[str] = []
+    for rep in report.cues:
+        if not rep.modified:
+            continue
+        lines.append(
+            json.dumps(
+                {
+                    "type": "cue",
+                    "path": path,
+                    "index_in": rep.index_in,
+                    "index_out": rep.index_out,
+                    "start_in": rep.start_ms_in,
+                    "end_in": rep.end_ms_in,
+                    "start_out": rep.start_ms_out,
+                    "end_out": rep.end_ms_out,
+                    "text_in": rep.text_in,
+                    "text_out": rep.text_out,
+                    "steps": [
+                        {
+                            "rule": h.rule_id,
+                            "reason": h.reason,
+                            "before": h.before,
+                            "after": h.after,
+                        }
+                        for h in rep.steps
+                    ],
+                },
+                ensure_ascii=False,
+            )
+        )
+    n_mod = sum(1 for r in report.cues if r.modified)
+    lines.append(
+        json.dumps(
+            {
+                "type": "summary",
+                "path": path,
+                "cues_in": report.cues_in,
+                "cues_out": report.cues_out,
+                "cues_modified": n_mod,
+                "rule_counts": report.rule_counts,
+            },
+            ensure_ascii=False,
+        )
+    )
+    return lines
 
 
 def clean(content: str) -> list[Cue]:
