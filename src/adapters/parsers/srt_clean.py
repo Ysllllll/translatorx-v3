@@ -418,27 +418,94 @@ _MIN_DURATION_MS = 50
 _MAX_OVERLAP_FIX_MS = 100
 
 
+def _ts(c: Cue) -> str:
+    return f"{_ms_to_ts(c.start_ms)} --> {_ms_to_ts(c.end_ms)}"
+
+
+def _fix_zero_duration_run(
+    cues: list[Cue],
+    start_idx: int,
+    *,
+    track_steps: dict[int, list[RuleHit]] | None = None,
+) -> int:
+    """Fix a run of zero-duration cues starting at ``start_idx``.
+
+    A "run" is one or more consecutive cues that share the same start_ms
+    with no positive duration. We spread them across the available window
+    [run_start, next_real_start), pushing any colliding successor forward
+    if the window collapses to zero. Returns the index past the run.
+    """
+    i = start_idx
+    run_start = cues[i].start_ms
+    j = i
+    while j < len(cues) and cues[j].start_ms == run_start and cues[j].end_ms <= cues[j].start_ms:
+        j += 1
+    run_len = j - i
+    if run_len == 0:
+        return i + 1
+
+    # Window ends at the next cue that strictly advances past run_start,
+    # OR at cues[j].start_ms if that cue is still at run_start (so we have
+    # no real room and must push it forward). When the tail has positive
+    # duration but same start, window=0 and we steal 1ms/cue.
+    next_real_start: int | None = None
+    for k in range(j, len(cues)):
+        if cues[k].start_ms > run_start:
+            next_real_start = cues[k].start_ms
+            break
+
+    window = (next_real_start - run_start) if next_real_start is not None else run_len * _MIN_DURATION_MS
+    # If there is a successor at the same timepoint (cues[j].start_ms == run_start),
+    # we have NO free window — override to zero so we fall into the push path.
+    if j < len(cues) and cues[j].start_ms == run_start:
+        window = 0
+
+    if window >= run_len:
+        per = min(_MIN_DURATION_MS, window // run_len)
+        per = max(1, per)
+        for k in range(run_len):
+            c = cues[i + k]
+            before = _ts(c)
+            c.start_ms = run_start + k * per
+            c.end_ms = c.start_ms + per
+            c.note = "interpolated"
+            if track_steps is not None:
+                track_steps.setdefault(id(c), []).append(RuleHit("T1", _rule("T1"), before, _ts(c)))
+    else:
+        # No room — give each 1ms and push colliding successors forward.
+        for k in range(run_len):
+            c = cues[i + k]
+            before = _ts(c)
+            c.start_ms = run_start + k
+            c.end_ms = c.start_ms + 1
+            c.note = "interpolated"
+            if track_steps is not None:
+                track_steps.setdefault(id(c), []).append(RuleHit("T1", _rule("T1"), before, _ts(c)))
+        needed_start = cues[i + run_len - 1].end_ms
+        for k in range(j, len(cues)):
+            if cues[k].start_ms >= needed_start:
+                break
+            before = _ts(cues[k])
+            old_dur = cues[k].end_ms - cues[k].start_ms
+            cues[k].start_ms = needed_start
+            cues[k].end_ms = max(cues[k].end_ms, needed_start + max(1, old_dur))
+            if track_steps is not None:
+                track_steps.setdefault(id(cues[k]), []).append(RuleHit("T1", _rule("T1"), before, _ts(cues[k])))
+            needed_start = cues[k].end_ms
+    return j
+
+
 def _fix_timestamps(cues: list[Cue]) -> list[Cue]:
     # T3 — drop negatives / impossibles.
     cues = [c for c in cues if 0 <= c.start_ms <= c.end_ms and c.end_ms < 360_000_000]
 
-    # T1 — fix zero-duration: borrow from neighbors (up to 50ms).
-    for i, c in enumerate(cues):
-        if c.end_ms > c.start_ms:
-            continue
-        nxt = cues[i + 1] if i + 1 < len(cues) else None
-        gap_next = (nxt.start_ms - c.end_ms) if nxt else 500
-        if gap_next > 5:
-            c.end_ms = c.start_ms + min(_MIN_DURATION_MS, gap_next - 1)
+    # T1 — fix zero-duration runs (handles consecutive same-start zero-dur cues).
+    i = 0
+    while i < len(cues):
+        if cues[i].end_ms <= cues[i].start_ms:
+            i = _fix_zero_duration_run(cues, i)
         else:
-            # No room after — try to borrow from the previous cue if it has
-            # extra room, otherwise accept a 1ms overlap with next.
-            prev = cues[i - 1] if i > 0 else None
-            gap_prev = (c.start_ms - prev.end_ms) if prev else 500
-            if gap_prev > 5:
-                c.start_ms = max(0, c.start_ms - min(_MIN_DURATION_MS, gap_prev - 1))
-            c.end_ms = max(c.end_ms, c.start_ms + 1)
-        c.note = "interpolated"
+            i += 1
 
     # T2 — fix small overlaps. Never collapse a cue to zero duration.
     for i in range(len(cues) - 1):
@@ -505,9 +572,6 @@ def _fix_timestamps_tracked(
     """
     track = cue_steps is not None
 
-    def _ts(c: Cue) -> str:
-        return f"{_ms_to_ts(c.start_ms)} --> {_ms_to_ts(c.end_ms)}"
-
     # T3 — drop negatives / impossibles.
     out: list[Cue] = []
     for c in cues:
@@ -517,24 +581,13 @@ def _fix_timestamps_tracked(
             cue_steps.setdefault(id(c), []).append(RuleHit("T3", _rule("T3"), _ts(c), "<dropped>"))
     cues = out
 
-    # T1 — fix zero-duration.
-    for i, c in enumerate(cues):
-        if c.end_ms > c.start_ms:
-            continue
-        before = _ts(c)
-        nxt = cues[i + 1] if i + 1 < len(cues) else None
-        gap_next = (nxt.start_ms - c.end_ms) if nxt else 500
-        if gap_next > 5:
-            c.end_ms = c.start_ms + min(_MIN_DURATION_MS, gap_next - 1)
+    # T1 — fix zero-duration runs (handles consecutive same-start zero-dur cues).
+    i = 0
+    while i < len(cues):
+        if cues[i].end_ms <= cues[i].start_ms:
+            i = _fix_zero_duration_run(cues, i, track_steps=cue_steps if track else None)
         else:
-            prev = cues[i - 1] if i > 0 else None
-            gap_prev = (c.start_ms - prev.end_ms) if prev else 500
-            if gap_prev > 5:
-                c.start_ms = max(0, c.start_ms - min(_MIN_DURATION_MS, gap_prev - 1))
-            c.end_ms = max(c.end_ms, c.start_ms + 1)
-        c.note = "interpolated"
-        if track:
-            cue_steps.setdefault(id(c), []).append(RuleHit("T1", _rule("T1"), before, _ts(c)))
+            i += 1
 
     # T2 — fix small overlaps.
     for i in range(len(cues) - 1):

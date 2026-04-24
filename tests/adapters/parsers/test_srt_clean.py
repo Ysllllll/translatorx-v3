@@ -92,6 +92,43 @@ def test_fast_path_unchanged():
     assert len(cues) == 3
 
 
+def test_consecutive_zero_duration_run_no_collision():
+    """Two adjacent zero-duration cues at the same timepoint, with a
+    valid cue starting at the same time right after. The old fix gave
+    both zero-dur cues identical timestamps (and they collided with
+    the next cue). The run-aware fix must give them distinct 1ms slots
+    and push the following cue's start forward if necessary so all
+    four cues end up strictly non-overlapping.
+    """
+    src = """1
+00:00:29,615 --> 00:00:34,950
+First valid cue
+
+2
+00:00:34,950 --> 00:00:34,950
+Zero dur A
+
+3
+00:00:34,950 --> 00:00:34,950
+Zero dur B
+
+4
+00:00:34,950 --> 00:00:39,800
+Next valid cue
+"""
+    cues = SC.clean(src)
+    assert len(cues) == 4
+    # every cue positive duration, strictly monotonic, no equal timestamps
+    for c in cues:
+        assert c.end_ms > c.start_ms, f"zero dur remains: {c.text!r}"
+    for a, b in zip(cues, cues[1:]):
+        assert a.end_ms <= b.start_ms, f"overlap: {a.text!r} vs {b.text!r}"
+        # the two fixed cues must not share endpoints
+        if a.text.startswith("Zero") and b.text.startswith("Zero"):
+            assert a.start_ms != b.start_ms
+            assert a.end_ms != b.end_ms
+
+
 def test_html_regex_preserves_math_notation():
     # Angle-bracket math-like notation must NOT be stripped
     src = """1
