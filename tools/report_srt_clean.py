@@ -45,7 +45,7 @@ SRC = REPO_ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from adapters.parsers import srt_clean as SC  # noqa: E402
+from adapters.parsers import srt as SC  # noqa: E402
 from rich.console import Console  # noqa: E402
 from rich.table import Table  # noqa: E402
 from rich import box  # noqa: E402
@@ -62,6 +62,14 @@ _console = Console(soft_wrap=False, highlight=False)
 def _discover(root: str, pattern: str) -> list[Path]:
     hits = glob.glob(str(Path(root) / pattern))
     return sorted(Path(h) for h in hits)
+
+
+def _time_range(cr: SC.CueReport) -> str:
+    in_s = f"{cr.start_ms_in / 1000:.3f}→{cr.end_ms_in / 1000:.3f}"
+    if cr.index_out is None:
+        return f"{in_s}\n=> <dropped>"
+    out_s = f"{cr.start_ms_out / 1000:.3f}→{cr.end_ms_out / 1000:.3f}"
+    return in_s if in_s == out_s else f"{in_s}\n=> {out_s}"
 
 
 # ---------------------------------------------------------------------------
@@ -89,9 +97,10 @@ def _render_summary_table(report: SC.Report, path: str, *, disabled: set[str] | 
         visible = [h for h in cr.steps if h.rule_id not in disabled]
         if not visible:
             continue
-        time_s = f"{cr.start_ms_in / 1000:.2f}→{cr.end_ms_in / 1000:.2f}"
+        time_s = _time_range(cr)
         rules = ", ".join(h.rule_id for h in visible)
-        table.add_row(str(cr.index_in), time_s, rules, cr.text_in, cr.text_out)
+        after = visible[-1].after if cr.index_out is None else cr.text_out
+        table.add_row(str(cr.index_in), time_s, rules, cr.text_in, after)
 
     _console.print(table)
     _console.print(_summary_panel(report, path, disabled=disabled))
@@ -118,14 +127,15 @@ def _render_detail_table(report: SC.Report, path: str, *, disabled: set[str] | N
         visible = [h for h in cr.steps if h.rule_id not in disabled]
         if not visible:
             continue
-        time_s = f"{cr.start_ms_in / 1000:.2f}→{cr.end_ms_in / 1000:.2f}"
+        time_s = _time_range(cr)
         # 'in' row
         table.add_row(str(cr.index_in), time_s, "in", "", "", cr.text_in)
         for idx, h in enumerate(visible, 1):
             reason = SC._RULE_REASONS.get(h.rule_id, "")
             table.add_row("", "", f"step{idx}", h.rule_id, reason, h.after)
         # 'out' row
-        table.add_row("", "", "[bold green]out[/bold green]", "", "", f"[green]{cr.text_out}[/green]")
+        out_text = "<dropped>" if cr.index_out is None else f"[green]{cr.text_out}[/green]"
+        table.add_row("", "", "[bold green]out[/bold green]", "", "", out_text)
 
     _console.print(table)
     _console.print(_summary_panel(report, path, disabled=disabled))

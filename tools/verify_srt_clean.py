@@ -31,7 +31,7 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE.parent / "src"))
 
-from adapters.parsers import srt_clean as SC  # noqa: E402
+from adapters.parsers import srt as SC  # noqa: E402
 
 
 def _read(path: Path) -> str:

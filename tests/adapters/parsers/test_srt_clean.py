@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from adapters.parsers import srt_clean as SC
+from adapters.parsers import srt as SC
 
 
 SAMPLE = """1
@@ -94,11 +94,9 @@ def test_fast_path_unchanged():
 
 def test_consecutive_zero_duration_run_no_collision():
     """Two adjacent zero-duration cues at the same timepoint, with a
-    valid cue starting at the same time right after. The old fix gave
-    both zero-dur cues identical timestamps (and they collided with
-    the next cue). The run-aware fix must give them distinct 1ms slots
-    and push the following cue's start forward if necessary so all
-    four cues end up strictly non-overlapping.
+    valid cue starting at the same time right after. Same-time zero-duration
+    cues are text fragments, so the cleaner should merge them into the valid
+    cue instead of creating synthetic 1ms slots and pushing the timeline.
     """
     src = """1
 00:00:29,615 --> 00:00:34,950
@@ -115,18 +113,51 @@ Zero dur B
 4
 00:00:34,950 --> 00:00:39,800
 Next valid cue
-"""
+    """
     cues = SC.clean(src)
-    assert len(cues) == 4
-    # every cue positive duration, strictly monotonic, no equal timestamps
+    assert len(cues) == 2
+    assert cues[1].start_ms == 34950
+    assert cues[1].end_ms == 39800
+    assert cues[1].text == "Zero dur A Zero dur B Next valid cue"
+    # every cue positive duration and non-overlapping
     for c in cues:
         assert c.end_ms > c.start_ms, f"zero dur remains: {c.text!r}"
     for a, b in zip(cues, cues[1:]):
         assert a.end_ms <= b.start_ms, f"overlap: {a.text!r} vs {b.text!r}"
-        # the two fixed cues must not share endpoints
-        if a.text.startswith("Zero") and b.text.startswith("Zero"):
-            assert a.start_ms != b.start_ms
-            assert a.end_ms != b.end_ms
+
+
+def test_zero_duration_same_start_merges_into_positive_cue():
+    src = """1
+00:00:00,000 --> 00:00:00,001
+A
+
+2
+00:00:00,000 --> 00:00:00,000
+B
+"""
+    result = SC.clean_srt(src)
+    assert result.ok
+    assert [(c.start_ms, c.end_ms, c.text) for c in result.cues] == [(0, 1, "A B")]
+    assert all(a.end_ms <= b.start_ms for a, b in zip(result.cues, result.cues[1:]))
+    # One hit records the target cue text change; one records the zero-duration
+    # cue being absorbed.
+    assert result.report.rule_counts["T1M"] == 2
+
+
+def test_zero_duration_merge_limit_marks_unrepairable():
+    src = """1
+00:00:00,000 --> 00:00:00,000
+zero zero zero zero zero zero
+
+2
+00:00:00,000 --> 00:00:01,000
+positive positive positive positive positive positive
+"""
+    result = SC.clean_srt(src, SC.CleanOptions(max_display_lines=1, display_line_chars=20))
+    assert not result.ok
+    assert result.issues
+    assert result.issues[0].code == "T1_MERGE_LIMIT_EXCEEDED"
+    assert "T1M!" in result.report.rule_counts
 
 
 def test_html_regex_preserves_math_notation():

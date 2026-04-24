@@ -28,7 +28,7 @@ for p in (SRC, DEMOS):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from adapters.parsers import srt_clean as SC  # noqa: E402
+from adapters.parsers import srt as SC  # noqa: E402
 
 from report_srt_clean import (  # noqa: E402
     _render_summary_table,
