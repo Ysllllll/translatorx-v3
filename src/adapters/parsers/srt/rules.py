@@ -15,6 +15,8 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Callable
 
+from domain.lang import DEFAULT_FENCES, Fence, mask_fences, unmask_fences
+
 from ..engine import Rule, Tracker
 from ..engine.rule import RuleHit
 from .model import CleanOptions, Cue, Issue
@@ -236,14 +238,35 @@ def run_text_pipeline(
     rules=TEXT_RULES,
     *,
     track: list[RuleHit] | None = None,
+    fences: tuple[Fence, ...] | None = DEFAULT_FENCES,
 ) -> str:
-    """Apply a sequence of :class:`TextRule` to ``text``. ``track=None`` → fast path."""
+    """Apply a sequence of :class:`TextRule` to ``text``. ``track=None`` → fast path.
+
+    When ``fences`` is provided (defaults to :data:`DEFAULT_FENCES`),
+    fenced spans like ``[? proceed ?]`` are masked with PUA sentinels
+    before any rule runs and restored afterwards. This keeps C7 from
+    eating the inner spaces and C5 from collapsing the inner ``..``.
+    Pass ``fences=None`` (or an empty tuple) to disable.
+    """
+    mapping: list[str] = []
+    if fences:
+        text, mapping = mask_fences(text, fences)
     for rule in rules:
         new_text = rule.apply(text)
         if new_text != text:
             if track is not None:
-                track.append(RuleHit(rule.id, rule.reason, text, new_text))
+                # Surface the user-visible before/after by unmasking on the fly.
+                track.append(
+                    RuleHit(
+                        rule.id,
+                        rule.reason,
+                        unmask_fences(text, mapping) if mapping else text,
+                        unmask_fences(new_text, mapping) if mapping else new_text,
+                    )
+                )
             text = new_text
+    if mapping:
+        text = unmask_fences(text, mapping)
     return text
 
 

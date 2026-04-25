@@ -14,8 +14,11 @@ Example::
 
 from __future__ import annotations
 
+from typing import Sequence
+
 from domain.lang import LangOps
 from domain.lang._core._base_ops import _BaseOps
+from domain.lang._core._fences import DEFAULT_FENCES, Fence, split_with_fences
 
 from domain.lang.chunk._boundary import find_boundaries, split_tokens_by_boundaries
 from domain.lang.chunk._length import split_tokens_by_length
@@ -35,7 +38,14 @@ class TextPipeline:
 
     __slots__ = ("_ops", "_groups")
 
-    def __init__(self, text: str, *, language: str | None = None, ops: _BaseOps | None = None) -> None:
+    def __init__(
+        self,
+        text: str,
+        *,
+        language: str | None = None,
+        ops: _BaseOps | None = None,
+        fences: Sequence[Fence] | None = DEFAULT_FENCES,
+    ) -> None:
         if ops is not None:
             self._ops = ops
         elif language is not None:
@@ -44,7 +54,10 @@ class TextPipeline:
             raise TypeError("TextPipeline requires either language or ops")
 
         if text:
-            tokens = self._ops.split(text)
+            if fences:
+                tokens = split_with_fences(text, self._ops.split, fences)
+            else:
+                tokens = self._ops.split(text)
             self._groups: list[list[str]] = [tokens] if tokens else []
         else:
             self._groups = []

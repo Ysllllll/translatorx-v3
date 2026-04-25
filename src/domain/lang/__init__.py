@@ -9,6 +9,14 @@ from ._core._availability import (
     mecab_is_available,
     kiwi_is_available,
 )
+from ._core._fences import (
+    DEFAULT_FENCES,
+    Fence,
+    find_fence_spans,
+    mask_fences,
+    split_with_fences,
+    unmask_fences,
+)
 from .chunk import TextPipeline
 
 __all__ = [
@@ -20,4 +28,10 @@ __all__ = [
     "jieba_is_available",
     "mecab_is_available",
     "kiwi_is_available",
+    "Fence",
+    "DEFAULT_FENCES",
+    "find_fence_spans",
+    "mask_fences",
+    "unmask_fences",
+    "split_with_fences",
 ]
