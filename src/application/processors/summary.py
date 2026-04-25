@@ -12,7 +12,7 @@ window is merged, and performs a final ``flush`` in ``finally`` under
 This parallels the ``translate_with_verify`` → :class:`TranslateProcessor`
 split: the Agent in ``llm_ops`` is the batch/stream-safe primitive; the
 Processor in ``runtime`` owns state restoration, Store persistence, and
-fingerprint-based invalidation.
+provenance-based invalidation.
 
 Semantics
 ---------
@@ -24,10 +24,16 @@ Semantics
 * **Cold start**: ``IncrementalSummaryState`` is restored from
   ``store.load_video(video)["summary"]`` so a rerun resumes at the same
   window boundary without replaying the LLM.
-* **Fingerprint**: tied to engine id/model + language pair + window size.
-  A mismatch clears the stored summary so the agent starts fresh.
+* **Per-blob provenance (D-070)**: instead of writing into the global
+  ``meta._fingerprints`` gate, the processor stamps a ``_provenance``
+  dict — ``{model, config_sig, source_lang, target_lang, window_words}`` —
+  *inside the persisted summary itself*. On the next run we compare it
+  to the current ``config_sig``; mismatch ⇒ start fresh. Engine *class
+  name* is intentionally excluded so swapping API-compatible backends
+  (OpenAI ↔ vLLM running the same model) does not invalidate state.
 * **Final flush**: ``aclose`` runs ``agent.flush(mark_completed=True)``
-  and a last ``patch_video(summary=...)`` under ``asyncio.shield``.
+  and a last ``patch_video(summary=...)`` (with refreshed ``_provenance``)
+  under ``asyncio.shield``.
 """
 
 from __future__ import annotations
@@ -77,15 +83,39 @@ class SummaryProcessor:
         self._fp_cache: str | None = None
 
     # ------------------------------------------------------------------
+    # Config signature (per-blob provenance — D-070)
+    # ------------------------------------------------------------------
 
     def fingerprint(self) -> str:
+        """SHA-256 of model + summary config — memoized per instance.
+
+        This signature is stamped into ``summary._provenance.config_sig``
+        and compared on the next run to decide whether the cached
+        summary state is still valid (D-070). Engine *class name* is
+        intentionally excluded so that switching between API-compatible
+        engines (e.g. OpenAI ↔ vLLM running the same model) does not
+        invalidate caches.
+        """
         if self._fp_cache is not None:
             return self._fp_cache
-        engine_id = type(self._engine).__name__
         model = getattr(self._engine, "model", "") or ""
-        raw = f"engine={engine_id}|model={model}|src={self._source_lang}|tgt={self._target_lang}|window={self._window_words}"
+        raw = f"model={model}|src={self._source_lang}|tgt={self._target_lang}|window={self._window_words}"
         self._fp_cache = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         return self._fp_cache
+
+    def _provenance(self) -> dict[str, Any]:
+        return {
+            "model": getattr(self._engine, "model", "") or "",
+            "config_sig": self.fingerprint(),
+            "source_lang": self._source_lang,
+            "target_lang": self._target_lang,
+            "window_words": self._window_words,
+        }
+
+    def _summary_payload(self, state: IncrementalSummaryState) -> dict[str, Any]:
+        payload = state.to_dict()
+        payload["_provenance"] = self._provenance()
+        return payload
 
     def output_is_stale(self, rec: SentenceRecord) -> bool:
         # Summary is a side-effect on the video, not a per-record output.
@@ -104,21 +134,23 @@ class SummaryProcessor:
         store: "Store",
         video_key: "VideoKey",
     ) -> AsyncIterator[SentenceRecord]:
-        fp = self.fingerprint()
+        config_sig = self.fingerprint()
 
         existing = await store.load_video(video_key.video)
-        existing_meta = existing.get("meta", {}) if isinstance(existing, dict) else {}
-        existing_fps = existing_meta.get("_fingerprints", {}) if isinstance(existing_meta, dict) else {}
-        fp_matches = existing_fps.get(self.name) == fp
+        existing_summary = existing.get("summary") if isinstance(existing, dict) else None
 
-        if fp_matches and isinstance(existing, dict):
-            state = IncrementalSummaryState.from_dict(existing.get("summary"))
+        prov = existing_summary.get("_provenance") if isinstance(existing_summary, dict) else None
+        sig_matches = isinstance(prov, dict) and prov.get("config_sig") == config_sig
+
+        if sig_matches and isinstance(existing_summary, dict):
+            state = IncrementalSummaryState.from_dict(existing_summary)
         else:
             state = IncrementalSummaryState()
 
-        # Fast path: fingerprint matches AND we already have a stable summary
-        # (completed or at least one merge) — just pass records through.
-        skip_work = fp_matches and state.current is not None
+        # Fast path: provenance matches AND we already have a stable
+        # summary (completed or at least one merge) — just pass records
+        # through.
+        skip_work = sig_matches and state.current is not None
 
         try:
             async for rec in upstream:
@@ -129,7 +161,7 @@ class SummaryProcessor:
                 state = await self._agent.feed(state, rec.src_text)
                 new_version = state.current.version if state.current else 0
                 if new_version != prev_version:
-                    await store.patch_video(video_key.video, summary=state.to_dict())
+                    await store.patch_video(video_key.video, summary=self._summary_payload(state))
                 yield rec
         finally:
             if skip_work:
@@ -142,8 +174,7 @@ class SummaryProcessor:
                     state = await self._agent.flush(state)
                 except Exception:  # noqa: BLE001
                     logger.exception("SummaryProcessor: final flush failed")
-                await store.patch_video(video_key.video, summary=state.to_dict())
-                await store.set_fingerprints(video_key.video, {self.name: fp})
+                await store.patch_video(video_key.video, summary=self._summary_payload(state))
 
             await asyncio.shield(_final())
             await asyncio.shield(self.aclose())

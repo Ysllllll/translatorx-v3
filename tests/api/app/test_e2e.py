@@ -269,8 +269,11 @@ class TestStreamE2E:
         assert store_file.exists()
         data = json.loads(store_file.read_text())
         assert len(data["records"]) == 1
-        # fingerprint stamped by translate processor
-        assert "_fingerprints" in data.get("meta", {})
+        # per-record provenance stamped by translate processor (D-070)
+        rec0 = data["records"][0]
+        assert "translation_meta" in rec0["extra"]
+        assert "zh" in rec0["extra"]["translation_meta"]
+        assert "config_sig" in rec0["extra"]["translation_meta"]["zh"]
 
 
 # ---------------------------------------------------------------------------

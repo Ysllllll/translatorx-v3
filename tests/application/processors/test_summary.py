@@ -3,13 +3,16 @@
 Covers:
 
 * fingerprint stability + sensitivity to window/lang/model changes
+  (engine *class name* now intentionally NOT part of the signature — D-070)
 * pass-through semantics — records emerge unchanged
 * cold start — no prior state, agent feeds incrementally
 * merge triggers ``patch_video(summary=...)`` when a new snapshot is
-  produced
+  produced — and stamps ``summary._provenance``
 * final ``flush`` is shielded and marks ``completed=True``
-* warm start — state restored from existing JSON when fingerprint matches
-* fingerprint mismatch — agent starts fresh, stored summary ignored
+* warm start — state restored from existing JSON when ``_provenance``
+  matches
+* provenance mismatch — agent starts fresh, stored summary ignored,
+  no writes to the legacy ``meta._fingerprints`` gate
 """
 
 from __future__ import annotations
@@ -111,6 +114,28 @@ class TestFingerprint:
         p2 = SummaryProcessor(e, source_lang="en", target_lang="ja")
         assert p1.fingerprint() != p2.fingerprint()
 
+    def test_engine_class_not_in_signature(self) -> None:
+        """D-070: engine class name must NOT affect config_sig — only model does."""
+
+        class _OtherEngine(_ScriptedEngine):
+            pass
+
+        a = _ScriptedEngine([])
+        b = _OtherEngine([])
+        # Same model on both → same signature regardless of engine class.
+        assert b.model == a.model
+        p1 = SummaryProcessor(a, source_lang="en", target_lang="zh")
+        p2 = SummaryProcessor(b, source_lang="en", target_lang="zh")
+        assert p1.fingerprint() == p2.fingerprint()
+
+    def test_sensitive_to_model(self) -> None:
+        a = _ScriptedEngine([])
+        b = _ScriptedEngine([])
+        b.model = "different-model"
+        p1 = SummaryProcessor(a, source_lang="en", target_lang="zh")
+        p2 = SummaryProcessor(b, source_lang="en", target_lang="zh")
+        assert p1.fingerprint() != p2.fingerprint()
+
 
 class TestPassThrough:
     @pytest.mark.asyncio
@@ -147,12 +172,21 @@ class TestWindowTrigger:
         assert summary["current"]["title"] == "Intro"
         assert summary["current"]["terms"] == {"LLM": "大模型"}
         assert summary["completed"] is True  # flush in finally
+        # D-070 per-blob provenance — no longer in meta._fingerprints.
+        prov = summary.get("_provenance")
+        assert isinstance(prov, dict), "summary._provenance must be present"
+        assert prov["config_sig"] == proc.fingerprint()
+        assert prov["source_lang"] == "en"
+        assert prov["target_lang"] == "zh"
+        assert prov["window_words"] == 3
+        meta = data.get("meta", {}) or {}
+        assert "_fingerprints" not in meta, "SummaryProcessor must not write to legacy meta._fingerprints under D-070"
         assert engine.calls == 1
 
 
 class TestWarmStart:
     @pytest.mark.asyncio
-    async def test_state_restored_on_matching_fingerprint(self, store, video_key) -> None:
+    async def test_state_restored_on_matching_provenance(self, store, video_key) -> None:
         # First run — produce summary v1.
         engine_a = _ScriptedEngine([_SUMMARY_JSON_1])
         proc_a = SummaryProcessor(engine_a, source_lang="en", target_lang="zh", window_words=3)
@@ -163,7 +197,7 @@ class TestWarmStart:
         await _drain(proc_a.process(src_a(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine_a.calls == 1
 
-        # Second run with *same* fingerprint — summary resumed; no merge
+        # Second run with *same* provenance — summary resumed; no merge
         # happens because completed=True (agent no-ops).
         engine_b = _ScriptedEngine([_SUMMARY_JSON_2])
         proc_b = SummaryProcessor(engine_b, source_lang="en", target_lang="zh", window_words=3)
@@ -176,10 +210,11 @@ class TestWarmStart:
         assert engine_b.calls == 0
 
     @pytest.mark.asyncio
-    async def test_fingerprint_mismatch_starts_fresh(self, store, video_key) -> None:
-        # Seed a stored summary from a *different* fingerprint.
+    async def test_provenance_mismatch_starts_fresh(self, store, video_key) -> None:
+        # Seed a stored summary stamped with a *different* config_sig.
         seeded = IncrementalSummaryState(current=None, completed=True).to_dict()
-        await store.patch_video("v1", summary=seeded, meta={"_fingerprints": {"summary": "DIFFERENT-FP"}})
+        seeded["_provenance"] = {"model": "old-model", "config_sig": "DIFFERENT-SIG", "source_lang": "en", "target_lang": "zh", "window_words": 3}
+        await store.patch_video("v1", summary=seeded)
 
         engine = _ScriptedEngine([_SUMMARY_JSON_1])
         proc = SummaryProcessor(engine, source_lang="en", target_lang="zh", window_words=3)
@@ -193,5 +228,8 @@ class TestWarmStart:
         assert engine.calls == 1
         data = await store.load_video("v1")
         assert data is not None, "store.load_video('v1') must return persisted state"
-        # Fingerprint was updated to current.
-        assert data["meta"]["_fingerprints"]["summary"] == proc.fingerprint()
+        # Provenance was rewritten to current.
+        prov = data["summary"]["_provenance"]
+        assert prov["config_sig"] == proc.fingerprint()
+        meta = data.get("meta", {}) or {}
+        assert "_fingerprints" not in meta, "SummaryProcessor must not write to legacy meta._fingerprints under D-070"

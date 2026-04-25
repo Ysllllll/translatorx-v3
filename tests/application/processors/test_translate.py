@@ -1,17 +1,27 @@
 """Tests for :class:`runtime.processors.TranslateProcessor`.
 
-Covers:
+Covers (D-070 — per-record provenance):
 
-* fingerprint stability + sensitivity to config changes
-* hit path (fingerprint matches + translation present) — no LLM call,
-  window updated, record yielded unchanged
-* miss path — LLM call, ``patch_video`` persists translation +
-  ``terms_ready_at_translate`` flag
-* ``output_is_stale`` transitions with TermsProvider readiness (D-068)
-* buffered flush — records written in batches of ``flush_every``
-* finally-shield — pending buffer + fingerprint flush happen on cancel
-* direct_translate / skip_long / fake_process refinements inherit from
-  the old :mod:`pipeline.nodes` behaviour
+* ``fingerprint()`` returns a stable config signature (per-record stamp,
+  not the legacy video-level cache key).
+* hit path — translation present + matching ``translation_meta[target]``
+  → no LLM call, window updated, record yielded unchanged.
+* legacy translations without ``translation_meta`` are treated as
+  user-edited (preserved as-is).
+* miss paths:
+  - ``miss_empty`` (no translation persisted)
+  - ``miss_src``  (upstream src_text changed → src_hash differs)
+  - ``miss_config`` (model / prompt / etc. changed → previous value
+    backed up to ``translations[target+"_prev"]``)
+* explicit ``edited=True`` flag on ``translation_meta[target]`` always
+  preserves the user's hand-written value, even on config / src drift.
+* miss path persistence (``patch_video``: translations + provenance +
+  ``terms_ready_at_translate`` flag).
+* ``output_is_stale`` transitions with TermsProvider readiness (D-068).
+* buffered flush — records written in batches of ``flush_every``.
+* finally-shield — pending buffer flushes on cancel.
+* direct_translate / skip_long / prefix refinements inherit from the
+  old :mod:`pipeline.nodes` behaviour.
 """
 
 from __future__ import annotations
@@ -31,6 +41,7 @@ from domain.model import SentenceRecord
 from domain.model.usage import CompletionResult
 
 from application.processors import TranslateProcessor
+from adapters.sources.common import compute_src_hash
 from ports.source import VideoKey
 from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
@@ -82,8 +93,16 @@ class _NotReadyTerms(StaticTerms):
 
 
 def _rec(rid: int, text: str, **extra) -> SentenceRecord:
-    base = {"id": rid, **extra}
+    base = {"id": rid, "src_hash": compute_src_hash(text), **extra}
     return SentenceRecord(src_text=text, start=0.0, end=1.0, extra=base)
+
+
+def _meta(target: str, *, config_sig: str, src_hash: str, model: str = "mock-model-v1", edited: bool = False) -> dict:
+    """Build a ``translation_meta`` payload entry for a target language."""
+    entry: dict = {"model": model, "config_sig": config_sig, "src_hash": src_hash}
+    if edited:
+        entry["edited"] = True
+    return {target: entry}
 
 
 @pytest.fixture
@@ -105,7 +124,7 @@ async def _drain(agen) -> list[SentenceRecord]:
 
 
 # ---------------------------------------------------------------------------
-# fingerprint
+# fingerprint (now: config signature stamped on each record — D-070)
 # ---------------------------------------------------------------------------
 
 
@@ -136,6 +155,18 @@ class TestFingerprint:
         p2 = TranslateProcessor(e2, _PassChecker())
         assert p1.fingerprint() != p2.fingerprint()
 
+    def test_insensitive_to_engine_class(self):
+        """Switching engine subclasses but keeping the same model name
+        must NOT invalidate caches (D-070 rationale: API-compatible
+        backends should reuse cached translations)."""
+
+        class _AltEngine(_RecordingEngine):
+            pass
+
+        p1 = TranslateProcessor(_RecordingEngine(), _PassChecker())
+        p2 = TranslateProcessor(_AltEngine(), _PassChecker())
+        assert p1.fingerprint() == p2.fingerprint()
+
 
 # ---------------------------------------------------------------------------
 # hit path
@@ -144,15 +175,16 @@ class TestFingerprint:
 
 class TestHitPath:
     @pytest.mark.asyncio
-    async def test_hit_skips_llm(self, store, video_key):
-        """Matching fingerprint + existing translation → no LLM call."""
+    async def test_hit_skips_llm_with_provenance(self, store, video_key):
+        """Translation + matching translation_meta → no LLM call."""
         engine = _RecordingEngine()
         proc = TranslateProcessor(engine, _PassChecker())
+        sig = proc.fingerprint()
 
-        # Seed the store with the current fingerprint.
-        await store.patch_video(video_key.video, meta={"_fingerprints": {"translate": proc.fingerprint()}})
-
-        recs = [replace(_rec(0, "Hello."), translations={"zh": "你好。"}), replace(_rec(1, "Bye."), translations={"zh": "再见。"})]
+        recs = [
+            replace(_rec(0, "Hello."), translations={"zh": "你好。"}, extra={"id": 0, "src_hash": compute_src_hash("Hello."), "translation_meta": _meta("zh", config_sig=sig, src_hash=compute_src_hash("Hello."))}),
+            replace(_rec(1, "Bye."), translations={"zh": "再见。"}, extra={"id": 1, "src_hash": compute_src_hash("Bye."), "translation_meta": _meta("zh", config_sig=sig, src_hash=compute_src_hash("Bye."))}),
+        ]
 
         async def src():
             for r in recs:
@@ -163,21 +195,37 @@ class TestHitPath:
         assert [r.translations["zh"] for r in out] == ["你好。", "再见。"]
 
     @pytest.mark.asyncio
+    async def test_legacy_translation_without_meta_is_preserved(self, store, video_key):
+        """Hand-written translation in JSON without ``translation_meta``
+        is treated as user-edited (preserved across runs)."""
+        engine = _RecordingEngine()
+        proc = TranslateProcessor(engine, _PassChecker())
+
+        recs = [replace(_rec(0, "Hello."), translations={"zh": "手译"})]
+
+        async def src():
+            for r in recs:
+                yield r
+
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
+        assert engine.calls == 0
+        assert out[0].translations["zh"] == "手译"
+
+    @pytest.mark.asyncio
     async def test_hit_hydrates_from_store_records(self, store, video_key):
         """Round-2 scenario: upstream Source emits records with empty
         ``translations`` (like :class:`SrtSource`). The processor must
         hydrate them from the persisted ``records[]`` so the cache-hit
-        branch fires — otherwise every rerun re-pays the LLM cost.
-        """
+        branch fires."""
         engine = _RecordingEngine()
         proc = TranslateProcessor(engine, _PassChecker())
+        sig = proc.fingerprint()
+        h0, h1 = compute_src_hash("Hello."), compute_src_hash("Bye.")
 
-        # Seed the store as if a previous run had completed: records
-        # persisted + fingerprint stamped.
-        await store.patch_video(video_key.video, records={0: {"translations.zh": "你好。"}, 1: {"translations.zh": "再见。"}}, meta={"_fingerprints": {"translate": proc.fingerprint()}})
+        # Seed the store with prior-run records carrying translation_meta.
+        await store.patch_video(video_key.video, records={0: {"translations.zh": "你好。", f"extra.translation_meta.zh": {"model": "mock-model-v1", "config_sig": sig, "src_hash": h0}}, 1: {"translations.zh": "再见。", f"extra.translation_meta.zh": {"model": "mock-model-v1", "config_sig": sig, "src_hash": h1}}})
 
-        # Upstream now emits *fresh* records (empty translations) — what
-        # SrtSource does in practice.
+        # Upstream now emits *fresh* records (empty translations).
         recs = [_rec(0, "Hello."), _rec(1, "Bye.")]
 
         async def src():
@@ -189,14 +237,14 @@ class TestHitPath:
         assert [r.translations["zh"] for r in out] == ["你好。", "再见。"]
 
     @pytest.mark.asyncio
-    async def test_miss_when_fingerprint_mismatch(self, store, video_key):
+    async def test_miss_when_config_sig_mismatch_backs_up_prev(self, store, video_key):
+        """Stale config_sig → re-translate AND back up old value to
+        ``translations[zh_prev]`` for diffing."""
         engine = _RecordingEngine()
         proc = TranslateProcessor(engine, _PassChecker())
+        h0 = compute_src_hash("Hello.")
 
-        # Stale fingerprint — should force miss even though translation is present.
-        await store.patch_video(video_key.video, meta={"_fingerprints": {"translate": "stale"}})
-
-        recs = [replace(_rec(0, "Hello."), translations={"zh": "旧译"})]
+        recs = [replace(_rec(0, "Hello."), translations={"zh": "旧译"}, extra={"id": 0, "src_hash": h0, "translation_meta": _meta("zh", config_sig="OLD-SIG-FROM-DIFFERENT-MODEL", src_hash=h0)})]
 
         async def src():
             for r in recs:
@@ -205,6 +253,44 @@ class TestHitPath:
         out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine.calls == 1
         assert out[0].translations["zh"] == "[翻译]Hello."
+        assert out[0].translations["zh_prev"] == "旧译"
+
+    @pytest.mark.asyncio
+    async def test_miss_when_src_hash_changed(self, store, video_key):
+        """Upstream re-chunked the source → new src_hash invalidates the
+        cached translation (no _prev backup; src text is different so
+        the diff is meaningless)."""
+        engine = _RecordingEngine()
+        proc = TranslateProcessor(engine, _PassChecker())
+
+        recs = [replace(_rec(0, "Hello world."), translations={"zh": "旧译"}, extra={"id": 0, "src_hash": compute_src_hash("Hello world."), "translation_meta": _meta("zh", config_sig=proc.fingerprint(), src_hash="00000000")})]
+
+        async def src():
+            for r in recs:
+                yield r
+
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
+        assert engine.calls == 1
+        assert out[0].translations["zh"] == "[翻译]Hello world."
+        # No _prev backup on src_hash mismatch (source changed; old translation stale).
+        assert "zh_prev" not in out[0].translations
+
+    @pytest.mark.asyncio
+    async def test_edited_flag_protects_translation(self, store, video_key):
+        """User sets ``edited=True`` in JSON → translation is preserved
+        even when config_sig and src_hash both differ."""
+        engine = _RecordingEngine()
+        proc = TranslateProcessor(engine, _PassChecker())
+
+        recs = [replace(_rec(0, "Hello."), translations={"zh": "我手改的"}, extra={"id": 0, "src_hash": compute_src_hash("Hello."), "translation_meta": _meta("zh", config_sig="STALE", src_hash="00000000", edited=True)})]
+
+        async def src():
+            for r in recs:
+                yield r
+
+        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
+        assert engine.calls == 0
+        assert out[0].translations["zh"] == "我手改的"
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +300,7 @@ class TestHitPath:
 
 class TestMissPath:
     @pytest.mark.asyncio
-    async def test_translation_persisted(self, store, video_key):
+    async def test_translation_persisted_with_provenance(self, store, video_key):
         engine = _RecordingEngine()
         proc = TranslateProcessor(engine, _PassChecker(), flush_every=1, flush_interval_s=0.01)
 
@@ -230,7 +316,11 @@ class TestMissPath:
         assert by_id[0]["translations"]["zh"] == "[翻译]Hello."
         assert by_id[1]["translations"]["zh"] == "[翻译]Bye."
         assert by_id[0]["extra"]["terms_ready_at_translate"] is False
-        assert data["meta"]["_fingerprints"]["translate"] == proc.fingerprint()
+        # Per-record provenance stamped (D-070).
+        meta_zh = by_id[0]["extra"]["translation_meta"]["zh"]
+        assert meta_zh["config_sig"] == proc.fingerprint()
+        assert meta_zh["src_hash"] == compute_src_hash("Hello.")
+        assert meta_zh["model"] == "mock-model-v1"
 
     @pytest.mark.asyncio
     async def test_terms_ready_flag_reflects_provider(self, store, video_key):
@@ -277,7 +367,7 @@ class TestMissPath:
 
 
 # ---------------------------------------------------------------------------
-# refinements (direct_translate / skip_long / fake_process / prefix)
+# refinements (direct_translate / skip_long / prefix)
 # ---------------------------------------------------------------------------
 
 
@@ -306,22 +396,6 @@ class TestRefinements:
         out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
         assert engine.calls == 0
         assert out[0].translations["zh"] == "hello world"
-
-    @pytest.mark.asyncio
-    async def test_fingerprint_hit_skips_llm(self, store, video_key):
-        """Record already translated + matching fingerprint → no LLM call."""
-        engine = _RecordingEngine()
-        proc = TranslateProcessor(engine, _PassChecker())
-
-        # Seed store with matching fingerprint so the hit path fires.
-        await store.patch_video(video_key.video, meta={"_fingerprints": {"translate": proc.fingerprint()}})
-
-        async def src():
-            yield replace(_rec(0, "Hello."), translations={"zh": "preloaded"})
-
-        out = await _drain(proc.process(src(), ctx=_ctx(), store=store, video_key=video_key))
-        assert engine.calls == 0
-        assert out[0].translations["zh"] == "preloaded"
 
     @pytest.mark.asyncio
     async def test_prefix_strip_and_readd(self, store, video_key):
@@ -421,7 +495,6 @@ class TestBufferedFlush:
         by_id = {r["id"]: r for r in data["records"]}
         assert by_id[0]["translations"]["zh"] == "[翻译]a"
         assert by_id[1]["translations"]["zh"] == "[翻译]b"
-        assert data["meta"]["_fingerprints"]["translate"] == proc.fingerprint()
 
 
 # ---------------------------------------------------------------------------
@@ -445,5 +518,4 @@ class TestNoIdRecords:
         assert out[0].translations["zh"] == "[翻译]Hello."
 
         data = await store.load_video(video_key.video)
-        assert data["records"] == []  # nothing written, but meta fingerprint OK
-        assert data["meta"]["_fingerprints"]["translate"] == proc.fingerprint()
+        assert data["records"] == []  # nothing written
