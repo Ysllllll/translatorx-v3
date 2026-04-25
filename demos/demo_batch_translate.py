@@ -273,7 +273,7 @@ async def translate_records(
     tgt: str,
     engine,
     terms: dict[str, str] | None,
-) -> list[SentenceRecord]:
+) -> AsyncIterator[SentenceRecord]:
     ctx = create_context(src, tgt, terms=terms)
     checker = default_checker(src, tgt)
     processor = TranslateProcessor(engine, checker)
@@ -283,10 +283,8 @@ async def translate_records(
         store = JsonFileStore(ws)
         video_key = VideoKey(course="demo", video="batch_translate")
 
-        out: list[SentenceRecord] = []
         async for rec in processor.process(_records_iter(records), ctx=ctx, store=store, video_key=video_key):
-            out.append(rec)
-        return out
+            yield rec
 
 
 # =====================================================================
@@ -353,21 +351,33 @@ async def run(
     )
     _render_records("post-preprocess", records)
 
-    # ── STEP 2: translate ─────────────────────────────────────────────
-    _step("STEP 2", "TranslateProcessor.process(records → records)", f"terms injected: {sorted((terms or {}).keys())}")
+    # ── STEP 2: translate (streaming bilingual print) ─────────────────
+    _step(
+        "STEP 2",
+        "TranslateProcessor.process(records → records)  [streaming]",
+        f"terms injected: {sorted((terms or {}).keys())}  · 每条完成立即打印译文",
+    )
+    total = len(records)
+    translated: list[SentenceRecord] = []
     t2 = time.perf_counter()
-    translated = await translate_records(
+    async for rec in translate_records(
         records,
         src=src_for_translate,
         tgt=tgt_for_translate,
         engine=engine,
         terms=terms,
-    )
+    ):
+        translated.append(rec)
+        idx = len(translated)
+        dt = time.perf_counter() - t2
+        tgt_text = rec.translations.get(tgt_for_translate, "")
+        console.print(f"  [bold green]✓[/bold green] [dim]({idx}/{total} +{dt:.2f}s)[/dim] [cyan]{_truncate(rec.src_text, 120)}[/cyan]")
+        console.print(f"      [magenta]→[/magenta] {_truncate(tgt_text, 200)}")
     elapsed_tx = time.perf_counter() - t2
-    console.print(f"  translate elapsed={elapsed_tx:.2f}s for {len(translated)} record(s)")
+    console.print(f"\n  translate elapsed={elapsed_tx:.2f}s for {len(translated)} record(s)")
 
-    # ── STEP 3: render ────────────────────────────────────────────────
-    _step("STEP 3", "Bilingual side-by-side", "rec.translations[tgt] 已被 TranslateProcessor 写入。")
+    # ── STEP 3: render summary ────────────────────────────────────────
+    _step("STEP 3", "Bilingual side-by-side (summary)", "rec.translations[tgt] 已被 TranslateProcessor 写入。")
     _render_translations(translated, tgt_for_translate)
 
 
