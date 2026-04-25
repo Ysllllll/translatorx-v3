@@ -133,21 +133,19 @@ def clean_srt(content: str, options: CleanOptions | None = None) -> CleanResult:
     return CleanResult(ok=ok, cues=cues, report=report, issues=issues)
 
 
-def clean_srt_or_false(content: str, options: CleanOptions | None = None) -> list[Cue] | bool:
-    result = clean_srt(content, options)
-    return result.cues if result.ok else False
-
-
 def clean(content: str) -> list[Cue]:
     """Parse → normalize text per cue → fix timestamps → drop empties → renumber."""
     return clean_srt(content).cues
 
 
 def clean_stream(options: CleanOptions | None = None) -> Session[Cue]:
-    """Streaming SRT cleaner. ``feed(cue) → list[cleaned_cue]``.
+    """Streaming SRT cleaner — ``feed(cue) → list[cleaned_cue]``.
 
-    Note: accepts already-parsed :class:`Cue` objects — text-level
-    streaming from raw SRT text is not in scope.
+    Designed for incremental / live-cleaning scenarios such as browser
+    extensions or transcribers that emit cues one at a time. Accepts
+    already-parsed :class:`Cue` objects; text-level streaming from raw
+    SRT bytes is not in scope (callers should run :func:`parse` on a
+    growing buffer themselves).
     """
     return default_pipeline(options=options).stream(tracker=NULL_TRACKER)
 
@@ -282,7 +280,6 @@ __all__ = [
     "default_pipeline",
     "clean",
     "clean_srt",
-    "clean_srt_or_false",
     "clean_with_report",
     "clean_stream",
     "format_report",

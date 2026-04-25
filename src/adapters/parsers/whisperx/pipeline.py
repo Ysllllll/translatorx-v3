@@ -54,7 +54,7 @@ def _dict_to_word(w: dict) -> Word | None:
     )
 
 
-def sanitize(word_segments: list[dict]) -> list[Word]:
+def sanitize_whisperx(word_segments: list[dict]) -> list[Word]:
     """Fast-path sanitizer: raw WhisperX word dicts → list of :class:`Word`."""
     if not word_segments:
         return []
@@ -65,10 +65,6 @@ def sanitize(word_segments: list[dict]) -> list[Word]:
         if wo is not None:
             out.append(wo)
     return out
-
-
-# Public alias for the fast-path — matches historic name.
-sanitize_whisperx = sanitize
 
 
 def sanitize_with_report(
@@ -129,10 +125,12 @@ sanitize_whisperx_with_report = sanitize_with_report
 
 
 def sanitize_stream() -> Session[dict]:
-    """Streaming WhisperX sanitizer. ``feed(dict) → list[dict]``.
+    """Streaming WhisperX sanitizer — ``feed(dict) → list[dict]``.
 
-    The session emits cleaned word dicts; callers that want
-    :class:`Word` objects should call :func:`_dict_to_word` on each.
+    Designed for incremental / live-cleaning scenarios such as browser
+    extensions or transcribers that emit word dicts one at a time. The
+    session emits cleaned word dicts; callers that want :class:`Word`
+    objects should call :func:`_dict_to_word` on each.
     """
     return default_pipeline().stream(tracker=NULL_TRACKER)
 
@@ -268,7 +266,6 @@ def report_to_jsonl(report: WhisperXReport, *, path: str | None = None) -> list[
 
 __all__ = [
     "default_pipeline",
-    "sanitize",
     "sanitize_whisperx",
     "sanitize_with_report",
     "sanitize_whisperx_with_report",

@@ -27,7 +27,6 @@ PUBLIC_SYMBOLS = [
     "default_pipeline",
     "clean",
     "clean_srt",
-    "clean_srt_or_false",
     "clean_with_report",
     "clean_stream",
     "format_report",

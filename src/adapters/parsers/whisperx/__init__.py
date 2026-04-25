@@ -8,7 +8,6 @@ from .pipeline import (
     default_pipeline,
     format_report,
     report_to_jsonl,
-    sanitize,
     sanitize_stream,
     sanitize_whisperx,
     sanitize_whisperx_with_report,
@@ -26,7 +25,6 @@ from .segments import extract_word_dicts
 from .serde import parse_whisperx, read_whisperx
 
 __all__ = [
-    "sanitize",
     "sanitize_whisperx",
     "sanitize_whisperx_with_report",
     "sanitize_with_report",
