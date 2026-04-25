@@ -578,6 +578,7 @@ class EnTypeOps(_BaseOps):
             text = re.sub(r" +([.,])", r"\1", text)
             text = re.sub(r" +([!?;:])", r" \1", text)
             text = re.sub(r"([^\s!?;:,.])([!?;])", r"\1 \2", text)
+            # \u00C0..\u024F 覆盖「拉丁补充 1 + 拉丁扩展 A/B」，囊括欧洲带变音符的字母（如 é ñ ü ž 等）
             text = re.sub(r"([a-zA-Z\u00C0-\u024F])(:)", r"\1 \2", text)
         else:
             text = re.sub(r" +([.,!?);:}\]])", r"\1", text)

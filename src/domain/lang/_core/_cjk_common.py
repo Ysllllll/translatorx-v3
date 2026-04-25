@@ -18,8 +18,8 @@ from ._chars import (
 from ._base_ops import _BaseOps, normalize_mode, _VALID_MODES
 
 
-# Smart quotes: treated as CJK-side characters so they stay with
-# adjacent CJK text (matches typical CJK typography).
+# 智能引号（Smart Quotes）：作为 CJK 侧字符处理，让它们紧贴中文文本（符合 CJK 排版习惯）。
+# \u201c=“  \u201d=”  \u2018=‘  \u2019=’
 _SMART_QUOTE_CHARS = frozenset("\u201c\u201d\u2018\u2019")
 
 

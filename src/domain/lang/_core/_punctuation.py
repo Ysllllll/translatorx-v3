@@ -39,10 +39,12 @@ TRAILING_PUNCT: frozenset[str] = frozenset(",.!?:;，。！？：；、")
 
 # 闭合标点：右括号、右引号、右书名号
 # Closing brackets, quotes, and CJK paired marks
+# \u201d=” 右双引号  \u2019=’ 右单引号
 CLOSING_PUNCT: frozenset[str] = frozenset(")]}）》\u201d\u2019」』】〉")
 
 # 起始标点：左括号、左引号、左书名号
 # Opening brackets, quotes, and CJK paired marks
+# \u201c=“ 左双引号  \u2018=‘ 左单引号
 OPENING_PUNCT: frozenset[str] = frozenset("([{（《\u201c\u2018「『【〈")
 
 # 破折号、连字符、省略号、间隔号
@@ -61,6 +63,7 @@ SYMBOLS: frozenset[str] = frozenset("/\\@#$%^&*+=|~")
 # 用于句边界检测——终止符后跟引号时，引号应归入当前句子
 # Closing quotes — subset of CLOSING_PUNCT used by sentence boundary
 # detection to absorb trailing quotes after a terminator.
+# \u201d=” 右双引号  \u2019=’ 右单引号
 CLOSING_QUOTES: frozenset[str] = frozenset("\"\u201d'\u2019」』")
 
 # =====================================================================

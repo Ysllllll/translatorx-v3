@@ -36,7 +36,7 @@ def parse(content: str, *, keep_raw: bool = False) -> list[Cue] | tuple[list[Cue
     ``keep_raw=True`` additionally returns the pre-join multi-line text per
     cue for use in the E2 report step.
     """
-    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")  # strip BOM
+    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")  # 去除字节顺序标记 BOM
     cues: list[Cue] = []
     raws: list[str] = []
     for block in re.split(r"\n\s*\n", content):
@@ -81,11 +81,11 @@ def dump(cues: list[Cue]) -> str:
     return "\n".join(parts).rstrip("\n") + "\n"
 
 
-# Strip whitespace + punctuation for content-invariant comparison.
-# Unicode ranges:
-#   U+2000..U+206F  General Punctuation (en/em spaces, primes, bullets, ZW marks)
-#   U+3000..U+303F  CJK Symbols and Punctuation (、。「」 ideographic space, etc.)
-#   U+FF00..U+FFEF  Halfwidth/Fullwidth Forms (！？．， etc.)
+# 用于「内容不变量」比较：剥掉所有空白与标点。
+# Unicode 区段：
+#   U+2000..U+206F  通用标点区（半/全宽空格、引号、连字符、省略号等）
+#   U+3000..U+303F  中日韩符号与标点（、。「」全角空格 等）
+#   U+FF00..U+FFEF  半宽/全宽变体表（！？．， 等全角符号）
 _STRIP_PUNCT_RE = re.compile(r"[\s\u2000-\u206f\u3000-\u303f\uff00-\uffef" + re.escape("""!"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~""") + r"]+")
 
 
@@ -106,7 +106,7 @@ def text_content(cues_or_text: list[Cue] | str) -> str:
 
 def sanitize_srt(content: str) -> str:
     """Text-level SRT sanitizer. Normalizes text artifacts in-place; no timestamp repair."""
-    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")  # strip BOM
+    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")  # 去除字节顺序标记 BOM
     content = _HTML_ENTITY_RE.sub(_entity_sub, content)
     content = _INVISIBLE_RE.sub("", content)
     content = content.translate(_WHITESPACE_MAP)

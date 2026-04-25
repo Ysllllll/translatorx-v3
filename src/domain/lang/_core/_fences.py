@@ -74,8 +74,8 @@ def find_fence_spans(
     return [(m.start(), m.end(), m.group(0)) for m in pattern.finditer(text)]
 
 
-_SENTINEL_OPEN = "\u27e6"  # ⟦ MATHEMATICAL LEFT WHITE SQUARE BRACKET (cat Ps)
-_SENTINEL_CLOSE = "\u27e7"  # ⟧ MATHEMATICAL RIGHT WHITE SQUARE BRACKET (cat Pe)
+_SENTINEL_OPEN = "\u27e6"  # ⟦ 数学左白方括号 MATHEMATICAL LEFT WHITE SQUARE BRACKET（标点类 Ps）
+_SENTINEL_CLOSE = "\u27e7"  # ⟧ 数学右白方括号 MATHEMATICAL RIGHT WHITE SQUARE BRACKET（标点类 Pe）
 
 
 def mask_fences(

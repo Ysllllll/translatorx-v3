@@ -26,59 +26,59 @@ from .model import CleanOptions, Cue, Issue
 
 _INVISIBLE_RE = re.compile(
     "["
-    "\u00ad"  # SOFT HYPHEN
-    "\u034f"  # COMBINING GRAPHEME JOINER
-    "\u061c"  # ARABIC LETTER MARK (bidi)
-    "\u115f\u1160"  # HANGUL CHOSEONG / JUNGSEONG FILLER
-    "\u17b4\u17b5"  # KHMER VOWEL INHERENT AQ / AA
-    "\u180e"  # MONGOLIAN VOWEL SEPARATOR
-    "\u200b\u200c\u200d\u200e\u200f"  # ZWSP, ZWNJ, ZWJ, LRM, RLM
-    "\u2028\u2029"  # LINE / PARAGRAPH SEPARATOR
-    "\u202a-\u202e"  # bidi embedding/override controls (LRE..RLO)
-    "\u2060-\u2064"  # WORD JOINER + invisible operators
-    "\u2066-\u206f"  # bidi isolates + deprecated formatting
-    "\u3164"  # HANGUL FILLER
-    "\ufe00-\ufe0f"  # variation selectors VS1..VS16
-    "\ufeff"  # BOM / ZERO WIDTH NO-BREAK SPACE
-    "\uffa0"  # HALFWIDTH HANGUL FILLER
-    "\U000e0100-\U000e01ef"  # variation selectors supplement VS17..VS256
-    "\u007f"  # DEL (C0 control)
+    "\u00ad"  # 软连字符 SOFT HYPHEN
+    "\u034f"  # 字形组合连接符 COMBINING GRAPHEME JOINER
+    "\u061c"  # 阿拉伯字母标记（双向控制）ARABIC LETTER MARK
+    "\u115f\u1160"  # 谚文初/中声填充符 HANGUL CHOSEONG / JUNGSEONG FILLER
+    "\u17b4\u17b5"  # 高棉语固有元音 AQ / AA
+    "\u180e"  # 蒙古语元音分隔符 MONGOLIAN VOWEL SEPARATOR
+    "\u200b\u200c\u200d\u200e\u200f"  # 零宽空格 ZWSP / 零宽非连字 ZWNJ / 零宽连字 ZWJ / 从左至右标记 LRM / 从右至左标记 RLM
+    "\u2028\u2029"  # 行/段落分隔符 LINE / PARAGRAPH SEPARATOR
+    "\u202a-\u202e"  # 双向嵌入/覆写控制符 LRE..RLO
+    "\u2060-\u2064"  # 单词连接符 WORD JOINER + 不可见运算符
+    "\u2066-\u206f"  # 双向隔离符 + 已废弃的格式控制
+    "\u3164"  # 谚文填充符 HANGUL FILLER
+    "\ufe00-\ufe0f"  # 字形变体选择符 VS1..VS16
+    "\ufeff"  # 字节顺序标记 BOM / 零宽不间断空格
+    "\uffa0"  # 半角谚文填充符 HALFWIDTH HANGUL FILLER
+    "\U000e0100-\U000e01ef"  # 字形变体选择符补充区 VS17..VS256
+    "\u007f"  # DEL 控制字符（C0）
     "]"
 )
 
 _WHITESPACE_MAP = str.maketrans(
     {
-        "\u00a0": " ",  # NO-BREAK SPACE
-        "\u1680": " ",  # OGHAM SPACE MARK
-        "\u2000": " ",  # EN QUAD
-        "\u2001": " ",  # EM QUAD
-        "\u2002": " ",  # EN SPACE
-        "\u2003": " ",  # EM SPACE
-        "\u2004": " ",  # THREE-PER-EM SPACE
-        "\u2005": " ",  # FOUR-PER-EM SPACE
-        "\u2006": " ",  # SIX-PER-EM SPACE
-        "\u2007": " ",  # FIGURE SPACE
-        "\u2008": " ",  # PUNCTUATION SPACE
-        "\u2009": " ",  # THIN SPACE
-        "\u200a": " ",  # HAIR SPACE
-        "\u202f": " ",  # NARROW NO-BREAK SPACE
-        "\u205f": " ",  # MEDIUM MATHEMATICAL SPACE
-        "\u3000": " ",  # IDEOGRAPHIC SPACE (full-width)
+        "\u00a0": " ",  # 不间断空格 NO-BREAK SPACE
+        "\u1680": " ",  # 欧甘文空格 OGHAM SPACE MARK
+        "\u2000": " ",  # 半角空格 EN QUAD
+        "\u2001": " ",  # 全角空格 EM QUAD
+        "\u2002": " ",  # 半宽空格 EN SPACE
+        "\u2003": " ",  # 全宽空格 EM SPACE
+        "\u2004": " ",  # 三分之一全宽空格 THREE-PER-EM SPACE
+        "\u2005": " ",  # 四分之一全宽空格 FOUR-PER-EM SPACE
+        "\u2006": " ",  # 六分之一全宽空格 SIX-PER-EM SPACE
+        "\u2007": " ",  # 数字空格 FIGURE SPACE
+        "\u2008": " ",  # 标点空格 PUNCTUATION SPACE
+        "\u2009": " ",  # 窄空格 THIN SPACE
+        "\u200a": " ",  # 极窄空格 HAIR SPACE
+        "\u202f": " ",  # 窄不间断空格 NARROW NO-BREAK SPACE
+        "\u205f": " ",  # 中等数学空格 MEDIUM MATHEMATICAL SPACE
+        "\u3000": " ",  # 全角中文空格 IDEOGRAPHIC SPACE
     }
 )
 
 _SMART_QUOTE_MAP = str.maketrans(
     {
-        "\u2018": "'",  # LEFT SINGLE QUOTATION MARK
-        "\u2019": "'",  # RIGHT SINGLE QUOTATION MARK
-        "\u201a": "'",  # SINGLE LOW-9 QUOTATION MARK
-        "\u201b": "'",  # SINGLE HIGH-REVERSED-9 QUOTATION MARK
-        "\u201c": '"',  # LEFT DOUBLE QUOTATION MARK
-        "\u201d": '"',  # RIGHT DOUBLE QUOTATION MARK
-        "\u201e": '"',  # DOUBLE LOW-9 QUOTATION MARK
-        "\u201f": '"',  # DOUBLE HIGH-REVERSED-9 QUOTATION MARK
-        "\u2032": "'",  # PRIME
-        "\u2033": '"',  # DOUBLE PRIME
+        "\u2018": "'",  # 左单引号 ‘ LEFT SINGLE QUOTATION MARK
+        "\u2019": "'",  # 右单引号 ’ RIGHT SINGLE QUOTATION MARK
+        "\u201a": "'",  # 下9形单引号 ‚ SINGLE LOW-9
+        "\u201b": "'",  # 上反9形单引号 ‛ SINGLE HIGH-REVERSED-9
+        "\u201c": '"',  # 左双引号 “ LEFT DOUBLE QUOTATION MARK
+        "\u201d": '"',  # 右双引号 ” RIGHT DOUBLE QUOTATION MARK
+        "\u201e": '"',  # 下9形双引号 „ DOUBLE LOW-9
+        "\u201f": '"',  # 上反9形双引号 ‟ DOUBLE HIGH-REVERSED-9
+        "\u2032": "'",  # 角分符 ′ PRIME
+        "\u2033": '"',  # 角秒符 ″ DOUBLE PRIME
     }
 )
 
@@ -94,8 +94,8 @@ _NAMED_ENTITIES: dict[str, str] = {
     "gt": ">",
     "quot": '"',
     "apos": "'",
-    "nbsp": "\u00a0",  # NO-BREAK SPACE
-    "hellip": "\u2026",  # HORIZONTAL ELLIPSIS …
+    "nbsp": "\u00a0",  # 不间断空格 NO-BREAK SPACE
+    "hellip": "\u2026",  # 省略号 … HORIZONTAL ELLIPSIS
     "ndash": "-",
     "mdash": "-",
     "lsquo": "'",
@@ -104,10 +104,10 @@ _NAMED_ENTITIES: dict[str, str] = {
     "rdquo": '"',
     "prime": "'",
     "Prime": '"',
-    "copy": "\u00a9",  # COPYRIGHT SIGN ©
-    "reg": "\u00ae",  # REGISTERED SIGN ®
-    "trade": "\u2122",  # TRADE MARK SIGN ™
-    "deg": "\u00b0",  # DEGREE SIGN °
+    "copy": "\u00a9",  # 版权符 © COPYRIGHT SIGN
+    "reg": "\u00ae",  # 注册商标 ® REGISTERED SIGN
+    "trade": "\u2122",  # 商标符 ™ TRADE MARK SIGN
+    "deg": "\u00b0",  # 度数符 ° DEGREE SIGN
 }
 
 
@@ -127,7 +127,7 @@ def _entity_sub(match: re.Match[str]) -> str:
 
 
 _MULTI_SPACE_RE = re.compile(r" {2,}")
-_ELLIPSIS_RE = re.compile(r"\u2026")  # HORIZONTAL ELLIPSIS …
+_ELLIPSIS_RE = re.compile(r"\u2026")  # 省略号 … HORIZONTAL ELLIPSIS
 # Collapse runs of 2+ dots into a proper ellipsis ``...``, but DON'T touch
 # dot-runs that sit inside a path/identifier-like token. ``../README`` and
 # ``parent/../child`` must stay intact; ``end ..`` and ``end ....`` should
