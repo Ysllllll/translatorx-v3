@@ -282,7 +282,12 @@ def run_pipeline(
         ".transform(punc_fn, scope='joined')",
         "整段送进 punc 后端；输出应包含 . , ? ! 等标点。",
     )
-    sub2 = sub1.transform(punc_fn, scope="joined", cache=punc_cache)
+    sub2 = sub1.transform(
+        punc_fn,
+        scope="joined",
+        cache=punc_cache,
+        skip_if=lambda t: ops.length(t) < PUNC_THRESHOLD,
+    )
     _render_subtitle_state(sub2, label="step3", ops=ops)
 
     # ── STEP 3b: .sentences() (post-punc) ─────────────────────────────
@@ -305,7 +310,12 @@ def run_pipeline(
         f".transform(chunk_fn, scope='chunk')  [chunk_len={CHUNK_LEN}]",
         "对每个子句单独调 chunk_fn，超长才会被拆。",
     )
-    sub4 = sub3.transform(chunk_fn, scope="chunk", cache=chunk_cache)
+    sub4 = sub3.transform(
+        chunk_fn,
+        scope="chunk",
+        cache=chunk_cache,
+        skip_if=lambda t: ops.length(t) < CHUNK_LEN,
+    )
     _render_subtitle_state(sub4, label="step5", ops=ops)
     over = [c for p in sub4._pipelines for c in p.result() if ops.length(c) > CHUNK_LEN]  # noqa: SLF001
     if over:
