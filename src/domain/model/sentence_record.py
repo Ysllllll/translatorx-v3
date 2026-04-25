@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from domain.model._helpers import fmt_time as _fmt_time
+from domain.model._helpers import fmt_timecode as _fmt_timecode
 from domain.model._helpers import num as _num
 from domain.model._helpers import round3 as _round3
 from domain.model.segment import Segment
@@ -69,6 +70,19 @@ class SentenceRecord:
             return value
         return None
 
+    def _times_derivable_from_segments(self) -> bool:
+        """True iff ``self.start`` / ``self.end`` match the segment span.
+
+        Used by :meth:`to_dict` to skip emitting redundant ``start`` /
+        ``end`` fields when the values are exactly the first segment's
+        start and the last segment's end (rounded to 3 decimals).
+        """
+        if not self.segments:
+            return False
+        first = self.segments[0]
+        last = self.segments[-1]
+        return _round3(first.start) == _round3(self.start) and _round3(last.end) == _round3(self.end)
+
     def __repr__(self) -> str:
         return f"SentenceRecord({self.src_text!r}, {_fmt_time(self.start)}->{_fmt_time(self.end)}, segments={len(self.segments)})"
 
@@ -89,16 +103,23 @@ class SentenceRecord:
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the main video JSON.
 
+        - ``start`` / ``end`` (float seconds) are omitted when they can
+          be derived from the segments' first/last word or segment
+          boundaries; instead a single ``time`` field carries a 24h
+          timecode string ``"HH:MM:SS.mmm → HH:MM:SS.mmm"`` for human
+          readability. Records with no segments still emit ``start`` /
+          ``end`` so they round-trip cleanly.
         - ``translations`` is the nested ``{lang: {variant_key: text}}``
           dict; emitted only when non-empty.
         - ``selected`` emitted only when non-empty.
         - ``alignment``/``extra`` are omitted when empty.
         """
-        payload: dict[str, Any] = {
-            "src_text": self.src_text,
-            "start": _round3(self.start),
-            "end": _round3(self.end),
-        }
+        payload: dict[str, Any] = {"src_text": self.src_text}
+        derivable = bool(self.segments) and self._times_derivable_from_segments()
+        if not derivable:
+            payload["start"] = _round3(self.start)
+            payload["end"] = _round3(self.end)
+        payload["time"] = f"{_fmt_timecode(self.start)} → {_fmt_timecode(self.end)}"
         if self.segments:
             hoisted_words: list[Any] = []
             seg_dicts: list[dict[str, Any]] = []
@@ -187,8 +208,8 @@ class SentenceRecord:
 
         return cls(
             src_text=payload["src_text"],
-            start=_num(payload["start"]),
-            end=_num(payload["end"]),
+            start=_num(payload["start"]) if "start" in payload else (segments[0].start if segments else 0.0),
+            end=_num(payload["end"]) if "end" in payload else (segments[-1].end if segments else 0.0),
             segments=segments,
             translations=translations,
             selected=selected,

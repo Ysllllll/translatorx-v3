@@ -83,7 +83,19 @@ class TestSegmentSerde:
 class TestSentenceRecordSerde:
     def test_minimal_omits_optional_buckets(self) -> None:
         rec = SentenceRecord(src_text="Hello.", start=0.0, end=1.0)
-        assert rec.to_dict() == {"src_text": "Hello.", "start": 0.0, "end": 1.0}
+        # No segments → start/end emitted; "time" always emitted.
+        assert rec.to_dict() == {"src_text": "Hello.", "start": 0.0, "end": 1.0, "time": "00:00:00.000 → 00:00:01.000"}
+
+    def test_start_end_omitted_when_derivable_from_segments(self) -> None:
+        rec = SentenceRecord(src_text="Hi.", start=0.0, end=1.0, segments=[Segment(start=0.0, end=1.0, text="Hi.")])
+        payload = rec.to_dict()
+        # Times are derivable from the segment span → only "time" survives.
+        assert "start" not in payload
+        assert "end" not in payload
+        assert payload["time"] == "00:00:00.000 → 00:00:01.000"
+        # Round-trip still works: from_dict reconstructs from segments.
+        restored = SentenceRecord.from_dict(json.loads(json.dumps(payload)))
+        assert restored.start == 0.0 and restored.end == 1.0
 
     def test_full_round_trip(self) -> None:
         rec = SentenceRecord(src_text="Hello world.", start=0.0, end=1.5, segments=[Segment(start=0.0, end=1.5, text="Hello world.")], translations={"zh": {"v1": "你好世界。"}}, alignment={"method": "wx"}, extra={"src_id": 1})
@@ -117,6 +129,12 @@ class TestSentenceRecordSerde:
     def test_timestamps_rounded_to_three_decimals(self) -> None:
         rec = SentenceRecord(src_text="Hi.", start=0.123456789, end=1.987654321, segments=[Segment(start=0.123456789, end=1.987654321, text="Hi.", words=[Word("Hi.", 0.111111111, 1.999999999)])])
         payload = rec.to_dict()
-        assert payload["start"] == 0.123
-        assert payload["end"] == 1.988
+        # When derivable from segments, start/end are omitted; word
+        # timestamps still round to 3 decimals on the wire.
+        assert "start" not in payload
+        assert "end" not in payload
         assert payload["words"] == ["Hi.\t0.111\t2.0"]
+        # Round-trip still works.
+        restored = SentenceRecord.from_dict(json.loads(json.dumps(payload)))
+        assert round(restored.start, 3) == 0.111
+        assert round(restored.end, 3) == 2.0

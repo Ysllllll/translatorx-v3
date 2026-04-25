@@ -178,9 +178,13 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                     patch: dict[str, Any] = {
                         f"translations.{target}.{variant_key}": text,
                         "src_text": rec_payload["src_text"],
-                        "start": rec_payload["start"],
-                        "end": rec_payload["end"],
                     }
+                    if "start" in rec_payload:
+                        patch["start"] = rec_payload["start"]
+                    if "end" in rec_payload:
+                        patch["end"] = rec_payload["end"]
+                    if "time" in rec_payload:
+                        patch["time"] = rec_payload["time"]
                     if "segments" in rec_payload:
                         patch["segments"] = rec_payload["segments"]
                     if "words" in rec_payload:
