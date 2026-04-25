@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 
@@ -174,10 +175,35 @@ def step(label: str, title: str, expected: str) -> None:
     console.print(f"[dim]{expected}[/dim]")
 
 
-def render_records(label: str, records: list[SentenceRecord]) -> None:
+def render_records(label: str, records: list[SentenceRecord], *, language: str | None = None) -> None:
+    """Render each SentenceRecord as a Panel containing a per-segment table.
+
+    Mirrors the STEP 7 layout from ``demo_batch_preprocess.py`` so the two
+    demos present records identically.
+    """
+    ops = LangOps.for_language(language) if language else None
     console.print(f"[dim]{label}[/dim]  •  [bold]{len(records)}[/bold] record(s)")
     for i, rec in enumerate(records, 1):
-        console.print(f"  [dim]#{i:>3}[/dim] {rec!r}")
+        inner = Table(show_header=True, header_style="bold magenta", expand=True)
+        inner.add_column("#", justify="right", width=4)
+        inner.add_column("start", justify="right", width=7)
+        inner.add_column("end", justify="right", width=7)
+        inner.add_column("len", justify="right", width=4)
+        inner.add_column("text", overflow="fold", ratio=1)
+        inner.add_column("words", justify="right", width=5)
+        for j, seg in enumerate(rec.segments):
+            length = ops.length(seg.text) if ops is not None else len(seg.text)
+            inner.add_row(
+                str(j),
+                f"{seg.start:.2f}",
+                f"{seg.end:.2f}",
+                str(length),
+                truncate(seg.text, 140),
+                str(len(seg.words)),
+            )
+        title = f"[bold]SentenceRecord #{i}[/bold]  [{rec.start:.2f}s → {rec.end:.2f}s]"
+        subtitle = f"src_text: {truncate(rec.src_text, 120)!r}"
+        console.print(Panel(inner, title=title, subtitle=subtitle, border_style="blue"))
 
 
 def render_translations(records: list[SentenceRecord], tgt: str) -> None:

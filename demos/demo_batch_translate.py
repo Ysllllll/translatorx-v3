@@ -225,7 +225,7 @@ async def run(
     console.print(
         f"  detected language=[bold]{language}[/bold]  →  src=[bold]{src_for_translate}[/bold] tgt=[bold]{tgt_for_translate}[/bold]"
     )
-    render_records("post-preprocess", records)
+    render_records("post-preprocess", records, language=language)
 
     # ── STEP 2: translate (streaming bilingual print) ─────────────────
     step(
