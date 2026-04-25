@@ -423,6 +423,24 @@ class Subtitle:
 
     # ---- output ------------------------------------------------------
 
+    def pipeline_chunks(self) -> list[list[str]]:
+        """Return current chunks grouped per sentence pipeline.
+
+        Each inner list is the ordered chunk strings of one pipeline (i.e. one
+        sentence after ``sentences()``, or the whole subtitle if not yet
+        split). Useful for inspection / comparison / debugging without having
+        to reach into ``_pipelines``.
+        """
+        return [p.result() for p in self._pipelines]
+
+    def pipeline_words(self) -> list[list[Word]]:
+        """Return per-pipeline word lists (one list per sentence pipeline)."""
+        return [list(ws) for ws in self._words]
+
+    def pipeline_count(self) -> int:
+        """Number of sentence pipelines currently held."""
+        return len(self._pipelines)
+
     def build(self) -> list[Segment]:
         """Align current chunks with words and return Segments."""
         result: list[Segment] = []

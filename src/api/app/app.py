@@ -62,6 +62,31 @@ class App:
             self._engines[name] = _build_engine(entry)
         return self._engines[name]
 
+    def set_engine(self, name: str, engine) -> None:
+        """Override the cached engine instance for *name*.
+
+        Use this for testing, debugging, or wrapping with progress / caching /
+        recording decorators (e.g. a ``ProgressEngine`` that classifies LLM
+        calls and prints timestamps). The cached engine is what every
+        downstream component (translate / summary / punc / chunk) resolves to,
+        so a single override replaces all of them.
+
+        Equivalent to ``app._engines[name] = engine`` but documented and
+        public.
+        """
+        self._engines[name] = engine
+
+    def wrap_engine(self, name: str, wrapper) -> None:
+        """Wrap the engine named *name* in-place with ``wrapper(inner)``.
+
+        ``wrapper`` is any callable accepting the existing engine and
+        returning a replacement (typically a Protocol-conforming decorator
+        that forwards ``complete()`` / ``stream()`` while doing extra work).
+        Engine is built lazily if not yet cached.
+        """
+        inner = self.engine(name)
+        self._engines[name] = wrapper(inner)
+
     def context(self, src: str, tgt: str) -> TranslationContext:
         """Return a fresh :class:`TranslationContext` for the given pair."""
         key = f"{src}_{tgt}"

@@ -173,10 +173,10 @@ def _step(step: str, title: str, expected: str) -> None:
 
 
 def _render_subtitle_state(sub: Subtitle, *, label: str, ops: LangOps) -> None:
-    pipelines = sub._pipelines  # noqa: SLF001
-    words_per = sub._words  # noqa: SLF001
+    pipeline_chunks = sub.pipeline_chunks()
+    words_per = sub.pipeline_words()
     table = Table(
-        title=f"[dim]state:{label}[/dim]  •  {len(pipelines)} pipeline(s)",
+        title=f"[dim]state:{label}[/dim]  •  {len(pipeline_chunks)} pipeline(s)",
         title_justify="left",
         show_header=True,
         header_style="bold magenta",
@@ -189,9 +189,8 @@ def _render_subtitle_state(sub: Subtitle, *, label: str, ops: LangOps) -> None:
     table.add_column("text", overflow="fold", ratio=1)
     table.add_column("words", justify="right", width=5)
     table.add_column("span", justify="right", width=14)
-    for i, (pipe, words) in enumerate(zip(pipelines, words_per)):
-        chunks = pipe.result()
-        for j, c in enumerate(chunks):
+    for i, (pipe_chunks, words) in enumerate(zip(pipeline_chunks, words_per)):
+        for j, c in enumerate(pipe_chunks):
             words_cell = str(len(words)) if j == 0 else ""
             span_cell = ""
             if j == 0 and words:
@@ -317,7 +316,7 @@ def run_pipeline(
         skip_if=lambda t: ops.length(t) < CHUNK_LEN,
     )
     _render_subtitle_state(sub4, label="step5", ops=ops)
-    over = [c for p in sub4._pipelines for c in p.result() if ops.length(c) > CHUNK_LEN]  # noqa: SLF001
+    over = [c for chunks in sub4.pipeline_chunks() for c in chunks if ops.length(c) > CHUNK_LEN]
     if over:
         console.print(f"  [yellow]⚠[/yellow] {len(over)} chunk(s) still > {CHUNK_LEN}: {over[:2]}")
     else:
