@@ -8,17 +8,22 @@ Usage:
     python course_batch
 
     # Run individual demo:
-    python demos/course_batch/demo_translate.py
-    python demos/course_batch/demo_preprocess.py
     python demos/course_batch/demo_standalone.py
     python demos/course_batch/demo_sentence.py
 
+Note: demo_translate / demo_preprocess have been removed — covered by
+demos/demo_batch_translate.py and demos/demo_batch_preprocess.py respectively.
+The two remaining demos focus on areas not covered by the batch demos:
+  * demo_standalone — isolated backend usage (NER / LLM / Remote punc, spaCy /
+    LLM chunk, full hand-stepped pipeline).
+  * demo_sentence   — hand-built 30-segment fixture × 4-pipeline comparison
+    (Baseline / A / B / C / D) for sentence-level preprocessing strategies.
+
 Environment variables:
-    DEMO_MAX_VIDEOS  — max videos to process (default: 1, set 0 for all)
     DEMO_LLM_BASE_URL — LLM endpoint (default: http://localhost:26592/v1)
     DEMO_LLM_MODEL    — LLM model name (default: Qwen/Qwen3-32B)
     DEMO_RUN          — comma-separated list of demos to run
-                         (translate, preprocess, standalone, sentence)
+                         (standalone, sentence)
                          default: all
 """
 
@@ -42,20 +47,10 @@ async def main() -> None:
     if selected:
         demos = [d.strip() for d in selected.split(",")]
     else:
-        demos = ["translate", "preprocess", "standalone", "sentence"]
+        demos = ["standalone", "sentence"]
 
     header(f"course_batch — 运行 {len(demos)} 个 demo: {', '.join(demos)}")
     t0 = time.perf_counter()
-
-    if "translate" in demos:
-        from demo_translate import main as run_translate
-
-        await run_translate()
-
-    if "preprocess" in demos:
-        from demo_preprocess import main as run_preprocess
-
-        await run_preprocess()
 
     if "standalone" in demos:
         from demo_standalone import main as run_standalone
