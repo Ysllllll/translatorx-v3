@@ -183,12 +183,9 @@ def main() -> int:
         print(f"[ERR] JSON parse failed: {type(e).__name__}: {e}", file=sys.stderr)
         return 1
 
-    raw_segments = data.get("word_segments")
-    if raw_segments is None:
-        print("[ERR] missing 'word_segments' key in JSON", file=sys.stderr)
-        return 1
-    if not isinstance(raw_segments, list):
-        print(f"[ERR] 'word_segments' must be a list, got {type(raw_segments).__name__}", file=sys.stderr)
+    raw_segments = WX.extract_word_dicts(data)
+    if not raw_segments:
+        print("[ERR] no usable words in JSON (missing both 'segments' and 'word_segments')", file=sys.stderr)
         return 1
 
     try:
