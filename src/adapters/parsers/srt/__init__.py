@@ -15,6 +15,7 @@ from .pipeline import (
     format_report,
     report_to_jsonl,
 )
+from .rules import _RULE_REASONS
 from .serde import (
     _STRIP_PUNCT_RE,
     dump,
@@ -47,4 +48,5 @@ __all__ = [
     "sanitize_srt",
     "parse_srt",
     "read_srt",
+    "_RULE_REASONS",
 ]
