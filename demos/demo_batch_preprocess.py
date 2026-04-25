@@ -118,7 +118,7 @@ def make_chunk_config(language: str, *, engine=None) -> dict:
             },
         },
         "max_len": CHUNK_LEN,
-        "on_failure": "rule",
+        "on_failure": "keep",
     }
 
 
