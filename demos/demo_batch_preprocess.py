@@ -1,6 +1,6 @@
 """demo_batch_preprocess — 批量字幕预处理流水线样板。
 
-与 :mod:`demos.demo_stream_preprocess`（流式 / WebSocket 场景）成对：
+与 :mod:`demos.demo_stream_preprocess`（流式 / WebSocket）成对：
 
 ==========================  ============================================
 demo_batch_preprocess.py    一次性吃完整段 SRT，离线批量预处理
@@ -19,13 +19,9 @@ demo_stream_preprocess/     增量喂段、一边喂一边产出 SentenceRecord
         .merge(max_len=...)                         # 邻近短块合并回长度上限
         .records()
 
-主打两条等价的「配置驱动」用法：
-
-* **路径 1（推荐）**：``App.from_dict(CONFIG)`` → ``app.punc_restorer(lang)``
-  / ``app.chunker(lang)``。CONFIG 字段名对齐 :class:`AppConfig`（``preprocess.*``、
-  ``engines.*``），日后可直接落到 yaml。
-* **路径 2（手工）**：直接读取同一份 ``CONFIG`` 自己 ``new PuncRestorer/Chunker``，
-  适合你想绕开 ``App`` 层、嵌进自己的服务时参考。
+配置直接喂 :meth:`PuncRestorer.from_config` / :meth:`Chunker.from_config`，
+key 与构造参数一一对应（``backends`` 是 ``{language: spec}`` 形式），落 yaml
+时复制即可。
 
 运行::
 
@@ -40,7 +36,6 @@ from __future__ import annotations
 import _bootstrap  # noqa: F401
 
 import argparse
-import copy
 import os
 import time
 
@@ -51,8 +46,7 @@ from rich.table import Table
 from rich.text import Text
 
 from adapters.parsers import parse_srt, sanitize_srt
-from adapters.preprocess import Chunker, PuncRestorer, availability
-from api.app import App
+from adapters.preprocess import Chunker, PuncRestorer
 from domain.lang import LangOps, detect_language
 from domain.subtitle import Subtitle
 
@@ -60,50 +54,102 @@ console = Console()
 
 
 # =====================================================================
-# CONFIG —— 一份样例配置，字段名直接对齐 AppConfig（preprocess / engines）。
-# 后期落 yaml 时复制这份即可。
+# 配置 —— 直接 PuncRestorer.from_config / Chunker.from_config 接受的形状
 # =====================================================================
 
-CONFIG: dict = {
-    # -- 引擎（real 模式下被 punc/chunk 引用） -----------------------------
-    "engines": {
-        "default": {
-            "model": os.environ.get("LLM_MODEL", "Qwen/Qwen3-32B"),
-            "base_url": os.environ.get("LLM_ENGINE_URL", "http://localhost:26592/v1"),
-            "api_key": os.environ.get("LLM_API_KEY", "EMPTY"),
-            "temperature": 0.3,
-            "extra_body": {
+PUNC_THRESHOLD = 180  # 短于该长度直接放行不送模型
+CHUNK_LEN = 90  # 子块目标长度上限
+MERGE_UNDER = CHUNK_LEN  # clauses 阶段用这个值合并短子句
+
+
+# 仅当 --mode real 时使用：构造 LLM backend
+def make_engine(base_url: str | None = None):
+    from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
+
+    return OpenAICompatEngine(
+        EngineConfig(
+            model=os.environ.get("LLM_MODEL", "Qwen/Qwen3-32B"),
+            base_url=base_url or os.environ.get("LLM_ENGINE_URL", "http://localhost:26592/v1"),
+            api_key=os.environ.get("LLM_API_KEY", "EMPTY"),
+            temperature=0.3,
+            extra_body={
                 "top_k": 20,
                 "min_p": 0,
                 "chat_template_kwargs": {"enable_thinking": False},
             },
+        )
+    )
+
+
+def make_punc_config(language: str) -> dict:
+    """Real 模式 punc 配置：所有语言走 deepmultilingualpunctuation。"""
+    return {
+        "backends": {
+            "*": {"library": "deepmultilingualpunctuation"},
+            language: {"library": "deepmultilingualpunctuation"},
         },
-    },
-    # -- 预处理参数 -------------------------------------------------------
-    "preprocess": {
-        # punc：超过 punc_threshold 才送模型；典型经验值 180
-        "punc_mode": "ner",
-        "punc_engine": "default",
-        "punc_threshold": 180,
-        "punc_max_retries": 2,
-        "punc_on_failure": "keep",
-        # chunk：每个块最长 chunk_len；典型经验值 90
-        "chunk_mode": "spacy_llm_rule",
-        "chunk_engine": "default",
-        "chunk_len": 90,
-        "chunk_max_depth": 4,
-        "chunk_max_retries": 2,
-        "chunk_on_failure": "rule",
-        "chunk_split_parts": 2,
-        # clauses 合并阈值；不填则与 chunk_len 同值
-        "merge_under": None,
-        "max_concurrent": 8,
-    },
-}
+        "threshold": PUNC_THRESHOLD,
+        "on_failure": "keep",
+    }
+
+
+def make_chunk_config(language: str, *, engine=None) -> dict:
+    """Real 模式 chunk 配置：spacy → llm → rule 三段 composite。"""
+    stages: list[dict] = [{"library": "spacy"}]
+    if engine is not None:
+        stages.append(
+            {
+                "library": "llm",
+                "engine": engine,
+                "max_len": CHUNK_LEN,
+                "max_depth": 4,
+                "max_retries": 2,
+                "max_concurrent": 8,
+            }
+        )
+    stages.append({"library": "rule", "max_len": CHUNK_LEN})
+    return {
+        "backends": {
+            language: {
+                "library": "composite",
+                "language": language,
+                "max_len": CHUNK_LEN,
+                "stages": stages,
+            },
+        },
+        "max_len": CHUNK_LEN,
+        "on_failure": "rule",
+    }
 
 
 # =====================================================================
-# 辅助渲染
+# Mock backends —— 默认 / 外部依赖缺失时使用
+# =====================================================================
+
+
+def _mock_punc_restore(texts: list[str]) -> list[list[str]]:
+    out: list[list[str]] = []
+    for t in texts:
+        t = t.strip()
+        if not t:
+            out.append([t])
+            continue
+        t = t[0].upper() + t[1:] if t[0].isalpha() else t
+        if t[-1] not in ".?!":
+            t = t + "."
+        out.append([t])
+    return out
+
+
+def _mock_chunker_factory(ops: LangOps, max_len: int):
+    def chunk_fn(texts: list[str]) -> list[list[str]]:
+        return [ops.split_by_length(t, max_len) for t in texts]
+
+    return chunk_fn
+
+
+# =====================================================================
+# 渲染辅助
 # =====================================================================
 
 
@@ -154,133 +200,11 @@ def _render_subtitle_state(sub: Subtitle, *, label: str, ops: LangOps) -> None:
 
 
 # =====================================================================
-# 路径 1：用 App.from_dict(CONFIG) 取 punc / chunk 工厂
+# 流水线
 # =====================================================================
 
 
-def build_via_app(config: dict, language: str):
-    """走 :class:`App` 路径——和未来 yaml-driven 部署完全一致。"""
-    app = App.from_dict(config)
-    return app.punc_restorer(language), app.chunker(language)
-
-
-# =====================================================================
-# 路径 2：直接拿同一份 CONFIG 手工构 PuncRestorer / Chunker
-# =====================================================================
-
-
-def build_manual(config: dict, language: str):
-    """手工构造——你想嵌进自己的服务、绕开 App 层时参考。"""
-    pre = config["preprocess"]
-    eng_specs = config.get("engines", {})
-
-    # ---- punc ----
-    punc_fn = None
-    mode = pre["punc_mode"]
-    if mode != "none":
-        if mode == "ner":
-            backend_spec: dict = {"library": "deepmultilingualpunctuation"}
-        elif mode == "llm":
-            from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
-
-            engine = OpenAICompatEngine(EngineConfig(**eng_specs[pre["punc_engine"]]))
-            backend_spec = {
-                "library": "llm",
-                "engine": engine,
-                "max_retries": pre["punc_max_retries"],
-                "max_concurrent": pre["max_concurrent"],
-            }
-        else:
-            raise ValueError(f"unsupported punc_mode in manual demo: {mode}")
-        restorer = PuncRestorer(
-            backends={language: backend_spec},
-            threshold=pre["punc_threshold"],
-            on_failure=pre["punc_on_failure"],
-        )
-        punc_fn = restorer.for_language(language)
-
-    # ---- chunk ----
-    chunk_fn = None
-    cmode = pre["chunk_mode"]
-    if cmode != "none":
-        stages: list[dict] = []
-        if availability.spacy_is_available() and "spacy" in cmode:
-            stages.append({"library": "spacy"})
-        if "llm" in cmode:
-            from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
-
-            engine = OpenAICompatEngine(EngineConfig(**eng_specs[pre["chunk_engine"]]))
-            stages.append(
-                {
-                    "library": "llm",
-                    "engine": engine,
-                    "max_len": pre["chunk_len"],
-                    "max_depth": pre["chunk_max_depth"],
-                    "max_retries": pre["chunk_max_retries"],
-                    "max_concurrent": pre["max_concurrent"],
-                }
-            )
-        if cmode.endswith("rule") or not stages:
-            stages.append({"library": "rule", "max_len": pre["chunk_len"]})
-
-        if len(stages) == 1:
-            spec = {**stages[0], "language": language}
-        else:
-            spec = {
-                "library": "composite",
-                "language": language,
-                "max_len": pre["chunk_len"],
-                "stages": stages,
-            }
-        chunker = Chunker(backends={language: spec}, max_len=pre["chunk_len"])
-        chunk_fn = chunker.for_language(language)
-
-    return punc_fn, chunk_fn
-
-
-# =====================================================================
-# Mock backends（外部依赖缺失或 --mode mock 时用）
-# =====================================================================
-
-
-def _mock_punc_restore(texts: list[str]) -> list[list[str]]:
-    out: list[list[str]] = []
-    for t in texts:
-        t = t.strip()
-        if not t:
-            out.append([t])
-            continue
-        t = t[0].upper() + t[1:] if t[0].isalpha() else t
-        if t[-1] not in ".?!":
-            t = t + "."
-        out.append([t])
-    return out
-
-
-def _mock_chunker_factory(ops: LangOps, max_len: int):
-    def chunk_fn(texts: list[str]) -> list[list[str]]:
-        return [ops.split_by_length(t, max_len) for t in texts]
-
-    return chunk_fn
-
-
-# =====================================================================
-# 流水线本体
-# =====================================================================
-
-
-def run_pipeline(
-    srt_text: str,
-    *,
-    config: dict,
-    mode: str,
-    language_override: str | None,
-) -> None:
-    pre = config["preprocess"]
-    chunk_len = pre["chunk_len"]
-    punc_threshold = pre["punc_threshold"]
-    merge_under = pre.get("merge_under") or chunk_len
-
+def run_pipeline(srt_text: str, *, mode: str, language_override: str | None, engine_url: str | None) -> None:
     # ── STEP 0a: sanitize SRT ─────────────────────────────────────────
     _step("STEP 0a", "sanitize_srt(srt_text)", "去 BOM、CRLF、HTML/标记、不可见字符等。")
     cleaned = sanitize_srt(srt_text)
@@ -302,35 +226,24 @@ def run_pipeline(
 
     ops = LangOps.for_language(language)
 
-    # ── 工厂：根据 mode 决定走 App 还是 Mock ──────────────────────────
+    # ── 工厂：根据 mode 决定走真后端还是 Mock ──────────────────────────
     if mode == "real":
-        console.print()
-        console.print(Rule("[bold]building backends[/bold]", style="green"))
-        console.print("  [cyan]path-1[/cyan]: App.from_dict(CONFIG)")
-        punc_fn, chunk_fn = build_via_app(config, language)
-        console.print("  [cyan]path-2[/cyan]: build_manual(CONFIG, language)  [dim](sanity check)[/dim]")
-        try:
-            _, _ = build_manual(config, language)
-            console.print("  [green]✓[/green] manual path constructed identically")
-        except Exception as exc:  # noqa: BLE001
-            console.print(f"  [yellow]⚠ manual path failed: {exc!r}[/yellow]")
-        if punc_fn is None:
-            console.print("  [yellow][punc][/yellow] real backend unavailable, using mock")
-            punc_fn = _mock_punc_restore
-        if chunk_fn is None:
-            console.print("  [yellow][chunk][/yellow] real backend unavailable, using mock")
-            chunk_fn = _mock_chunker_factory(ops, chunk_len)
+        engine = make_engine(engine_url)
+        restorer = PuncRestorer.from_config(make_punc_config(language))
+        chunker = Chunker.from_config(make_chunk_config(language, engine=engine))
+        punc_fn = restorer.for_language(language)
+        chunk_fn = chunker.for_language(language)
     else:
         punc_fn = _mock_punc_restore
-        chunk_fn = _mock_chunker_factory(ops, chunk_len)
+        chunk_fn = _mock_chunker_factory(ops, CHUNK_LEN)
 
     console.print(
         Panel.fit(
             f"[bold]segments[/bold]: {len(segments)}  •  "
             f"[bold]language[/bold]: {language}  •  "
-            f"[bold]punc_threshold[/bold]: {punc_threshold}  •  "
-            f"[bold]chunk_len[/bold]: {chunk_len}  •  "
-            f"[bold]merge_under[/bold]: {merge_under}",
+            f"[bold]punc_threshold[/bold]: {PUNC_THRESHOLD}  •  "
+            f"[bold]chunk_len[/bold]: {CHUNK_LEN}  •  "
+            f"[bold]merge_under[/bold]: {MERGE_UNDER}",
             title="batch preprocess",
             border_style="green",
         )
@@ -364,38 +277,29 @@ def run_pipeline(
     # ── STEP 4: .clauses(merge_under=...) ─────────────────────────────
     _step(
         "STEP 4",
-        f".clauses(merge_under={merge_under})",
+        f".clauses(merge_under={MERGE_UNDER})",
         "每个句子 pipeline 按内部标点细分；短于 merge_under 的子句合并回去。",
     )
-    sub3 = sub2b.clauses(merge_under=merge_under)
+    sub3 = sub2b.clauses(merge_under=MERGE_UNDER)
     _render_subtitle_state(sub3, label="step4", ops=ops)
 
     # ── STEP 5: .transform(chunk, scope='chunk') ──────────────────────
     _step(
         "STEP 5",
-        f".transform(chunk_fn, scope='chunk')  [chunk_len={chunk_len}]",
+        f".transform(chunk_fn, scope='chunk')  [chunk_len={CHUNK_LEN}]",
         "对每个子句单独调 chunk_fn，超长才会被拆。",
     )
     sub4 = sub3.transform(chunk_fn, scope="chunk")
     _render_subtitle_state(sub4, label="step5", ops=ops)
-    over = [
-        c
-        for p in sub4._pipelines
-        for c in p.result()
-        if ops.length(c) > chunk_len  # noqa: SLF001
-    ]
+    over = [c for p in sub4._pipelines for c in p.result() if ops.length(c) > CHUNK_LEN]  # noqa: SLF001
     if over:
-        console.print(f"  [yellow]⚠[/yellow] {len(over)} chunk(s) still > {chunk_len}: {over[:2]}")
+        console.print(f"  [yellow]⚠[/yellow] {len(over)} chunk(s) still > {CHUNK_LEN}: {over[:2]}")
     else:
-        console.print(f"  [green]✓[/green] 全部块在 ≤{chunk_len}")
+        console.print(f"  [green]✓[/green] 全部块在 ≤{CHUNK_LEN}")
 
     # ── STEP 6: .merge(chunk_len) ─────────────────────────────────────
-    _step(
-        "STEP 6",
-        f".merge(max_len={chunk_len})",
-        "贪心合并相邻短块，对应 split→merge 的回填阶段。",
-    )
-    sub5 = sub4.merge(chunk_len)
+    _step("STEP 6", f".merge(max_len={CHUNK_LEN})", "贪心合并相邻短块。")
+    sub5 = sub4.merge(CHUNK_LEN)
     _render_subtitle_state(sub5, label="step6", ops=ops)
 
     # ── STEP 7: .records() ────────────────────────────────────────────
@@ -466,35 +370,8 @@ def main() -> None:
         default="mock",
         help="后端模式（默认 mock）。",
     )
-    parser.add_argument(
-        "--engine",
-        default=None,
-        help="覆盖 CONFIG.engines.default.base_url（仅在 --mode real 时生效）。",
-    )
-    parser.add_argument(
-        "--punc-threshold",
-        type=int,
-        default=None,
-        help="覆盖 CONFIG.preprocess.punc_threshold。",
-    )
-    parser.add_argument(
-        "--chunk-len",
-        type=int,
-        default=None,
-        help="覆盖 CONFIG.preprocess.chunk_len。",
-    )
+    parser.add_argument("--engine", default=None, help="real 模式下覆盖 LLM base_url。")
     args = parser.parse_args()
-
-    cfg = copy.deepcopy(CONFIG)
-    if args.engine:
-        cfg["engines"]["default"]["base_url"] = args.engine
-    if args.punc_threshold is not None:
-        cfg["preprocess"]["punc_threshold"] = args.punc_threshold
-    if args.chunk_len is not None:
-        cfg["preprocess"]["chunk_len"] = args.chunk_len
-    if args.mode == "mock":
-        cfg["preprocess"]["punc_mode"] = "none"
-        cfg["preprocess"]["chunk_mode"] = "none"
 
     if args.srt:
         with open(args.srt, encoding="utf-8") as f:
@@ -504,10 +381,15 @@ def main() -> None:
 
     header = f"[bold]Mode[/bold]: [yellow]{args.mode}[/yellow]"
     if args.mode == "real":
-        header += f"\nLLM engine: [cyan]{cfg['engines']['default']['base_url']}[/cyan]"
+        header += f"\nLLM engine: [cyan]{args.engine or os.environ.get('LLM_ENGINE_URL', 'default')}[/cyan]"
     console.print(Panel.fit(header, border_style="yellow"))
 
-    run_pipeline(srt_text, config=cfg, mode=args.mode, language_override=args.language)
+    run_pipeline(
+        srt_text,
+        mode=args.mode,
+        language_override=args.language,
+        engine_url=args.engine,
+    )
 
 
 if __name__ == "__main__":
