@@ -26,59 +26,59 @@ from .model import CleanOptions, Cue, Issue
 
 _INVISIBLE_RE = re.compile(
     "["
-    "\u00ad"
-    "\u034f"
-    "\u061c"
-    "\u115f\u1160"
-    "\u17b4\u17b5"
-    "\u180e"
-    "\u200b\u200c\u200d\u200e\u200f"
-    "\u2028\u2029"
-    "\u202a-\u202e"
-    "\u2060-\u2064"
-    "\u2066-\u206f"
-    "\u3164"
-    "\ufe00-\ufe0f"
-    "\ufeff"
-    "\uffa0"
-    "\U000e0100-\U000e01ef"
-    "\u007f"
+    "\u00ad"  # SOFT HYPHEN
+    "\u034f"  # COMBINING GRAPHEME JOINER
+    "\u061c"  # ARABIC LETTER MARK (bidi)
+    "\u115f\u1160"  # HANGUL CHOSEONG / JUNGSEONG FILLER
+    "\u17b4\u17b5"  # KHMER VOWEL INHERENT AQ / AA
+    "\u180e"  # MONGOLIAN VOWEL SEPARATOR
+    "\u200b\u200c\u200d\u200e\u200f"  # ZWSP, ZWNJ, ZWJ, LRM, RLM
+    "\u2028\u2029"  # LINE / PARAGRAPH SEPARATOR
+    "\u202a-\u202e"  # bidi embedding/override controls (LRE..RLO)
+    "\u2060-\u2064"  # WORD JOINER + invisible operators
+    "\u2066-\u206f"  # bidi isolates + deprecated formatting
+    "\u3164"  # HANGUL FILLER
+    "\ufe00-\ufe0f"  # variation selectors VS1..VS16
+    "\ufeff"  # BOM / ZERO WIDTH NO-BREAK SPACE
+    "\uffa0"  # HALFWIDTH HANGUL FILLER
+    "\U000e0100-\U000e01ef"  # variation selectors supplement VS17..VS256
+    "\u007f"  # DEL (C0 control)
     "]"
 )
 
 _WHITESPACE_MAP = str.maketrans(
     {
-        "\u00a0": " ",
-        "\u1680": " ",
-        "\u2000": " ",
-        "\u2001": " ",
-        "\u2002": " ",
-        "\u2003": " ",
-        "\u2004": " ",
-        "\u2005": " ",
-        "\u2006": " ",
-        "\u2007": " ",
-        "\u2008": " ",
-        "\u2009": " ",
-        "\u200a": " ",
-        "\u202f": " ",
-        "\u205f": " ",
-        "\u3000": " ",
+        "\u00a0": " ",  # NO-BREAK SPACE
+        "\u1680": " ",  # OGHAM SPACE MARK
+        "\u2000": " ",  # EN QUAD
+        "\u2001": " ",  # EM QUAD
+        "\u2002": " ",  # EN SPACE
+        "\u2003": " ",  # EM SPACE
+        "\u2004": " ",  # THREE-PER-EM SPACE
+        "\u2005": " ",  # FOUR-PER-EM SPACE
+        "\u2006": " ",  # SIX-PER-EM SPACE
+        "\u2007": " ",  # FIGURE SPACE
+        "\u2008": " ",  # PUNCTUATION SPACE
+        "\u2009": " ",  # THIN SPACE
+        "\u200a": " ",  # HAIR SPACE
+        "\u202f": " ",  # NARROW NO-BREAK SPACE
+        "\u205f": " ",  # MEDIUM MATHEMATICAL SPACE
+        "\u3000": " ",  # IDEOGRAPHIC SPACE (full-width)
     }
 )
 
 _SMART_QUOTE_MAP = str.maketrans(
     {
-        "\u2018": "'",
-        "\u2019": "'",
-        "\u201a": "'",
-        "\u201b": "'",
-        "\u201c": '"',
-        "\u201d": '"',
-        "\u201e": '"',
-        "\u201f": '"',
-        "\u2032": "'",
-        "\u2033": '"',
+        "\u2018": "'",  # LEFT SINGLE QUOTATION MARK
+        "\u2019": "'",  # RIGHT SINGLE QUOTATION MARK
+        "\u201a": "'",  # SINGLE LOW-9 QUOTATION MARK
+        "\u201b": "'",  # SINGLE HIGH-REVERSED-9 QUOTATION MARK
+        "\u201c": '"',  # LEFT DOUBLE QUOTATION MARK
+        "\u201d": '"',  # RIGHT DOUBLE QUOTATION MARK
+        "\u201e": '"',  # DOUBLE LOW-9 QUOTATION MARK
+        "\u201f": '"',  # DOUBLE HIGH-REVERSED-9 QUOTATION MARK
+        "\u2032": "'",  # PRIME
+        "\u2033": '"',  # DOUBLE PRIME
     }
 )
 
@@ -94,8 +94,8 @@ _NAMED_ENTITIES: dict[str, str] = {
     "gt": ">",
     "quot": '"',
     "apos": "'",
-    "nbsp": "\u00a0",
-    "hellip": "\u2026",
+    "nbsp": "\u00a0",  # NO-BREAK SPACE
+    "hellip": "\u2026",  # HORIZONTAL ELLIPSIS …
     "ndash": "-",
     "mdash": "-",
     "lsquo": "'",
@@ -104,10 +104,10 @@ _NAMED_ENTITIES: dict[str, str] = {
     "rdquo": '"',
     "prime": "'",
     "Prime": '"',
-    "copy": "\u00a9",
-    "reg": "\u00ae",
-    "trade": "\u2122",
-    "deg": "\u00b0",
+    "copy": "\u00a9",  # COPYRIGHT SIGN ©
+    "reg": "\u00ae",  # REGISTERED SIGN ®
+    "trade": "\u2122",  # TRADE MARK SIGN ™
+    "deg": "\u00b0",  # DEGREE SIGN °
 }
 
 
@@ -127,7 +127,7 @@ def _entity_sub(match: re.Match[str]) -> str:
 
 
 _MULTI_SPACE_RE = re.compile(r" {2,}")
-_ELLIPSIS_RE = re.compile(r"\u2026")
+_ELLIPSIS_RE = re.compile(r"\u2026")  # HORIZONTAL ELLIPSIS …
 # Collapse runs of 2+ dots into a proper ellipsis ``...``, but DON'T touch
 # dot-runs that sit inside a path/identifier-like token. ``../README`` and
 # ``parent/../child`` must stay intact; ``end ..`` and ``end ....`` should

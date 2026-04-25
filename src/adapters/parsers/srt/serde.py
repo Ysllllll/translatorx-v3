@@ -36,7 +36,7 @@ def parse(content: str, *, keep_raw: bool = False) -> list[Cue] | tuple[list[Cue
     ``keep_raw=True`` additionally returns the pre-join multi-line text per
     cue for use in the E2 report step.
     """
-    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")
+    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")  # strip BOM
     cues: list[Cue] = []
     raws: list[str] = []
     for block in re.split(r"\n\s*\n", content):
@@ -81,6 +81,11 @@ def dump(cues: list[Cue]) -> str:
     return "\n".join(parts).rstrip("\n") + "\n"
 
 
+# Strip whitespace + punctuation for content-invariant comparison.
+# Unicode ranges:
+#   U+2000..U+206F  General Punctuation (en/em spaces, primes, bullets, ZW marks)
+#   U+3000..U+303F  CJK Symbols and Punctuation (、。「」 ideographic space, etc.)
+#   U+FF00..U+FFEF  Halfwidth/Fullwidth Forms (！？．， etc.)
 _STRIP_PUNCT_RE = re.compile(r"[\s\u2000-\u206f\u3000-\u303f\uff00-\uffef" + re.escape("""!"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~""") + r"]+")
 
 
@@ -101,7 +106,7 @@ def text_content(cues_or_text: list[Cue] | str) -> str:
 
 def sanitize_srt(content: str) -> str:
     """Text-level SRT sanitizer. Normalizes text artifacts in-place; no timestamp repair."""
-    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")
+    content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")  # strip BOM
     content = _HTML_ENTITY_RE.sub(_entity_sub, content)
     content = _INVISIBLE_RE.sub("", content)
     content = content.translate(_WHITESPACE_MAP)
