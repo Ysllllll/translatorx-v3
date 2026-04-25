@@ -175,25 +175,9 @@ def step(label: str, title: str, expected: str) -> None:
 
 
 def render_records(label: str, records: list[SentenceRecord]) -> None:
-    table = Table(
-        title=f"[dim]{label}[/dim]  •  {len(records)} record(s)",
-        title_justify="left",
-        show_header=True,
-        header_style="bold magenta",
-        expand=True,
-    )
-    table.add_column("#", justify="right", width=4)
-    table.add_column("span", justify="right", width=14)
-    table.add_column("segments", justify="right", width=8)
-    table.add_column("src_text", overflow="fold", ratio=1)
+    console.print(f"[dim]{label}[/dim]  •  [bold]{len(records)}[/bold] record(s)")
     for i, rec in enumerate(records, 1):
-        table.add_row(
-            str(i),
-            f"{rec.start:.2f}-{rec.end:.2f}",
-            str(len(rec.segments)),
-            truncate(rec.src_text, 140),
-        )
-    console.print(table)
+        console.print(f"  [dim]#{i:>3}[/dim] {rec!r}")
 
 
 def render_translations(records: list[SentenceRecord], tgt: str) -> None:
