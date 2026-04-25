@@ -126,7 +126,12 @@ def _entity_sub(match: re.Match[str]) -> str:
 
 _MULTI_SPACE_RE = re.compile(r" {2,}")
 _ELLIPSIS_RE = re.compile(r"\u2026")
-_DOT_RUN_RE = re.compile(r"\.{2,}")
+# Collapse runs of 2+ dots into a proper ellipsis ``...``, but DON'T touch
+# dot-runs that sit inside a path/identifier-like token. ``../README`` and
+# ``parent/../child`` must stay intact; ``end ..`` and ``end ....`` should
+# normalize to ``end ...``. The lookahead also excludes ``.`` itself to prevent
+# the ``{2,}`` quantifier from backtracking to a shorter match.
+_DOT_RUN_RE = re.compile(r"\.{2,}(?=[^.A-Za-z0-9_/\\-]|$)")
 _TIMESTAMP_RE = re.compile(
     r"(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*"
     r"(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})"
@@ -134,7 +139,22 @@ _TIMESTAMP_RE = re.compile(
 
 _ATTACH_PUNCTS = ",.!?:;"
 _CJK_PUNCTS = "，。！？：；、"
-_SPACE_BEFORE_PUNCT_RE = re.compile(rf" +([{re.escape(_ATTACH_PUNCTS + _CJK_PUNCTS)}])")
+# Strip the leading space before a *complete* run of attached-punctuation only
+# when the run is followed by a non-word, non-path character (whitespace, EOS,
+# or a neutral character like a CJK glyph). Critically the lookahead also
+# excludes more punct chars in the same class, so the ``+`` quantifier cannot
+# backtrack to a shorter match. This protects:
+#   * leading-dot tokens     ``.gitignore`` / ``.env``
+#   * relative paths         ``./script.sh`` / ``../README``
+#   * decimal-island numbers ``1 .5``
+# while still attaching trailing punctuation runs:
+#   * ``Hello , world`` → ``Hello, world``
+#   * ``wait !? !``     → ``wait!?!``
+#   * ``end ...``       → ``end...``
+_SPACE_BEFORE_PUNCT_RE = re.compile(
+    rf" +([{re.escape(_ATTACH_PUNCTS + _CJK_PUNCTS)}]+)"
+    rf"(?=[^{re.escape(_ATTACH_PUNCTS + _CJK_PUNCTS)}A-Za-z0-9_/\\-]|$)"
+)
 _COMMA_LIKE_RE = re.compile(r"(\w)([,:;!?])(?=[A-Za-z])")
 _PERIOD_RE = re.compile(r"([A-Za-z]{2,})\.(?=[A-Z][a-z])")
 
