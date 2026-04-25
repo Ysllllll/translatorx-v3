@@ -212,7 +212,15 @@ def _render_subtitle_state(sub: Subtitle, *, label: str, ops: LangOps) -> None:
 # =====================================================================
 
 
-def run_pipeline(srt_text: str, *, mode: str, language_override: str | None, engine_url: str | None) -> None:
+def run_pipeline(
+    srt_text: str,
+    *,
+    mode: str,
+    language_override: str | None,
+    engine_url: str | None,
+    punc_cache: dict[str, list[str]] | None = None,
+    chunk_cache: dict[str, list[str]] | None = None,
+) -> float:
     # ── STEP 0a: sanitize SRT ─────────────────────────────────────────
     _step("STEP 0a", "sanitize_srt(srt_text)", "去 BOM、CRLF、HTML/标记、不可见字符等。")
     cleaned = sanitize_srt(srt_text)
@@ -274,7 +282,7 @@ def run_pipeline(srt_text: str, *, mode: str, language_override: str | None, eng
         ".transform(punc_fn, scope='joined')",
         "整段送进 punc 后端；输出应包含 . , ? ! 等标点。",
     )
-    sub2 = sub1.transform(punc_fn, scope="joined")
+    sub2 = sub1.transform(punc_fn, scope="joined", cache=punc_cache)
     _render_subtitle_state(sub2, label="step3", ops=ops)
 
     # ── STEP 3b: .sentences() (post-punc) ─────────────────────────────
@@ -297,7 +305,7 @@ def run_pipeline(srt_text: str, *, mode: str, language_override: str | None, eng
         f".transform(chunk_fn, scope='chunk')  [chunk_len={CHUNK_LEN}]",
         "对每个子句单独调 chunk_fn，超长才会被拆。",
     )
-    sub4 = sub3.transform(chunk_fn, scope="chunk")
+    sub4 = sub3.transform(chunk_fn, scope="chunk", cache=chunk_cache)
     _render_subtitle_state(sub4, label="step5", ops=ops)
     over = [c for p in sub4._pipelines for c in p.result() if ops.length(c) > CHUNK_LEN]  # noqa: SLF001
     if over:
@@ -335,6 +343,24 @@ def run_pipeline(srt_text: str, *, mode: str, language_override: str | None, eng
         title = f"[bold]SentenceRecord #{i}[/bold]  [{rec.start:.2f}s → {rec.end:.2f}s]"
         subtitle = f"src_text: {_truncate(rec.src_text, 120)!r}"
         console.print(Panel(inner, title=title, subtitle=subtitle, border_style="blue"))
+
+    return elapsed
+
+
+def _render_cache(label: str, cache: dict[str, list[str]]) -> None:
+    table = Table(
+        title=f"[dim]{label}[/dim]  •  {len(cache)} entries",
+        title_justify="left",
+        show_header=True,
+        header_style="bold magenta",
+        expand=True,
+    )
+    table.add_column("#", justify="right", width=4)
+    table.add_column("key (text)", overflow="fold", ratio=1)
+    table.add_column("value (list[str])", overflow="fold", ratio=1)
+    for i, (k, v) in enumerate(cache.items()):
+        table.add_row(str(i), _truncate(k, 100), _truncate(repr(v), 100))
+    console.print(table)
 
 
 # =====================================================================
@@ -379,6 +405,11 @@ def main() -> None:
         help="后端模式（默认 mock）。",
     )
     parser.add_argument("--engine", default=None, help="real 模式下覆盖 LLM base_url。")
+    parser.add_argument(
+        "--cache",
+        action="store_true",
+        help="开启内存 cache：跑两遍并对比耗时（演示 Subtitle.transform(cache=dict) 命中效果）。",
+    )
     args = parser.parse_args()
 
     if args.srt:
@@ -392,12 +423,53 @@ def main() -> None:
         header += f"\nLLM engine: [cyan]{args.engine or os.environ.get('LLM_ENGINE_URL', 'default')}[/cyan]"
     console.print(Panel.fit(header, border_style="yellow"))
 
-    run_pipeline(
-        srt_text,
-        mode=args.mode,
-        language_override=args.language,
-        engine_url=args.engine,
-    )
+    if args.cache:
+        punc_cache: dict[str, list[str]] = {}
+        chunk_cache: dict[str, list[str]] = {}
+
+        console.print(Rule("[bold yellow]PASS 1[/bold yellow] (cold — populate cache)", style="yellow"))
+        elapsed1 = run_pipeline(
+            srt_text,
+            mode=args.mode,
+            language_override=args.language,
+            engine_url=args.engine,
+            punc_cache=punc_cache,
+            chunk_cache=chunk_cache,
+        )
+
+        console.print()
+        console.print(Rule("[bold yellow]CACHE STATE after PASS 1[/bold yellow]", style="yellow"))
+        _render_cache("punc_cache", punc_cache)
+        _render_cache("chunk_cache", chunk_cache)
+
+        console.print()
+        console.print(Rule("[bold yellow]PASS 2[/bold yellow] (warm — reuse cache)", style="yellow"))
+        elapsed2 = run_pipeline(
+            srt_text,
+            mode=args.mode,
+            language_override=args.language,
+            engine_url=args.engine,
+            punc_cache=punc_cache,
+            chunk_cache=chunk_cache,
+        )
+
+        console.print()
+        speedup = (elapsed1 / elapsed2) if elapsed2 > 0 else float("inf")
+        summary = Table(show_header=True, header_style="bold magenta")
+        summary.add_column("pass", justify="left")
+        summary.add_column("elapsed", justify="right")
+        summary.add_column("punc cache", justify="right")
+        summary.add_column("chunk cache", justify="right")
+        summary.add_row("1 (cold)", f"{elapsed1:.3f}s", "0 → " + str(len(punc_cache)), "0 → " + str(len(chunk_cache)))
+        summary.add_row("2 (warm)", f"{elapsed2:.3f}s", str(len(punc_cache)), str(len(chunk_cache)))
+        console.print(Panel(summary, title=f"[bold green]Cache speedup: {speedup:.2f}x[/bold green]", border_style="green"))
+    else:
+        run_pipeline(
+            srt_text,
+            mode=args.mode,
+            language_override=args.language,
+            engine_url=args.engine,
+        )
 
 
 if __name__ == "__main__":
