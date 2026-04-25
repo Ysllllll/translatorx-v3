@@ -64,7 +64,7 @@ async def _translate_route(engine, src: str, tgt: str) -> None:
         print(f"  ✗ failed: {type(exc).__name__}: {exc}")
         return
     for rec in records:
-        translation = rec.translations.get(tgt, "") if rec.translations else ""
+        translation = (rec.get_translation(tgt) or "") if rec.translations else ""
         src_text = rec.src_text or ""
         print(f"  {src_text!r} → {translation!r}")
     print()

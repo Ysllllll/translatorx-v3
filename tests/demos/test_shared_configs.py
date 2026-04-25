@@ -94,7 +94,4 @@ def test_make_engine_signature_no_max_retries(demo_shared):
     import inspect
 
     src = inspect.getsource(demo_shared.make_engine)
-    assert "max_retries" not in src, (
-        "make_engine() must not pass max_retries to create_engine() — "
-        "max_retries is a TranslationContext parameter, not an engine parameter"
-    )
+    assert "max_retries" not in src, "make_engine() must not pass max_retries to create_engine() — max_retries is a TranslationContext parameter, not an engine parameter"

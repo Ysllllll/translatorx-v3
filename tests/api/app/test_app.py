@@ -110,7 +110,7 @@ class TestVideoBuilder:
 
         result = await app.video(course="c1", video="lec").source(srt, language="en", kind="srt").translate(src="en", tgt="zh").run()
         assert len(result.records) == 1
-        assert result.records[0].translations["zh"] == "[Hello world.]"
+        assert result.records[0].get_translation("zh") == "[Hello world.]"
 
     @pytest.mark.asyncio
     async def test_video_requires_source_and_translate(self, app: App):
@@ -166,7 +166,7 @@ class TestBuilderEnhancements:
 
         # No kind= — should infer "srt" from .srt suffix.
         result = await app.video(course="c1", video="auto").source(srt, language="en").translate(src="en", tgt="zh").run()
-        assert result.records[0].translations["zh"] == "[Hi.]"
+        assert result.records[0].get_translation("zh") == "[Hi.]"
 
     def test_source_kind_rejects_unknown_suffix(self, app: App, tmp_path: Path):
         bogus = tmp_path / "foo.xyz"
@@ -199,8 +199,8 @@ class TestStreamBuilder:
 
         got = [rec async for rec in handle.records()]
         assert len(got) == 2
-        assert got[0].translations["zh"] == "[Hello.]"
-        assert got[1].translations["zh"] == "[World.]"
+        assert got[0].get_translation("zh") == "[Hello.]"
+        assert got[1].get_translation("zh") == "[World.]"
 
     @pytest.mark.asyncio
     async def test_stream_as_async_context_manager(self, app: App, monkeypatch):
@@ -227,7 +227,7 @@ class TestStreamBuilder:
 
         await task  # records() drains after close()
         assert len(collected) == 1
-        assert collected[0].translations["zh"] == "[Ping.]"
+        assert collected[0].get_translation("zh") == "[Ping.]"
 
     def test_stream_requires_translate(self, app: App):
         b = app.stream(course="c1", video="live", language="en")
@@ -466,7 +466,7 @@ class TestPreprocessIntegration:
         result = await app.video(course="c1", video="test").source(srt, language="en").translate(tgt="zh").run()
         # Fake punc engine wraps text in [...]; result must be exactly one
         # record echoing the wrapped source.
-        actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
+        actual = [(r.src_text, r.get_translation("zh")) for r in result.records]
         expected = [("[hello world]", "[[hello world]]")]
         assert actual == expected
 
@@ -484,7 +484,7 @@ class TestPreprocessIntegration:
         result = await app.video(course="c1", video="test").source(srt, language="en").translate(tgt="zh").run()
         # Fake LLM chunker leaves text intact (returns single chunk per item),
         # so we expect one record with the original source text.
-        actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
+        actual = [(r.src_text, r.get_translation("zh")) for r in result.records]
         expected = [("This is a long sentence that needs chunking", "[This is a long sentence that needs chunking]")]
         assert actual == expected
 
@@ -517,7 +517,7 @@ class TestPreprocessIntegration:
 
         result = await app.video(course="c1", video="test").source(srt, language="en").translate(tgt="zh").run()
         # punc_position='sentence' wraps once → src "[hello world]".
-        actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
+        actual = [(r.src_text, r.get_translation("zh")) for r in result.records]
         expected = [("[hello world]", "[[hello world]]")]
         assert actual == expected
 
@@ -534,6 +534,6 @@ class TestPreprocessIntegration:
 
         result = await app.video(course="c1", video="test").source(srt, language="en").translate(tgt="zh").run()
         # punc_position='both' wraps twice → src "[[hello world]]".
-        actual = [(r.src_text, r.translations.get("zh")) for r in result.records]
+        actual = [(r.src_text, r.get_translation("zh")) for r in result.records]
         expected = [("[[hello world]]", "[[[hello world]]]")]
         assert actual == expected

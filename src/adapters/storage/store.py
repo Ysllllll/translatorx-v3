@@ -47,7 +47,7 @@ from typing import Any, Iterable, Literal, Protocol, runtime_checkable
 from domain.model import Segment, Word
 from adapters.storage.workspace import Workspace
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SegmentType = Literal["srt", "whisperx"]
 
@@ -105,6 +105,8 @@ def empty_video_data() -> dict[str, Any]:
         "records": [],
         "failed": [],
         "terms": {},
+        "variants": {},
+        "prompts": {},
     }
 
 
@@ -168,6 +170,8 @@ class Store(Protocol):
         punc_cache: dict[str, list[str]] | None = None,
         chunk_cache: dict[str, list[str]] | None = None,
         summary: dict[str, Any] | None = None,
+        variants: dict[str, dict[str, Any]] | None = None,
+        prompts: dict[str, str] | None = None,
     ) -> None: ...
 
     async def load_course(self) -> dict[str, Any]: ...
@@ -374,6 +378,8 @@ class JsonFileStore:
         punc_cache: dict[str, list[str]] | None = None,
         chunk_cache: dict[str, list[str]] | None = None,
         summary: dict[str, Any] | None = None,
+        variants: dict[str, dict[str, Any]] | None = None,
+        prompts: dict[str, str] | None = None,
     ) -> None:
         if not any(
             x is not None
@@ -388,6 +394,8 @@ class JsonFileStore:
                 punc_cache,
                 chunk_cache,
                 summary,
+                variants,
+                prompts,
             )
         ):
             return
@@ -426,6 +434,15 @@ class JsonFileStore:
                 data["chunk_cache"] = existing
             if summary is not None:
                 data["summary"] = dict(summary)
+            if variants:
+                existing = data.get("variants") or {}
+                for k, v in variants.items():
+                    existing[k] = dict(v)
+                data["variants"] = existing
+            if prompts:
+                existing_prompts = data.get("prompts") or {}
+                existing_prompts.update(prompts)
+                data["prompts"] = existing_prompts
 
             await asyncio.to_thread(_atomic_write_json, path, data)
 

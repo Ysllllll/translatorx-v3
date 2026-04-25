@@ -115,7 +115,7 @@ class TestRerunCacheHit:
         assert len(r2.records) == 3
         assert eng2.calls == [], "second run must hit cache, no LLM calls"
         for rec in r2.records:
-            actual_prefix = rec.translations.get("zh", "")[: len("[zh]")]
+            actual_prefix = (rec.get_translation("zh") or "")[: len("[zh]")]
             assert actual_prefix == "[zh]"
 
 
@@ -155,7 +155,7 @@ class TestPartialFailureResume:
         r2 = await app2.video(course="c", video="mix").source(srt, language="en").translate(src="en", tgt="zh").run()
         assert len(r2.records) == 3
         for r in r2.records:
-            actual_prefix = r.translations["zh"][: len("[zh]")]
+            actual_prefix = (r.get_translation("zh") or "")[: len("[zh]")]
             assert actual_prefix == "[zh]"
         # Engine called only for records not previously persisted (BAD + Bravo)
         # — Alpha must NOT trigger a new call.
@@ -230,7 +230,7 @@ class TestStreamE2E:
 
         assert len(collected) == 2
         for r in collected:
-            actual_prefix = r.translations["zh"][: len("[zh]")]
+            actual_prefix = (r.get_translation("zh") or "")[: len("[zh]")]
             assert actual_prefix == "[zh]"
 
         # Store on disk should have both records
@@ -269,11 +269,12 @@ class TestStreamE2E:
         assert store_file.exists()
         data = json.loads(store_file.read_text())
         assert len(data["records"]) == 1
-        # per-record provenance stamped by translate processor (D-070)
+        # Variant registry stamped by translate processor.
+        assert "variants" in data and data["variants"]
         rec0 = data["records"][0]
-        assert "translation_meta" in rec0["extra"]
-        assert "zh" in rec0["extra"]["translation_meta"]
-        assert "config_sig" in rec0["extra"]["translation_meta"]["zh"]
+        # Translation persisted under at least one variant key.
+        zh = rec0["translations"]["zh"]
+        assert isinstance(zh, dict) and len(zh) >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -293,4 +294,4 @@ class TestConfigVariants:
         srt = tmp_path / "y.srt"
         _write_srt(srt, ["YAML works."])
         result = await app.video(course="c", video="y").source(srt, language="en").translate(src="en", tgt="zh").run()
-        assert result.records[0].translations["zh"] == "[zh]YAML works."
+        assert result.records[0].get_translation("zh") == "[zh]YAML works."

@@ -310,7 +310,7 @@ async def section_2_bypasses() -> None:
 
     def _classify(rec: SentenceRecord) -> str:
         """Mark how a record was resolved, inferring from translation value."""
-        tgt = rec.translations.get("zh", "")
+        tgt = rec.get_translation("zh") or ""
         if not tgt:
             return "EMPTY"
         if tgt.startswith("【译·"):
@@ -350,7 +350,9 @@ async def section_2_bypasses() -> None:
         out_a = await _run(proc_a, inputs_a, store, vkey_a)
         for r in out_a:
             kind = _classify(r)
-            print(f"    [{kind}] id={r.extra['id']}  {_truncate(r.src_text, 48)!r:52s} → {_truncate(r.translations.get('zh', '∅'), 30)!r}")
+            print(
+                f"    [{kind}] id={r.extra['id']}  {_truncate(r.src_text, 48)!r:52s} → {_truncate((r.get_translation('zh') or '∅'), 30)!r}"
+            )
         direct_hits = sum(1 for r in out_a if _classify(r) == "DIRECT")
         llm_hits = sum(1 for r in out_a if _classify(r) == "LLM ")
         print(f"    ⇒ direct={direct_hits}  llm={llm_hits}  engine.calls={eng_a.calls}")
@@ -385,7 +387,7 @@ async def section_2_bypasses() -> None:
         n_before = eng_b.calls
         out_b2 = await _run(proc_b1, inputs_b, store, vkey_b)
         run2_delta = eng_b.calls - n_before
-        cached_zh = [r.translations.get("zh", "") for r in out_b2]
+        cached_zh = [(r.get_translation("zh") or "") for r in out_b2]
         print(f"    Run2  engine.calls +{run2_delta}  (fingerprint 命中，应为 0)")
         print(f"          cached[0] = {_truncate(cached_zh[0], 60)!r}")
         assert run2_delta == 0
@@ -435,7 +437,7 @@ async def section_2_bypasses() -> None:
         for r in out_c:
             kind = _classify(r)
             L = len(r.src_text)
-            print(f"    [{kind}] id={r.extra['id']}  len={L:>3d}  → {_truncate(r.translations.get('zh', '∅'), 55)!r}")
+            print(f"    [{kind}] id={r.extra['id']}  len={L:>3d}  → {_truncate((r.get_translation('zh') or '∅'), 55)!r}")
         print(f"    ⇒ engine.calls = {eng_c.calls}  (应为 2：两条正常长度的)")
         assert eng_c.calls == 2
 

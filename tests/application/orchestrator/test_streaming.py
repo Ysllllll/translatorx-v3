@@ -87,8 +87,8 @@ class TestStreamingOrchestrator:
         await asyncio.wait_for(task, timeout=2.0)
 
         assert len(received) == 2
-        assert received[0].translations["zh"] == "[翻译]Hello."
-        assert received[1].translations["zh"] == "[翻译]Bye."
+        assert received[0].get_translation("zh") == "[翻译]Hello."
+        assert received[1].get_translation("zh") == "[翻译]Bye."
 
     @pytest.mark.asyncio
     async def test_high_priority_overtakes_normal(self, store, video_key):

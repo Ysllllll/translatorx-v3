@@ -218,7 +218,7 @@ def render_translations(records: list[SentenceRecord], tgt: str) -> None:
     table.add_column("source", overflow="fold", ratio=1)
     table.add_column("translation", overflow="fold", ratio=1)
     for i, rec in enumerate(records, 1):
-        tgt_text = rec.translations.get(tgt, "")
+        tgt_text = rec.get_translation(tgt) or ""
         table.add_row(str(i), truncate(rec.src_text, 200), truncate(tgt_text, 200))
     console.print(table)
 

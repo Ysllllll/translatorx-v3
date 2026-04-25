@@ -175,7 +175,7 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                         merged = {**stored_align, **rec.alignment}
                         rec = replace(rec, alignment=merged)
 
-                translation = rec.translations.get(target) if rec.translations else None
+                translation = rec.get_translation(target, default_variant_key=ctx.variant.key)
                 n_segments = len(rec.segments)
 
                 # Short circuits.

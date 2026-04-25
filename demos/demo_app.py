@@ -105,7 +105,7 @@ async def scenario_video_builder(app: App, srt_path: Path) -> None:
     )
     for rec in result.records:
         print(f"  [{rec.start:5.1f}-{rec.end:5.1f}] {rec.src_text}")
-        print(f"              -> {rec.translations.get('zh', '')}")
+        print(f"              -> {(rec.get_translation('zh') or '')}")
     print(f"  ({len(result.records)} records, {result.elapsed_s:.2f}s)")
 
 
@@ -120,7 +120,7 @@ async def scenario_course_builder(app: App, srt1: Path, srt2: Path) -> None:
     )
     for video, outcome in result.videos:
         if hasattr(outcome, "records"):
-            translations = [r.translations.get("zh", "") for r in outcome.records]
+            translations = [(r.get_translation("zh") or "") for r in outcome.records]
             print(f"  [{video}] OK — {translations}")
         else:
             print(f"  [{video}] FAIL — {outcome!r}")
@@ -160,7 +160,7 @@ async def scenario_stream_builder(app: App) -> None:
         async def consumer():
             async for rec in stream.records():
                 print(f"  [{rec.start:5.1f}-{rec.end:5.1f}] {rec.src_text}")
-                print(f"              -> {rec.translations.get('zh', '')}")
+                print(f"              -> {(rec.get_translation('zh') or '')}")
 
         consumer_task = asyncio.create_task(consumer())
         await producer()
@@ -237,7 +237,7 @@ async def scenario_multi_speaker_stream(app: App) -> None:
         async def consumer():
             async for rec in stream.records():
                 print(f"  [{rec.start:4.1f}-{rec.end:4.1f}] {rec.src_text}")
-                print(f"              -> {rec.translations.get('zh', '')}")
+                print(f"              -> {(rec.get_translation('zh') or '')}")
 
         consumer_task = asyncio.create_task(consumer())
         await producer()

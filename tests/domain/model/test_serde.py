@@ -86,7 +86,7 @@ class TestSentenceRecordSerde:
         assert rec.to_dict() == {"src_text": "Hello.", "start": 0.0, "end": 1.0}
 
     def test_full_round_trip(self) -> None:
-        rec = SentenceRecord(src_text="Hello world.", start=0.0, end=1.5, segments=[Segment(start=0.0, end=1.5, text="Hello world.")], translations={"zh": "你好世界。"}, alignment={"method": "wx"}, extra={"src_id": 1})
+        rec = SentenceRecord(src_text="Hello world.", start=0.0, end=1.5, segments=[Segment(start=0.0, end=1.5, text="Hello world.")], translations={"zh": {"v1": "你好世界。"}}, alignment={"method": "wx"}, extra={"src_id": 1})
         wire = json.loads(json.dumps(rec.to_dict()))
         assert SentenceRecord.from_dict(wire) == rec
 

@@ -73,7 +73,7 @@ async def step_chunked(
         keep_from_local = 0 if w_idx == 0 else overlap
         for j, tr in enumerate(translated[keep_from_local:], start=start + keep_from_local):
             if final_translations[j] is None:
-                final_translations[j] = tr.translations.get(tgt, "")
+                final_translations[j] = tr.get_translation(tgt) or ""
                 final_attribution[j] = w_idx
         console.print(f"    [dim]window {w_idx} [{start}:{end}] kept indices {start + keep_from_local}..{end - 1}[/dim]")
 

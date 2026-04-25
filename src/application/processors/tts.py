@@ -129,7 +129,7 @@ class TTSProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             async for rec in upstream:
                 rec_id = rec.extra.get("id")
 
-                translation = rec.translations.get(target) if rec.translations else None
+                translation = rec.get_translation(target, default_variant_key=ctx.variant.key)
                 if not translation or not translation.strip():
                     yield rec
                     continue

@@ -97,13 +97,13 @@ class TestVideoOrchestrator:
         result = await orch.run()
 
         assert len(result.records) == 2
-        assert result.records[0].translations["zh"] == "[翻译]Hello."
+        assert result.records[0].get_translation("zh") == "[翻译]Hello."
         assert engine.calls == 2
         assert result.failed == ()
         assert result.elapsed_s >= 0.0
         # Persisted to store.
         data = await store.load_video(video_key.video)
-        assert data["records"][0]["translations"]["zh"] == "[翻译]Hello."
+        assert data["records"][0]["translations"]["zh"]["1b094599"] == "[翻译]Hello."
 
     @pytest.mark.asyncio
     async def test_empty_processors_rejected(self, store, video_key):
@@ -185,7 +185,7 @@ class TestVideoOrchestrator:
         orch = VideoOrchestrator(source=src, processors=[translate, _Marker()], ctx=_ctx(), store=store, video_key=video_key)
         result = await orch.run()
 
-        assert result.records[0].translations["zh"] == "[翻译]Hello."
+        assert result.records[0].get_translation("zh") == "[翻译]Hello."
         assert result.records[0].extra["marker"] is True
 
 

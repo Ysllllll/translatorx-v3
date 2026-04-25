@@ -27,6 +27,7 @@ from .context import (
 )
 from .prompts import get_default_system_prompt, register_default_prompt
 from .translate import TranslateResult, translate_with_verify
+from .variant import VariantSpec, default_variant
 
 __all__ = [
     "ContextWindow",
@@ -34,7 +35,9 @@ __all__ = [
     "TermsProvider",
     "TranslateResult",
     "TranslationContext",
+    "VariantSpec",
     "build_frozen_messages",
+    "default_variant",
     "get_default_system_prompt",
     "register_default_prompt",
     "translate_with_verify",

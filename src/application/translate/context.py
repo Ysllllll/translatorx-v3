@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 from application.terminology.protocol import TermsProvider
 from application.terminology.static import StaticTerms
+from application.translate.variant import VariantSpec, default_variant
 from ports.engine import Message
 
 
@@ -183,3 +184,4 @@ class TranslationContext:
     window_size: int = 4
     max_retries: int = 3
     system_prompt_template: str = ""
+    variant: VariantSpec = field(default_factory=default_variant)

@@ -407,13 +407,25 @@ def _records_to_srt(data: dict) -> str:
     for r in records:
         segments = r.get("segments") or []
         translations = r.get("translations") or {}
+        selected = r.get("selected") or {}
         alignment = r.get("alignment") or {}
         tgt = next(iter(translations.keys()), None)
         if tgt is None:
             continue
+        bucket = translations.get(tgt) or {}
+        # Pick the variant text: per-record selected → first available.
+        if isinstance(bucket, dict):
+            chosen = selected.get(tgt) if isinstance(selected, dict) else None
+            text = ""
+            if chosen and chosen in bucket:
+                text = bucket[chosen]
+            elif bucket:
+                text = next(iter(bucket.values()))
+        else:  # legacy bare-string fallthrough
+            text = str(bucket or "")
         pieces = alignment.get(tgt)
         if not (isinstance(pieces, list) and len(pieces) == len(segments)):
-            pieces = [translations.get(tgt, "")] + [""] * max(0, len(segments) - 1)
+            pieces = [text] + [""] * max(0, len(segments) - 1)
         for seg, piece in zip(segments, pieces):
             if not piece:
                 continue

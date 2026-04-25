@@ -119,7 +119,7 @@ class TestCourseOrchestrator:
         # The "good" video must succeed regardless of "bad".
         good = dict(result.videos)["good"]
         assert isinstance(good, VideoResult)
-        assert good.records[0].translations["zh"] == "[译]Hello."
+        assert good.records[0].get_translation("zh") == "[译]Hello."
 
     @pytest.mark.asyncio
     async def test_empty_batch(self, workspace, store):

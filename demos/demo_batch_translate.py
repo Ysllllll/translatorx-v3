@@ -14,7 +14,7 @@
             Bilingual table
 
 STEP 4 演示 **persist 一切到一份 ``<video>.json``**：
-* records + extra.translation_meta（per-record provenance, D-070）
+* records + variants/prompts 顶层 registry（A/B 多变体）
 * punc_cache / chunk_cache（store.patch_video 原生支持）
 
 跑两轮：第一轮 miss → 全译；第二轮 hit → 零 LLM 调用，且预处理缓存从 disk
@@ -143,7 +143,7 @@ async def step_cache_demo(
     console.print(
         f"  [bold]pass1[/bold]={t1:.2f}s  [bold]pass2[/bold]={t2:.2f}s  "
         f"[green]speedup={speedup:.1f}x[/green]  "
-        f"records cached on disk = {sum(1 for r in recs2 if r.translations.get(tgt))}"
+        f"records cached on disk = {sum(1 for r in recs2 if r.get_translation(tgt))}"
     )
     console.print(f"  [dim]preprocess caches in JSON[/dim]  punc_cache_keys={len(disk_punc)}  chunk_cache_keys={len(disk_chunk)}")
 
@@ -154,11 +154,9 @@ async def step_cache_demo(
         data = json.loads(fp_path.read_text(encoding="utf-8"))
         records_on_disk = data.get("records", [])
         n_records = len(records_on_disk)
-        sample_meta: dict = {}
-        if records_on_disk:
-            sample_meta = records_on_disk[0].get("extra", {}).get("translation_meta", {})
-        sections = [k for k in ("records", "punc_cache", "chunk_cache", "summary") if data.get(k)]
-        console.print(f"  [dim]on-disk[/dim] sections={sections}  records={n_records}  sample translation_meta={sample_meta}")
+        sections = [k for k in ("records", "punc_cache", "chunk_cache", "summary", "variants", "prompts") if data.get(k)]
+        variants = data.get("variants", {})
+        console.print(f"  [dim]on-disk[/dim] sections={sections}  records={n_records}  variants={list(variants.keys())}")
 
 
 # =====================================================================
@@ -246,7 +244,7 @@ async def run(
         translated.append(rec)
         idx = len(translated)
         dt = time.perf_counter() - t2
-        tgt_text = rec.translations.get(tgt_for_translate, "")
+        tgt_text = rec.get_translation(tgt_for_translate) or ""
         console.print(f"  [bold green]✓[/bold green] [dim]({idx}/{total} +{dt:.2f}s)[/dim] [cyan]{truncate(rec.src_text, 120)}[/cyan]")
         console.print(f"      [magenta]→[/magenta] {truncate(tgt_text, 200)}")
     elapsed_tx = time.perf_counter() - t2

@@ -14,13 +14,60 @@ from domain.model.word import Word
 
 @dataclass(slots=True, frozen=True)
 class SentenceRecord:
+    """One translation unit.
+
+    ``translations`` is keyed first by target language, then by *variant
+    key* (see :class:`application.translate.VariantSpec`). The variant
+    key identifies which (model, prompt, config) combination produced
+    that text, so a record may carry several side-by-side translations
+    for A/B comparison.
+
+    Pre-variant code that wrote ``translations[target] = "text"`` (a
+    bare string) is no longer supported; callers must always pick a
+    variant key. To read "the" translation downstream, use
+    :meth:`get_translation` which honours :attr:`selected` first and
+    falls back to the supplied ``default_variant_key``.
+
+    ``selected`` is an optional per-record override of the active
+    variant, e.g. ``{"zh": "gpt5-strict"}``. When absent, downstream
+    consumers fall back to the pipeline-level :class:`VariantSpec.key`.
+    """
+
     src_text: str
     start: float
     end: float
     segments: list[Segment] = field(default_factory=list)
-    translations: dict[str, str] = field(default_factory=dict)
+    translations: dict[str, dict[str, str]] = field(default_factory=dict)
+    selected: dict[str, str] = field(default_factory=dict)
     alignment: dict[str, Any] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
+
+    def get_translation(self, lang: str, *, default_variant_key: str | None = None) -> str | None:
+        """Return the translation text for ``lang``.
+
+        Resolution order:
+
+        1. ``self.selected[lang]`` — per-record override (highest priority).
+        2. ``default_variant_key`` — pipeline-level active variant
+           (typically ``ctx.variant.key``).
+        3. The first key in ``translations[lang]`` (insertion order).
+
+        Returns ``None`` when no translation is available.
+        """
+        bucket = self.translations.get(lang)
+        if not bucket:
+            return None
+        # Tolerate legacy bare-string translations (test fixtures).
+        if isinstance(bucket, str):
+            return bucket
+        chosen = self.selected.get(lang)
+        if chosen and chosen in bucket:
+            return bucket[chosen]
+        if default_variant_key and default_variant_key in bucket:
+            return bucket[default_variant_key]
+        for value in bucket.values():
+            return value
+        return None
 
     def __repr__(self) -> str:
         return f"SentenceRecord({self.src_text!r}, {_fmt_time(self.start)}->{_fmt_time(self.end)}, segments={len(self.segments)})"
@@ -33,26 +80,19 @@ class SentenceRecord:
             f"  end={_fmt_time(self.end)},\n"
             f"  segments={repr([segment.text for segment in self.segments])},\n"
             f"  translations={self.translations!r},\n"
+            f"  selected={self.selected!r},\n"
             f"  alignment={self.alignment!r},\n"
             f"  extra={self.extra!r},\n"
             ")"
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for the main video JSON (D-069).
+        """Serialize for the main video JSON.
 
-        Schema:
-
-        - ``src_text``/``start``/``end`` always emitted (start/end rounded
-          to 3 decimal places).
-        - ``words`` hoisted to the sentence level when any segment carries
-          words — emitted as a flat list in segment order (tab-separated
-          strings per :meth:`Word.to_dict`).
-        - ``segments`` emits ``{text, w: [i, j]}`` index ranges that slice
-          into the sentence-level ``words`` array. Segments without words
-          fall back to ``{text, start, end}``.
-        - ``translations``/``alignment``/``extra`` are
-          omitted when empty.
+        - ``translations`` is the nested ``{lang: {variant_key: text}}``
+          dict; emitted only when non-empty.
+        - ``selected`` emitted only when non-empty.
+        - ``alignment``/``extra`` are omitted when empty.
         """
         payload: dict[str, Any] = {
             "src_text": self.src_text,
@@ -64,8 +104,6 @@ class SentenceRecord:
             seg_dicts: list[dict[str, Any]] = []
             all_have_words = all(s.words for s in self.segments)
             if all_have_words:
-                # Hoist path — every segment contributes its words; segments
-                # reference them by [i, j] index ranges.
                 for seg in self.segments:
                     i = len(hoisted_words)
                     hoisted_words.extend(w.to_dict() for w in seg.words)
@@ -78,7 +116,6 @@ class SentenceRecord:
                     seg_dicts.append(seg_payload)
                 payload["words"] = hoisted_words
             else:
-                # Fallback path — no word-level timing; use {text,start,end}.
                 for seg in self.segments:
                     seg_payload = {
                         "text": seg.text,
@@ -92,7 +129,9 @@ class SentenceRecord:
                     seg_dicts.append(seg_payload)
             payload["segments"] = seg_dicts
         if self.translations:
-            payload["translations"] = dict(self.translations)
+            payload["translations"] = {lang: dict(bucket) for lang, bucket in self.translations.items()}
+        if self.selected:
+            payload["selected"] = dict(self.selected)
         if self.alignment:
             payload["alignment"] = dict(self.alignment)
         if self.extra:
@@ -101,7 +140,13 @@ class SentenceRecord:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "SentenceRecord":
-        """Deserialize a sentence record, reassembling hoisted words."""
+        """Deserialize a sentence record, reassembling hoisted words.
+
+        ``translations`` must be ``{lang: {variant_key: text}}``; legacy
+        records that stored ``translations[lang] = "text"`` (a bare
+        string) are tolerated by parking the value under a ``legacy``
+        variant key.
+        """
         segments_raw = payload.get("segments") or []
         hoisted_words_raw = payload.get("words") or []
         hoisted_words: list[Word] = [Word.from_dict(w) for w in hoisted_words_raw]
@@ -127,14 +172,26 @@ class SentenceRecord:
                     )
                 )
             else:
-                # Legacy {text, start, end, ...} form or bare fallback.
                 segments.append(Segment.from_dict(s))
+
+        raw_translations = payload.get("translations") or {}
+        translations: dict[str, dict[str, str]] = {}
+        for lang, bucket in raw_translations.items():
+            if isinstance(bucket, dict):
+                translations[lang] = {str(k): str(v) for k, v in bucket.items() if v is not None}
+            elif isinstance(bucket, str) and bucket:
+                translations[lang] = {"legacy": bucket}
+
+        selected_raw = payload.get("selected") or {}
+        selected: dict[str, str] = {str(k): str(v) for k, v in selected_raw.items() if isinstance(v, str) and v}
+
         return cls(
             src_text=payload["src_text"],
             start=_num(payload["start"]),
             end=_num(payload["end"]),
             segments=segments,
-            translations=dict(payload.get("translations") or {}),
+            translations=translations,
+            selected=selected,
             alignment=dict(payload.get("alignment") or {}),
             extra=dict(payload.get("extra") or {}),
         )

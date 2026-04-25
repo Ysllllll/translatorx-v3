@@ -29,5 +29,5 @@ class TestSentenceRecordDisplay:
         assert repr(record) == "SentenceRecord('你好世界。', 0.00->2.00, segments=1)"
 
     def test_sentence_record_pretty_shows_segment_texts(self) -> None:
-        record = SentenceRecord(src_text="Hello world. How are you?", start=0.0, end=3.0, segments=[Segment(0.0, 1.5, "Hello world."), Segment(1.5, 3.0, " How are you?")], translations={"zh": "你好世界。"}, alignment={"method": "mock"}, extra={"note": "demo"})
-        assert record.pretty() == ("SentenceRecord(\n  src_text='Hello world. How are you?',\n  start=0.00,\n  end=3.00,\n  segments=['Hello world.', ' How are you?'],\n  translations={'zh': '你好世界。'},\n  alignment={'method': 'mock'},\n  extra={'note': 'demo'},\n)")
+        record = SentenceRecord(src_text="Hello world. How are you?", start=0.0, end=3.0, segments=[Segment(0.0, 1.5, "Hello world."), Segment(1.5, 3.0, " How are you?")], translations={"zh": {"v1": "你好世界。"}}, alignment={"method": "mock"}, extra={"note": "demo"})
+        assert record.pretty() == ("SentenceRecord(\n  src_text='Hello world. How are you?',\n  start=0.00,\n  end=3.00,\n  segments=['Hello world.', ' How are you?'],\n  translations={'zh': {'v1': '你好世界。'}},\n  selected={},\n  alignment={'method': 'mock'},\n  extra={'note': 'demo'},\n)")
