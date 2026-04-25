@@ -85,8 +85,9 @@ def make_punc_config(language: str) -> dict:
     """Real 模式 punc 配置：所有语言走 deepmultilingualpunctuation。"""
     return {
         "backends": {
+            # "*" 是 wildcard fallback，等价于「所有语言都用这个 backend」。
+            # 想给特定语言换模型，就再加一条 `language: {...}` 覆盖。
             "*": {"library": "deepmultilingualpunctuation"},
-            language: {"library": "deepmultilingualpunctuation"},
         },
         "threshold": PUNC_THRESHOLD,
         "on_failure": "keep",
@@ -94,7 +95,11 @@ def make_punc_config(language: str) -> dict:
 
 
 def make_chunk_config(language: str, *, engine=None) -> dict:
-    """Real 模式 chunk 配置：spacy → llm → rule 三段 composite。"""
+    """Real 模式 chunk 配置：spacy → llm → rule 三段 composite。
+
+    与 :meth:`api.app.App.chunker` 在 ``chunk_mode == "spacy_llm_rule"`` 分支
+    生成的 spec 完全等价，可直接对照阅读。
+    """
     stages: list[dict] = [{"library": "spacy"}]
     if engine is not None:
         stages.append(
@@ -105,6 +110,8 @@ def make_chunk_config(language: str, *, engine=None) -> dict:
                 "max_depth": 4,
                 "max_retries": 2,
                 "max_concurrent": 8,
+                "split_parts": 2,
+                "on_failure": "rule",  # LLM 单次失败 → fallback 到规则切分
             }
         )
     stages.append({"library": "rule", "max_len": CHUNK_LEN})
@@ -118,6 +125,7 @@ def make_chunk_config(language: str, *, engine=None) -> dict:
             },
         },
         "max_len": CHUNK_LEN,
+        # 顶层 Chunker.on_failure 仅 "keep"|"raise"；"rule" 是 LLM stage 内部概念。
         "on_failure": "keep",
     }
 
