@@ -111,7 +111,6 @@ def make_engine(base_url: str | None):
         api_key=os.environ.get("LLM_API_KEY", "EMPTY"),
         temperature=0.3,
         timeout=180.0,
-        max_retries=2,
         extra_body={
             "top_k": 20,
             "min_p": 0,
@@ -122,35 +121,41 @@ def make_engine(base_url: str | None):
 
 def make_punc_config(language: str) -> dict:
     return {
-        language: {
-            "library": "deepmultilingualpunctuation",
-            "model_name": "kredor/punctuate-all",
+        "backends": {
+            language: {
+                "library": "deepmultilingualpunctuation",
+                "model": "kredor/punctuate-all",
+            }
         }
     }
 
 
 def make_chunk_config(language: str, *, engine) -> dict:
-    return {
-        language: {
-            "library": "composite",
-            "language": language,
-            "chunk_len": CHUNK_LEN,
-            "inner": {
-                "library": "spacy",
-                "language": language,
-                "chunk_len": CHUNK_LEN,
-                "stop_punct": ".!?。！？",
-                "soft_punct": ",;，；",
-            },
-            "refine": {
+    stages: list[dict] = [{"library": "spacy"}]
+    if engine is not None:
+        stages.append(
+            {
                 "library": "llm",
-                "language": language,
                 "engine": engine,
-                "chunk_len": CHUNK_LEN,
-                "rule_aware": True,
+                "max_len": CHUNK_LEN,
+                "max_depth": 4,
+                "max_retries": 2,
                 "max_concurrent": 4,
-            },
-        }
+                "on_failure": "rule",
+            }
+        )
+    stages.append({"library": "rule", "max_len": CHUNK_LEN})
+    return {
+        "backends": {
+            language: {
+                "library": "composite",
+                "language": language,
+                "max_len": CHUNK_LEN,
+                "stages": stages,
+            }
+        },
+        "max_len": CHUNK_LEN,
+        "on_failure": "keep",
     }
 
 
