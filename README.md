@@ -110,7 +110,8 @@ pytest tests/ --cov=src --cov-report=term       # 覆盖率
 |---|---|
 | `demos/demo_lang_ops.py` | 分词 / 分句 / ChunkPipeline |
 | `demos/demo_subtitle.py` | SRT 解析 / Word 对齐 / Subtitle 重组 |
-| `demos/demo_preprocess_pipeline.py` | 标点恢复 + 分块流水线 (step-by-step 自检) |
+| `demos/demo_batch_preprocess.py` | 批量预处理流水线：sanitize → punc → clauses → chunk → merge → records (CONFIG dict + App/manual 双路径) |
+| `demos/demo_stream_preprocess/` | 流式 / WebSocket 预处理样板（边喂边产 SentenceRecord） |
 | `demos/demo_checker.py`  | 翻译质量检查 |
 | `demos/demo_media.py`    | yt-dlp 下载 + ffmpeg 提取 |
 | `demos/demo_llm_ops.py`  | LLM 引擎 + 上下文 + translate_with_verify (需要 LLM) |
