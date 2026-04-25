@@ -8,15 +8,22 @@ from pathlib import Path
 from domain.model import Word
 
 from .pipeline import sanitize_whisperx
+from .segments import extract_word_dicts
 
 
 def parse_whisperx(data: dict) -> list[Word]:
-    """Parse a WhisperX JSON dict into sanitized :class:`Word` objects."""
-    ws = data.get("word_segments")
-    if ws is None:
-        raise KeyError("Missing 'word_segments' in WhisperX JSON")
+    """Parse a WhisperX JSON dict into sanitized :class:`Word` objects.
+
+    Walks ``segments`` (preferred) so word-less segments are recovered
+    via synthesis from their ``text`` + ``[start, end]``; falls back to
+    the legacy top-level ``word_segments`` list when ``segments`` is
+    absent.
+    """
+    if "segments" not in data and "word_segments" not in data:
+        raise KeyError("Missing 'segments' / 'word_segments' in WhisperX JSON")
+    ws = extract_word_dicts(data)
     if not ws:
-        raise ValueError("Empty 'word_segments' in WhisperX JSON")
+        raise ValueError("WhisperX JSON contains no usable words")
     return sanitize_whisperx(ws)
 
 

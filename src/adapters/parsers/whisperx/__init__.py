@@ -22,6 +22,7 @@ from .rules import (
     _interpolate_timestamps,
     _replace_long_words,
 )
+from .segments import extract_word_dicts
 from .serde import parse_whisperx, read_whisperx
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "default_pipeline",
     "parse_whisperx",
     "read_whisperx",
+    "extract_word_dicts",
     "WordReport",
     "WhisperXReport",
     "RuleHit",

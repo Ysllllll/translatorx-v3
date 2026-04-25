@@ -303,10 +303,14 @@ class TestParseWhisperx:
         assert len(result) == 2
         assert all(isinstance(w, Word) for w in result)
 
-    def test_missing_word_segments_key(self):
-        with pytest.raises(KeyError, match="word_segments"):
+    def test_missing_both_keys(self):
+        with pytest.raises(KeyError, match="segments"):
+            parse_whisperx({})
+
+    def test_empty_segments_and_no_word_segments(self):
+        with pytest.raises(ValueError, match="no usable words"):
             parse_whisperx({"segments": []})
 
     def test_empty_word_segments(self):
-        with pytest.raises(ValueError, match="Empty"):
+        with pytest.raises(ValueError, match="no usable words"):
             parse_whisperx({"word_segments": []})
