@@ -94,6 +94,35 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         """
         return "variant"
 
+    @staticmethod
+    def _hydrate_from_stored(rec: SentenceRecord, stored: dict[str, Any]) -> SentenceRecord:
+        """Merge persisted ``translations`` / ``selected`` into ``rec``.
+
+        Stored values are taken as the base; the in-memory record's
+        translations/selected layer on top so any not-yet-flushed work
+        wins. Legacy bare-string translations (pre-variant schema) are
+        promoted under a ``"legacy"`` variant key.
+        """
+        stored_tr = stored.get("translations") if isinstance(stored, dict) else None
+        stored_sel = stored.get("selected") if isinstance(stored, dict) else None
+        new_translations = rec.translations
+        new_selected = rec.selected
+        if isinstance(stored_tr, dict) and stored_tr:
+            merged: dict[str, dict[str, str]] = {}
+            for lang, b in stored_tr.items():
+                if isinstance(b, dict):
+                    merged[lang] = {str(k): str(v) for k, v in b.items() if v is not None}
+                elif isinstance(b, str) and b:
+                    merged[lang] = {"legacy": b}
+            for lang, b in rec.translations.items():
+                merged.setdefault(lang, {}).update(b)
+            new_translations = merged
+        if isinstance(stored_sel, dict) and stored_sel:
+            new_selected = {**stored_sel, **rec.selected}
+        if new_translations is rec.translations and new_selected is rec.selected:
+            return rec
+        return replace(rec, translations=new_translations, selected=new_selected)
+
     async def process(
         self,
         upstream: AsyncIterator[SentenceRecord],
@@ -119,7 +148,7 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                     stored_by_id[rid] = stored
 
         window = ContextWindow(ctx.window_size)
-        buffer: dict[int, dict[str, Any]] = {}
+        buffer: dict[int, dict[Any, Any]] = {}
         last_flush_at = time.monotonic()
 
         async def _flush() -> None:
@@ -141,31 +170,15 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                 # Hydrate persisted translations + selected so the cache
                 # check below sees what's on disk.
                 if isinstance(rec_id, int) and rec_id in stored_by_id:
-                    stored = stored_by_id[rec_id]
-                    stored_tr = stored.get("translations") if isinstance(stored, dict) else None
-                    stored_sel = stored.get("selected") if isinstance(stored, dict) else None
-                    new_translations = rec.translations
-                    new_selected = rec.selected
-                    if isinstance(stored_tr, dict) and stored_tr:
-                        merged: dict[str, dict[str, str]] = {}
-                        for lang, b in stored_tr.items():
-                            if isinstance(b, dict):
-                                merged[lang] = {str(k): str(v) for k, v in b.items() if v is not None}
-                            elif isinstance(b, str) and b:
-                                merged[lang] = {"legacy": b}
-                        for lang, b in rec.translations.items():
-                            merged.setdefault(lang, {}).update(b)
-                        new_translations = merged
-                    if isinstance(stored_sel, dict) and stored_sel:
-                        new_selected = {**stored_sel, **rec.selected}
-                    if new_translations is not rec.translations or new_selected is not rec.selected:
-                        rec = replace(rec, translations=new_translations, selected=new_selected)
+                    rec = self._hydrate_from_stored(rec, stored_by_id[rec_id])
 
                 bucket = rec.translations.get(target) or {}
                 if variant_key in bucket and bucket[variant_key]:
                     cached = bucket[variant_key]
-                    if rec.src_text.lower() not in self._direct_map:
-                        window.add(rec.src_text, cached)
+                    # Cache-hit context tracking: always feed the
+                    # window so subsequent LLM calls see continuity,
+                    # matching what `_translate_one` does on misses.
+                    window.add(rec.src_text, cached)
                     logger.debug("translate hit id=%s variant=%s src=%r", rec_id, variant_key, rec.src_text[:40])
                     yield rec
                     continue
@@ -173,23 +186,8 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                 new_rec, _result = await self._translate_one(rec, ctx, target, window, variant_key=variant_key, system_prompt=system_prompt)
 
                 if isinstance(rec_id, int):
-                    rec_payload = new_rec.to_dict()
                     text = new_rec.translations[target][variant_key]
-                    patch: dict[str, Any] = {
-                        f"translations.{target}.{variant_key}": text,
-                        "src_text": rec_payload["src_text"],
-                    }
-                    if "start" in rec_payload:
-                        patch["start"] = rec_payload["start"]
-                    if "end" in rec_payload:
-                        patch["end"] = rec_payload["end"]
-                    if "time" in rec_payload:
-                        patch["time"] = rec_payload["time"]
-                    if "segments" in rec_payload:
-                        patch["segments"] = rec_payload["segments"]
-                    if "words" in rec_payload:
-                        patch["words"] = rec_payload["words"]
-                    buffer[rec_id] = patch
+                    buffer[rec_id] = new_rec.to_patch_dict(target, variant_key, text)
                     now = time.monotonic()
                     if len(buffer) >= self._flush_every or (now - last_flush_at) >= self._flush_interval_s:
                         await _flush()
@@ -226,6 +224,15 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             return (
                 replace(record, translations=_store(direct_hit)),
                 _make_skipped_result(direct_hit),
+            )
+
+        # Empty / whitespace-only source: nothing to translate.
+        # Persist the empty string as the "translation" so downstream
+        # processors don't keep re-asking the LLM about it.
+        if not source.strip():
+            return (
+                replace(record, translations=_store(source)),
+                _make_skipped_result(source),
             )
 
         if cfg.max_source_len > 0 and len(source) > cfg.max_source_len:

@@ -138,3 +138,29 @@ class TestSentenceRecordSerde:
         restored = SentenceRecord.from_dict(json.loads(json.dumps(payload)))
         assert round(restored.start, 3) == 0.111
         assert round(restored.end, 3) == 2.0
+
+
+class TestSentenceRecordPatchDict:
+    def test_basic_shape(self) -> None:
+        rec = SentenceRecord(src_text="Hi.", start=0.0, end=1.0, segments=[Segment(start=0.0, end=1.0, text="Hi.")])
+        patch = rec.to_patch_dict("zh", "qwen-baseline", "你好。")
+        # Variant cell uses tuple-path so dots in variant keys are safe.
+        assert patch[("translations", "zh", "qwen-baseline")] == "你好。"
+        # Mirrors to_dict for sibling fields.
+        assert patch["src_text"] == "Hi."
+        assert "time" in patch
+        # start/end derivable from segments → omitted.
+        assert "start" not in patch and "end" not in patch
+        assert "segments" in patch
+
+    def test_dotted_variant_key_safe(self) -> None:
+        rec = SentenceRecord(src_text="Hi.", start=0.0, end=1.0)
+        patch = rec.to_patch_dict("zh", "openai/gpt-3.5-turbo", "你好。")
+        # The cell key is a tuple — set_nested won't split on dots.
+        assert ("translations", "zh", "openai/gpt-3.5-turbo") in patch
+
+    def test_no_segments_emits_start_end(self) -> None:
+        rec = SentenceRecord(src_text="Hi.", start=0.0, end=1.0)
+        patch = rec.to_patch_dict("zh", "v1", "你好。")
+        assert patch["start"] == 0.0
+        assert patch["end"] == 1.0

@@ -83,6 +83,33 @@ class SentenceRecord:
         last = self.segments[-1]
         return _round3(first.start) == _round3(self.start) and _round3(last.end) == _round3(self.end)
 
+    def to_patch_dict(self, target: str, variant_key: str, translation: str) -> dict[Any, Any]:
+        """Build a translate-write patch keyed by tuple paths.
+
+        Returns a dict suitable to feed into :func:`set_nested` (via
+        :meth:`Store.patch_video`'s ``records`` map). Layout:
+
+        * ``("translations", target, variant_key) -> translation``
+          — surgical update of one variant cell, leaves siblings intact.
+        * ``"src_text"`` / ``"start"`` / ``"end"`` / ``"time"`` /
+          ``"segments"`` / ``"words"`` mirror :meth:`to_dict` so the
+          on-disk record stays consistent with the in-memory shape.
+          Only fields that ``to_dict`` actually emits are included.
+
+        Tuple-path keys (``("a","b","c")``) bypass the dotted-string
+        splitting in :func:`set_nested`, so variant keys containing
+        ``.`` (e.g. ``"openai/gpt-3.5-turbo"``) are safe.
+        """
+        rec_payload = self.to_dict()
+        patch: dict[Any, Any] = {
+            ("translations", target, variant_key): translation,
+            "src_text": rec_payload["src_text"],
+        }
+        for key in ("start", "end", "time", "segments", "words"):
+            if key in rec_payload:
+                patch[key] = rec_payload[key]
+        return patch
+
     def __repr__(self) -> str:
         return f"SentenceRecord({self.src_text!r}, {_fmt_time(self.start)}->{_fmt_time(self.end)}, segments={len(self.segments)})"
 

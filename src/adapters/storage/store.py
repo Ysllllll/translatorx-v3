@@ -119,15 +119,28 @@ def empty_course_data() -> dict[str, Any]:
     }
 
 
-def set_nested(target: dict[str, Any], dotted_key: str, value: Any) -> None:
-    """Assign `value` to `target` at `dotted_key`, creating intermediate dicts.
+def set_nested(target: dict[str, Any], dotted_key: str | tuple[str, ...] | list[str], value: Any) -> None:
+    """Assign ``value`` to ``target`` at the given path, creating intermediate dicts.
 
-    ``set_nested(rec, "translations.zh", "你好")`` sets
-    ``rec["translations"]["zh"] = "你好"``. Empty key is rejected.
+    The path may be:
+
+    * a dotted-string (legacy shorthand): ``"translations.zh"`` → splits on ``.``.
+      **Caution:** any literal ``.`` inside a key segment will be misinterpreted.
+      Pass a tuple/list path when keys may contain dots (e.g. model names like
+      ``"openai/gpt-3.5-turbo"``).
+    * a tuple or list of segments: ``("translations", "zh", "gpt-3.5-turbo")`` —
+      each entry is treated as a literal key, no splitting.
+
+    Empty path is rejected.
     """
-    if not dotted_key:
+    if isinstance(dotted_key, (tuple, list)):
+        parts: list[str] = [str(p) for p in dotted_key]
+    else:
+        if not dotted_key:
+            raise ValueError("dotted_key must not be empty")
+        parts = dotted_key.split(".")
+    if not parts:
         raise ValueError("dotted_key must not be empty")
-    parts = dotted_key.split(".")
     cur = target
     for part in parts[:-1]:
         nxt = cur.get(part)
@@ -160,7 +173,7 @@ class Store(Protocol):
         self,
         video: str,
         *,
-        records: dict[int, dict[str, Any]] | None = None,
+        records: dict[int, dict[Any, Any]] | None = None,
         failed: list[dict[str, Any]] | None = None,
         meta: dict[str, Any] | None = None,
         terms: dict[str, Any] | None = None,
@@ -368,7 +381,7 @@ class JsonFileStore:
         self,
         video: str,
         *,
-        records: dict[int, dict[str, Any]] | None = None,
+        records: dict[int, dict[Any, Any]] | None = None,
         failed: list[dict[str, Any]] | None = None,
         meta: dict[str, Any] | None = None,
         terms: dict[str, Any] | None = None,
@@ -635,7 +648,7 @@ class JsonFileStore:
             await asyncio.to_thread(_atomic_write_json, path, data)
 
 
-def _apply_record_patches(data: dict[str, Any], records: dict[int, dict[str, Any]]) -> None:
+def _apply_record_patches(data: dict[str, Any], records: dict[int, dict[Any, Any]]) -> None:
     by_id: dict[int, dict[str, Any]] = {}
     for rec in data["records"]:
         rid = rec.get("id")

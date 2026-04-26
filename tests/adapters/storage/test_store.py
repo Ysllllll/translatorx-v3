@@ -52,6 +52,33 @@ class TestSetNested:
         with pytest.raises(ValueError):
             set_nested({}, "", 1)
 
+    def test_tuple_path_treats_segments_literally(self) -> None:
+        """Tuple paths bypass the dotted-string splitting.
+
+        Critical for variant keys like model names containing ``.``
+        (e.g. ``openai/gpt-3.5-turbo``).
+        """
+        d: dict = {}
+        set_nested(d, ("translations", "zh", "gpt-3.5-turbo"), "你好")
+        assert d == {"translations": {"zh": {"gpt-3.5-turbo": "你好"}}}
+
+    def test_dotted_string_misinterprets_dots_in_keys(self) -> None:
+        """Documents the dotted-string footgun — use tuple paths instead."""
+        d: dict = {}
+        # If callers pass the raw key with dots, set_nested splits it.
+        set_nested(d, "translations.zh.gpt-3.5-turbo", "你好")
+        assert d != {"translations": {"zh": {"gpt-3.5-turbo": "你好"}}}
+        assert "5-turbo" in d["translations"]["zh"]["gpt-3"]
+
+    def test_list_path_works_like_tuple(self) -> None:
+        d: dict = {}
+        set_nested(d, ["translations", "zh.dotted", "v1"], "x")
+        assert d == {"translations": {"zh.dotted": {"v1": "x"}}}
+
+    def test_empty_tuple_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            set_nested({}, (), 1)
+
 
 # ---------------------------------------------------------------------------
 # Protocol conformance
