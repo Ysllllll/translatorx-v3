@@ -36,6 +36,7 @@ from application.translate import TranslationContext
 from domain.model import SentenceRecord, Segment
 
 from application.observability.progress import ProgressCallback, ProgressEvent
+from application.orchestrator.session import VideoSession
 from ports.errors import ErrorInfo, ErrorReporter
 from ports.source import Priority, Processor, Source, VideoKey
 from adapters.sources.push import PushQueueSource
@@ -93,14 +94,30 @@ def _make_wrapper(
     video_key: VideoKey,
     failed: list[ErrorInfo],
     reporter: ErrorReporter | None,
+    session: VideoSession | None,
 ):
+    import inspect
+
+    def _accepts_session(proc: Processor[SentenceRecord, SentenceRecord]) -> bool:
+        try:
+            sig = inspect.signature(proc.process)
+        except (TypeError, ValueError):
+            return False
+        params = sig.parameters
+        if "session" in params:
+            return True
+        return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+
     async def _with_error_capture(
         upstream: AsyncIterator[SentenceRecord],
         proc: Processor[SentenceRecord, SentenceRecord],
     ) -> AsyncIterator[SentenceRecord]:
         seen: set[int] = set()
+        kwargs: dict[str, object] = {"ctx": ctx, "store": store, "video_key": video_key}
+        if session is not None and _accepts_session(proc):
+            kwargs["session"] = session
         try:
-            async for rec in proc.process(upstream, ctx=ctx, store=store, video_key=video_key):
+            async for rec in proc.process(upstream, **kwargs):
                 errs = rec.extra.get("errors") if rec.extra else None
                 if isinstance(errs, list):
                     for info in errs:
@@ -169,7 +186,8 @@ class VideoOrchestrator:
     async def run(self) -> VideoResult:
         start = time.monotonic()
         failed: list[ErrorInfo] = []
-        wrap = _make_wrapper(self._ctx, self._store, self._video_key, failed, self._error_reporter)
+        session = await VideoSession.load(self._store, self._video_key)
+        wrap = _make_wrapper(self._ctx, self._store, self._video_key, failed, self._error_reporter, session)
 
         stream: AsyncIterator[SentenceRecord] = self._source.read()
         for proc in self._processors:
@@ -178,32 +196,35 @@ class VideoOrchestrator:
         records: list[SentenceRecord] = []
         _fire(self._progress, ProgressEvent(kind="started", processor="orchestrator", done=0))
         try:
-            async for rec in stream:
-                records.append(rec)
+            try:
+                async for rec in stream:
+                    records.append(rec)
+                    _fire(
+                        self._progress,
+                        ProgressEvent(
+                            kind="record",
+                            processor="orchestrator",
+                            done=len(records),
+                            record_id=rec.extra.get("id") if rec.extra else None,
+                        ),
+                    )
+            except BaseException:
+                logger.exception(
+                    "VideoOrchestrator.run failed for %s/%s",
+                    self._video_key.course,
+                    self._video_key.video,
+                )
                 _fire(
                     self._progress,
                     ProgressEvent(
-                        kind="record",
+                        kind="failed",
                         processor="orchestrator",
                         done=len(records),
-                        record_id=rec.extra.get("id") if rec.extra else None,
                     ),
                 )
-        except BaseException:
-            logger.exception(
-                "VideoOrchestrator.run failed for %s/%s",
-                self._video_key.course,
-                self._video_key.video,
-            )
-            _fire(
-                self._progress,
-                ProgressEvent(
-                    kind="failed",
-                    processor="orchestrator",
-                    done=len(records),
-                ),
-            )
-            raise
+                raise
+        finally:
+            await asyncio.shield(session.flush(self._store))
 
         stale: set[int] = set()
         for rec in records:
@@ -291,6 +312,7 @@ class StreamingOrchestrator:
         self._pump_task: asyncio.Task | None = None
         self._failed: list[ErrorInfo] = []
         self._started = False
+        self._session: VideoSession | None = None
 
     # ---- public API --------------------------------------------------
 
@@ -352,7 +374,8 @@ class StreamingOrchestrator:
         self._started = True
 
         self._pump_task = asyncio.create_task(self._pump(), name="streamorch-pump")
-        wrap = _make_wrapper(self._ctx, self._store, self._video_key, self._failed, self._error_reporter)
+        self._session = await VideoSession.load(self._store, self._video_key)
+        wrap = _make_wrapper(self._ctx, self._store, self._video_key, self._failed, self._error_reporter, self._session)
 
         try:
             stream: AsyncIterator[SentenceRecord] = self._source.read()
@@ -367,6 +390,8 @@ class StreamingOrchestrator:
                     await asyncio.shield(self._pump_task)
                 except (asyncio.CancelledError, BaseException):
                     pass
+            if self._session is not None:
+                await asyncio.shield(self._session.flush(self._store))
 
     # ---- internals ---------------------------------------------------
 

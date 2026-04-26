@@ -20,6 +20,11 @@ Per-record processing mirrors legacy behaviour:
 4. **capitalize** — upper-case the first character.
 5. **translate_with_verify** — LLM call with quality check + retry.
 6. **prefix readd** — prepend target-language prefix.
+
+Persistence is delegated to the orchestrator-owned
+:class:`~application.orchestrator.session.VideoSession` so this
+processor no longer touches ``store.load_video`` / ``store.patch_video``
+directly.
 """
 
 from __future__ import annotations
@@ -28,7 +33,7 @@ import asyncio
 import logging
 import time
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from typing import TYPE_CHECKING, AsyncIterator
 
 from application.checker import CheckReport, Checker
 from application.processors.prefix import PrefixHandler, TranslateNodeConfig
@@ -44,6 +49,7 @@ from ports.processor import ProcessorBase
 
 if TYPE_CHECKING:
     from adapters.storage.store import Store
+    from application.orchestrator.session import VideoSession
     from ports.source import VideoKey
 
 
@@ -86,42 +92,6 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
     # ("") because cache decisions are variant-keyed per-record (see the
     # module docstring), not gated by a global processor signature.
 
-    @staticmethod
-    def _hydrate_from_stored(rec: SentenceRecord, stored: dict[str, Any]) -> SentenceRecord:
-        """Merge persisted ``translations`` / ``selected`` into ``rec``.
-
-        Why this exists: upstream sources (``SrtSource``, ``WhisperXSource``,
-        ``PushQueueSource``) emit *fresh* :class:`SentenceRecord` objects
-        built from the raw subtitle / WhisperX payload — they have no
-        knowledge of the JSON store and therefore carry no prior
-        translations. Without merging in the persisted state, every
-        record would look like a cache miss on every run.
-
-        Merge order: stored values form the base, the in-memory record's
-        translations / selected layer on top so any not-yet-flushed work
-        from this run wins. Legacy bare-string translations (pre-variant
-        schema) are promoted under a ``"legacy"`` variant key.
-        """
-        stored_tr = stored.get("translations") if isinstance(stored, dict) else None
-        stored_sel = stored.get("selected") if isinstance(stored, dict) else None
-        new_translations = rec.translations
-        new_selected = rec.selected
-        if isinstance(stored_tr, dict) and stored_tr:
-            merged: dict[str, dict[str, str]] = {}
-            for lang, b in stored_tr.items():
-                if isinstance(b, dict):
-                    merged[lang] = {str(k): str(v) for k, v in b.items() if v is not None}
-                elif isinstance(b, str) and b:
-                    merged[lang] = {"legacy": b}
-            for lang, b in rec.translations.items():
-                merged.setdefault(lang, {}).update(b)
-            new_translations = merged
-        if isinstance(stored_sel, dict) and stored_sel:
-            new_selected = {**stored_sel, **rec.selected}
-        if new_translations is rec.translations and new_selected is rec.selected:
-            return rec
-        return replace(rec, translations=new_translations, selected=new_selected)
-
     async def process(
         self,
         upstream: AsyncIterator[SentenceRecord],
@@ -129,6 +99,7 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         ctx: TranslationContext,
         store: "Store",
         video_key: "VideoKey",
+        session: "VideoSession | None" = None,
     ) -> AsyncIterator[SentenceRecord]:
         target = ctx.target_lang
         variant = ctx.variant
@@ -138,38 +109,26 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         # different prompts works without rebuilding the processor.
         system_prompt = variant.prompt or self._config.system_prompt
 
-        existing = await store.load_video(video_key.video)
-        stored_by_id: dict[int, dict[str, Any]] = {}
-        if isinstance(existing, dict):
-            for stored in existing.get("records", []) or []:
-                rid = stored.get("id") if isinstance(stored, dict) else None
-                if isinstance(rid, int):
-                    stored_by_id[rid] = stored
+        # Lazy fallback so unit tests / out-of-orchestrator calls still work.
+        if session is None:
+            from application.orchestrator.session import VideoSession  # noqa: PLC0415
+
+            session = await VideoSession.load(store, video_key)
+            owned_session = True
+        else:
+            owned_session = False
 
         window = ContextWindow(ctx.window_size)
-        buffer: dict[int, dict[Any, Any]] = {}
         last_flush_at = time.monotonic()
-
-        async def _flush() -> None:
-            if not buffer:
-                return
-            pending = dict(buffer)
-            buffer.clear()
-            await store.patch_video(
-                video_key.video,
-                records=pending,
-                variants={variant_key: variant.info()},
-                prompts={variant.prompt_id: variant.prompt} if variant.prompt else None,
-            )
+        writes_since_flush = 0
 
         try:
             async for rec in upstream:
-                rec_id = rec.extra.get("id")
+                rec_id = rec.extra.get("id") if rec.extra else None
 
                 # Hydrate persisted translations + selected so the cache
                 # check below sees what's on disk.
-                if isinstance(rec_id, int) and rec_id in stored_by_id:
-                    rec = self._hydrate_from_stored(rec, stored_by_id[rec_id])
+                rec = session.hydrate(rec)
 
                 bucket = rec.translations.get(target) or {}
                 if variant_key in bucket and bucket[variant_key]:
@@ -178,7 +137,12 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                     # window so subsequent LLM calls see continuity,
                     # matching what `_translate_one` does on misses.
                     window.add(rec.src_text, cached)
-                    logger.debug("translate hit id=%s variant=%s src=%r", rec_id, variant_key, rec.src_text[:40])
+                    logger.debug(
+                        "translate hit id=%s variant=%s src=%r",
+                        rec_id,
+                        variant_key,
+                        rec.src_text[:40],
+                    )
                     yield rec
                     continue
 
@@ -186,15 +150,27 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
 
                 if isinstance(rec_id, int):
                     text = new_rec.translations[target][variant_key]
-                    buffer[rec_id] = new_rec.to_patch_dict(target, variant_key, text)
+                    session.set_translation(
+                        new_rec,
+                        target,
+                        variant_key,
+                        text,
+                        variant_info=variant.info(),
+                        prompt_id=variant.prompt_id if variant.prompt else None,
+                        prompt=variant.prompt or None,
+                    )
+                    writes_since_flush += 1
+                    pending_since = writes_since_flush
                     now = time.monotonic()
-                    if len(buffer) >= self._flush_every or (now - last_flush_at) >= self._flush_interval_s:
-                        await _flush()
+                    if pending_since >= self._flush_every or (now - last_flush_at) >= self._flush_interval_s:
+                        await session.flush(store)
+                        writes_since_flush = 0
                         last_flush_at = time.monotonic()
 
                 yield new_rec
         finally:
-            await asyncio.shield(_flush())
+            if owned_session:
+                await asyncio.shield(session.flush(store))
             await asyncio.shield(self.aclose())
 
     async def _translate_one(

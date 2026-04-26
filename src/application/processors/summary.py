@@ -51,6 +51,7 @@ from ports.engine import LLMEngine
 if TYPE_CHECKING:  # pragma: no cover
     from ports.source import VideoKey
     from adapters.storage.store import Store
+    from application.orchestrator.session import VideoSession
 
 logger = logging.getLogger(__name__)
 
@@ -133,11 +134,19 @@ class SummaryProcessor:
         ctx: TranslationContext,
         store: "Store",
         video_key: "VideoKey",
+        session: "VideoSession | None" = None,
     ) -> AsyncIterator[SentenceRecord]:
         config_sig = self.fingerprint()
 
-        existing = await store.load_video(video_key.video)
-        existing_summary = existing.get("summary") if isinstance(existing, dict) else None
+        if session is None:
+            from application.orchestrator.session import VideoSession  # noqa: PLC0415
+
+            session = await VideoSession.load(store, video_key)
+            owned_session = True
+        else:
+            owned_session = False
+
+        existing_summary = session.stored_summary
 
         prov = existing_summary.get("_provenance") if isinstance(existing_summary, dict) else None
         sig_matches = isinstance(prov, dict) and prov.get("config_sig") == config_sig
@@ -161,10 +170,12 @@ class SummaryProcessor:
                 state = await self._agent.feed(state, rec.src_text)
                 new_version = state.current.version if state.current else 0
                 if new_version != prev_version:
-                    await store.patch_video(video_key.video, summary=self._summary_payload(state))
+                    session.set_summary(self._summary_payload(state))
                 yield rec
         finally:
             if skip_work:
+                if owned_session:
+                    await asyncio.shield(session.flush(store))
                 await asyncio.shield(self.aclose())
                 return
 
@@ -174,7 +185,9 @@ class SummaryProcessor:
                     state = await self._agent.flush(state)
                 except Exception:  # noqa: BLE001
                     logger.exception("SummaryProcessor: final flush failed")
-                await store.patch_video(video_key.video, summary=self._summary_payload(state))
+                session.set_summary(self._summary_payload(state))
 
             await asyncio.shield(_final())
+            if owned_session:
+                await asyncio.shield(session.flush(store))
             await asyncio.shield(self.aclose())

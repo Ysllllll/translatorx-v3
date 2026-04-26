@@ -43,6 +43,7 @@ from domain.model import SentenceRecord
 from .errors import ErrorCategory, ErrorInfo
 
 if TYPE_CHECKING:
+    from application.orchestrator.session import VideoSession
     from application.translate import TranslationContext
 
     from .protocol import VideoKey
@@ -93,6 +94,7 @@ class ProcessorBase(ABC, Generic[In, Out]):
         ctx: "TranslationContext",
         store: "Store",
         video_key: "VideoKey",
+        session: "VideoSession | None" = None,
     ) -> AsyncIterator[Out]:
         """Transform ``upstream`` records, yielding enriched outputs.
 
@@ -101,6 +103,13 @@ class ProcessorBase(ABC, Generic[In, Out]):
         or a coroutine that returns an iterator. The contract (buffered
         flush, finally-shielded cleanup, fingerprint-gated hit path) is
         described in :mod:`runtime.protocol`.
+
+        ``session`` is the orchestrator-owned :class:`VideoSession`
+        aggregate. New processors should funnel all hydrate / patch
+        work through it instead of calling ``store.load_video`` /
+        ``store.patch_video`` directly. The argument is optional so
+        that legacy or out-of-orchestrator callers can keep using the
+        bare ``store``.
         """
 
     # ------------------------------------------------------------------

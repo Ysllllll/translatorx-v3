@@ -43,6 +43,7 @@ from ports.processor import ProcessorBase
 
 if TYPE_CHECKING:
     from adapters.storage.store import Store
+    from application.orchestrator.session import VideoSession
     from ports.source import VideoKey
 
 
@@ -138,42 +139,33 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         ctx: TranslationContext,
         store: "Store",
         video_key: "VideoKey",
+        session: "VideoSession | None" = None,
     ) -> AsyncIterator[SentenceRecord]:
         target = ctx.target_lang
         fp = self.fingerprint()
 
-        existing = await store.load_video(video_key.video)
-        existing_meta = existing.get("meta", {}) if isinstance(existing, dict) else {}
-        existing_fps = existing_meta.get("_fingerprints", {}) if isinstance(existing_meta, dict) else {}
+        if session is None:
+            from application.orchestrator.session import VideoSession  # noqa: PLC0415
+
+            session = await VideoSession.load(store, video_key)
+            owned_session = True
+        else:
+            owned_session = False
+
+        existing_fps = session.stored_fingerprints
         fp_matches = existing_fps.get(self.name) == fp
-        stored_by_id: dict[int, dict[str, Any]] = {}
-        if fp_matches and isinstance(existing, dict):
-            for stored in existing.get("records", []) or []:
-                rid = stored.get("id") if isinstance(stored, dict) else None
-                if isinstance(rid, int):
-                    stored_by_id[rid] = stored
 
-        buffer: dict[int, dict[str, Any]] = {}
         last_flush_at = time.monotonic()
-
-        async def _flush() -> None:
-            if not buffer:
-                return
-            pending = dict(buffer)
-            buffer.clear()
-            await store.patch_video(video_key.video, records=pending)
+        writes_since_flush = 0
 
         try:
             async for rec in upstream:
-                rec_id = rec.extra.get("id")
+                rec_id = rec.extra.get("id") if rec.extra else None
 
-                # Hydrate persisted alignment.
-                if isinstance(rec_id, int) and rec_id in stored_by_id:
-                    stored = stored_by_id[rec_id]
-                    stored_align = stored.get("alignment") if isinstance(stored, dict) else None
-                    if isinstance(stored_align, dict) and stored_align:
-                        merged = {**stored_align, **rec.alignment}
-                        rec = replace(rec, alignment=merged)
+                # Hydrate persisted alignment (and translations/selected
+                # the session also tracks).
+                if fp_matches:
+                    rec = session.hydrate(rec)
 
                 translation = rec.get_translation(target, default_variant_key=ctx.variant.key)
                 n_segments = len(rec.segments)
@@ -197,19 +189,24 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                     yield rec
                     continue
 
-                new_rec, patch = await self._align_record(ctx, rec, translation)
+                new_rec, segments_payload, pieces = await self._align_record(ctx, rec, translation)
 
-                if isinstance(rec_id, int) and patch:
-                    buffer[rec_id] = patch
+                if isinstance(rec_id, int):
+                    session.set_alignment(rec_id, target, pieces)
+                    if segments_payload is not None:
+                        session.set_segments_payload(rec_id, segments_payload)
+                    writes_since_flush += 1
                     now = time.monotonic()
-                    if len(buffer) >= self._flush_every or (now - last_flush_at) >= self._flush_interval_s:
-                        await _flush()
+                    if (now - last_flush_at) >= self._flush_interval_s or writes_since_flush >= self._flush_every:
+                        await session.flush(store)
+                        writes_since_flush = 0
                         last_flush_at = time.monotonic()
 
                 yield new_rec
         finally:
-            await asyncio.shield(_flush())
-            await asyncio.shield(store.set_fingerprints(video_key.video, {self.name: fp}))
+            session.set_fingerprint(self.name, fp)
+            if owned_session:
+                await asyncio.shield(session.flush(store))
             await asyncio.shield(self.aclose())
 
     # ------------------------------------------------------------------
@@ -221,7 +218,7 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         ctx: TranslationContext,
         rec: SentenceRecord,
         translation: str,
-    ) -> tuple[SentenceRecord, dict[str, Any]]:
+    ) -> tuple[SentenceRecord, list[dict[str, Any]] | None, list[str]]:
         target = ctx.target_lang
         src_ops = LangOps.for_language(self._source_lang)
         tgt_ops = LangOps.for_language(target)
@@ -270,7 +267,6 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                     break
 
         # --- Text pass: retry stuck size-2 groups with rearrange -----------
-        patches: dict[str, Any] = {}
         if self._enable_text_mode:
             text_agent = self._get_text_agent(target)
             for g_idx in range(len(groups)):
@@ -310,7 +306,13 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                             segments[i1] = new_b
                             texts[i0] = new_a.text
                             texts[i1] = new_b.text
-                            logger.info("align rearrange: [%s|%s] -> [%s|%s]", sub_texts[0], sub_texts[1], new_a.text, new_b.text)
+                            logger.info(
+                                "align rearrange: [%s|%s] -> [%s|%s]",
+                                sub_texts[0],
+                                sub_texts[1],
+                                new_a.text,
+                                new_b.text,
+                            )
 
         # --- Materialize alignment list ------------------------------------
         pieces: list[str] = [""] * n
@@ -325,36 +327,29 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             # concat-preserving invariant downstream still holds.
 
         new_rec = self._with_alignment(rec, target, pieces)
+        segments_payload: list[dict[str, Any]] | None = None
         # Reflect source-side rearrange back into the record.
         if self._enable_text_mode and any(s is not rec.segments[i] for i, s in enumerate(segments)):
             new_rec = replace(new_rec, segments=list(segments))
-
-        patches[f"alignment.{target}"] = list(pieces)
-        if self._enable_text_mode:
-            # Only write segments back if we actually mutated any.
-            if any(s is not rec.segments[i] for i, s in enumerate(segments)):
-                # Serialize segments via Segment.pretty-compatible dicts if
-                # the Store layer understands them; fall back to a generic
-                # dict shape.
-                patches["segments"] = [
-                    {
-                        "start": s.start,
-                        "end": s.end,
-                        "text": s.text,
-                        "speaker": s.speaker,
-                        "words": [
-                            {
-                                "word": w.word,
-                                "start": w.start,
-                                "end": w.end,
-                                "speaker": w.speaker,
-                            }
-                            for w in s.words
-                        ],
-                    }
-                    for s in segments
-                ]
-        return new_rec, patches
+            segments_payload = [
+                {
+                    "start": s.start,
+                    "end": s.end,
+                    "text": s.text,
+                    "speaker": s.speaker,
+                    "words": [
+                        {
+                            "word": w.word,
+                            "start": w.start,
+                            "end": w.end,
+                            "speaker": w.speaker,
+                        }
+                        for w in s.words
+                    ],
+                }
+                for s in segments
+            ]
+        return new_rec, segments_payload, list(pieces)
 
     # ------------------------------------------------------------------
     # Agent factories
