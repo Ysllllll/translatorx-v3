@@ -82,8 +82,8 @@ class TestOrchestratorEventBus:
                     break
                 collected.append(ev.type)
 
-            assert "orchestrator.started" in collected
-            assert "orchestrator.finished" in collected
+            assert "stage.started" in collected
+            assert "stage.finished" in collected
             assert "video.records_patched" in collected
         finally:
             sub.close()
@@ -96,7 +96,7 @@ class TestOrchestratorEventBus:
 
     async def test_finished_with_failure_payload_when_run_raises(self, store, video_key):
         bus = EventBus()
-        sub = bus.subscribe(type_prefix="orchestrator.finished")
+        sub = bus.subscribe(type_prefix="stage.finished")
 
         class _Boom:
             async def read(self):
@@ -110,6 +110,7 @@ class TestOrchestratorEventBus:
 
         ev = await sub.get(timeout=0.5)
         assert ev is not None
-        assert ev.type == "orchestrator.finished"
+        assert ev.type == "stage.finished"
         assert ev.payload["success"] is False
+        assert ev.payload["status"] == "failed"
         sub.close()

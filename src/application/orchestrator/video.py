@@ -212,9 +212,9 @@ class VideoOrchestrator:
         _fire(self._progress, ProgressEvent(kind="started", processor="orchestrator", done=0))
         success = False
         if self._event_bus is not None:
-            from application.events import orchestrator_started
+            from application.events import stage_started
 
-            await self._event_bus.publish(orchestrator_started(self._video_key.course, self._video_key.video))
+            await self._event_bus.publish(stage_started("orchestrator", self._video_key.course, self._video_key.video))
         try:
             try:
                 async for rec in stream:
@@ -247,9 +247,16 @@ class VideoOrchestrator:
         finally:
             await asyncio.shield(session.flush(self._store))
             if self._event_bus is not None:
-                from application.events import orchestrator_finished
+                from application.events import stage_finished
 
-                await self._event_bus.publish(orchestrator_finished(self._video_key.course, self._video_key.video, success=success))
+                await self._event_bus.publish(
+                    stage_finished(
+                        "orchestrator",
+                        self._video_key.course,
+                        self._video_key.video,
+                        status="completed" if success else "failed",
+                    )
+                )
 
         stale: set[int] = set()
         for rec in records:
@@ -426,9 +433,9 @@ class StreamingOrchestrator:
         wrap = _make_wrapper(self._ctx, self._store, self._video_key, self._failed, self._error_reporter, self._session)
 
         if self._event_bus is not None:
-            from application.events import orchestrator_started
+            from application.events import stage_started
 
-            await self._event_bus.publish(orchestrator_started(self._video_key.course, self._video_key.video))
+            await self._event_bus.publish(stage_started("stream", self._video_key.course, self._video_key.video))
         success = False
         try:
             stream: AsyncIterator[SentenceRecord] = self._source.read()
@@ -447,9 +454,16 @@ class StreamingOrchestrator:
             if self._session is not None:
                 await asyncio.shield(self._session.flush(self._store))
             if self._event_bus is not None:
-                from application.events import orchestrator_finished
+                from application.events import stage_finished
 
-                await self._event_bus.publish(orchestrator_finished(self._video_key.course, self._video_key.video, success=success))
+                await self._event_bus.publish(
+                    stage_finished(
+                        "stream",
+                        self._video_key.course,
+                        self._video_key.video,
+                        status="completed" if success else "failed",
+                    )
+                )
 
     # ---- internals ---------------------------------------------------
 

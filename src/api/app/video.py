@@ -431,7 +431,7 @@ class VideoBuilder:
 
         from application.orchestrator.session import VideoSession
         from application.pipeline.context import PipelineContext
-        from application.pipeline.middleware import ProgressMiddleware
+        from application.pipeline.middleware import ProgressMiddleware, TracingMiddleware
         from application.pipeline.runtime import PipelineRuntime
         from application.stages import make_default_registry
         from ports.pipeline import PipelineDef, StageDef
@@ -495,11 +495,11 @@ class VideoBuilder:
 
         ctx = PipelineContext(**ctx_kwargs)
 
-        mws: list[Any] = []
+        mws: list[Any] = [TracingMiddleware()]
         if self._progress is not None:
             mws.append(ProgressMiddleware(self._progress))
 
-        runtime = PipelineRuntime(registry, middlewares=mws or None)
+        runtime = PipelineRuntime(registry, middlewares=mws)
         started = _time.perf_counter()
         try:
             result = await runtime.run(defn, ctx)

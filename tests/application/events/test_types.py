@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from application.events import DomainEvent, course_metadata_patched, orchestrator_finished, orchestrator_started, video_fingerprints_set, video_invalidated, video_records_patched
+from application.events import DomainEvent, course_metadata_patched, stage_finished, stage_started, video_fingerprints_set, video_invalidated, video_records_patched
 
 
 class TestDomainEvent:
@@ -97,12 +97,21 @@ class TestConvenienceConstructors:
         assert ev.video is None
         assert ev.payload == {"keys": ["videos", "meta"]}
 
-    def test_orchestrator_lifecycle(self):
-        s = orchestrator_started("c1", "v1")
-        f = orchestrator_finished("c1", "v1", success=True)
-        assert s.type == "orchestrator.started"
-        assert f.type == "orchestrator.finished"
-        assert f.payload == {"success": True}
+    def test_stage_lifecycle(self):
+        s = stage_started("orchestrator", "c1", "v1")
+        f = stage_finished("orchestrator", "c1", "v1", status="completed")
+        assert s.type == "stage.started"
+        assert s.payload == {"stage_id": "orchestrator", "stage": "orchestrator"}
+        assert f.type == "stage.finished"
+        assert f.payload["status"] == "completed"
+        assert f.payload["success"] is True
+        assert f.payload["stage"] == "orchestrator"
+
+    def test_stage_finished_failed_carries_error(self):
+        f = stage_finished("translate", "c1", "v1", status="failed", error="RuntimeError")
+        assert f.payload["status"] == "failed"
+        assert f.payload["success"] is False
+        assert f.payload["error"] == "RuntimeError"
 
     def test_event_ids_unique(self):
         a = video_records_patched("c1", "v1", record_ids=[1])

@@ -22,8 +22,8 @@ Design refs
   ``video.invalidated``          — invalidate_from_step propagated.
   ``video.raw_segment_written``  — sidecar JSONL written.
   ``course.metadata_patched``    — course-level metadata changed.
-  ``orchestrator.started``       — VideoOrchestrator entered.
-  ``orchestrator.finished``      — VideoOrchestrator left.
+  ``stage.started``              — pipeline/orchestrator stage entered.
+  ``stage.finished``             — pipeline/orchestrator stage left.
   ``processor.started`` /
     ``processor.finished``       — per-processor lifecycle (optional).
 
@@ -165,12 +165,33 @@ def course_metadata_patched(course: str, *, keys: list[str]) -> DomainEvent:
     )
 
 
-def orchestrator_started(course: str, video: str) -> DomainEvent:
-    return DomainEvent(type="orchestrator.started", course=course, video=video)
+def stage_started(stage_name: str, course: str, video: str | None = None, *, stage_id: str | None = None) -> DomainEvent:
+    return DomainEvent(
+        type="stage.started",
+        course=course,
+        video=video,
+        payload={"stage_id": stage_id or stage_name, "stage": stage_name},
+    )
 
 
-def orchestrator_finished(course: str, video: str, *, success: bool) -> DomainEvent:
-    return DomainEvent(type="orchestrator.finished", course=course, video=video, payload={"success": success})
+def stage_finished(
+    stage_name: str,
+    course: str,
+    video: str | None = None,
+    *,
+    stage_id: str | None = None,
+    status: str = "completed",
+    error: str | None = None,
+) -> DomainEvent:
+    payload: dict[str, Any] = {
+        "stage_id": stage_id or stage_name,
+        "stage": stage_name,
+        "status": status,
+        "success": status == "completed",
+    }
+    if error is not None:
+        payload["error"] = error
+    return DomainEvent(type="stage.finished", course=course, video=video, payload=payload)
 
 
 __all__ = [
@@ -179,6 +200,6 @@ __all__ = [
     "video_fingerprints_set",
     "video_invalidated",
     "course_metadata_patched",
-    "orchestrator_started",
-    "orchestrator_finished",
+    "stage_started",
+    "stage_finished",
 ]
