@@ -69,7 +69,7 @@ class TestStreamingOrchestrator:
     @pytest.mark.asyncio
     async def test_feed_then_close_drains(self, store, video_key):
         engine = _Engine()
-        proc = TranslateProcessor(engine, _PassChecker(), flush_every=1)
+        proc = TranslateProcessor(engine, _PassChecker())
         orch = StreamingOrchestrator(language="en", processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
 
         received = []
@@ -94,7 +94,7 @@ class TestStreamingOrchestrator:
     async def test_high_priority_overtakes_normal(self, store, video_key):
         """HIGH items in the pending queue are drained before NORMAL."""
         engine = _Engine()
-        proc = TranslateProcessor(engine, _PassChecker(), flush_every=1)
+        proc = TranslateProcessor(engine, _PassChecker())
         orch = StreamingOrchestrator(language="en", processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
 
         # Pre-fill PQ *before* run() starts so ordering is deterministic.

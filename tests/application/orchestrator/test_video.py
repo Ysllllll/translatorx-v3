@@ -90,7 +90,7 @@ class TestVideoOrchestrator:
     @pytest.mark.asyncio
     async def test_single_processor_end_to_end(self, store, video_key):
         engine = _Engine()
-        proc = TranslateProcessor(engine, _PassChecker(), flush_every=1)
+        proc = TranslateProcessor(engine, _PassChecker())
 
         src = _ListSource([_rec(0, "Hello."), _rec(1, "Bye.")])
         orch = VideoOrchestrator(source=src, processors=[proc], ctx=_ctx(), store=store, video_key=video_key)

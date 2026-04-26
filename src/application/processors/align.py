@@ -28,7 +28,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
@@ -63,7 +62,6 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         text_norm_ratio / text_accept_ratio: Ratio thresholds for text mode.
         rearrange_chunk_len: Max per-half source length used by
             :func:`rebalance_segment_words` when rearranging.
-        flush_every / flush_interval_s: Store-patch cadence knobs.
         json_agent / text_agent: Pre-built agents (override factory).
     """
 
@@ -80,8 +78,6 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         text_norm_ratio: float = 3.0,
         text_accept_ratio: float = 3.0,
         rearrange_chunk_len: int = 90,
-        flush_every: int | float = float("inf"),
-        flush_interval_s: float = float("inf"),
         json_agent: AlignAgent | None = None,
         text_agent: AlignAgent | None = None,
     ) -> None:
@@ -95,8 +91,6 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         self._text_norm = float(text_norm_ratio)
         self._text_accept = float(text_accept_ratio)
         self._rearrange_chunk_len = int(rearrange_chunk_len)
-        self._flush_every = flush_every
-        self._flush_interval_s = flush_interval_s
         self._json_agent_override = json_agent
         self._text_agent_override = text_agent
         self._json_agents: dict[str, AlignAgent] = {}
@@ -155,9 +149,6 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         existing_fps = session.stored_fingerprints
         fp_matches = existing_fps.get(self.name) == fp
 
-        last_flush_at = time.monotonic()
-        writes_since_flush = 0
-
         try:
             async for rec in upstream:
                 rec_id = rec.extra.get("id") if rec.extra else None
@@ -195,12 +186,7 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                     session.set_alignment(rec_id, target, pieces)
                     if segments_payload is not None:
                         session.set_segments_payload(rec_id, segments_payload)
-                    writes_since_flush += 1
-                    now = time.monotonic()
-                    if (now - last_flush_at) >= self._flush_interval_s or writes_since_flush >= self._flush_every:
-                        await session.flush(store)
-                        writes_since_flush = 0
-                        last_flush_at = time.monotonic()
+                    await session.maybe_autoflush(store)
 
                 yield new_rec
         finally:

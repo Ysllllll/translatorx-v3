@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, AsyncIterator
 
@@ -77,16 +76,12 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         checker: Checker,
         *,
         config: TranslateNodeConfig | None = None,
-        flush_every: int | float = float("inf"),
-        flush_interval_s: float = float("inf"),
     ) -> None:
         self._engine = engine
         self._checker = checker
         self._config = config or TranslateNodeConfig()
         self._prefix_handler = PrefixHandler(self._config.prefix_rules) if self._config.prefix_rules else None
         self._direct_map = {k.lower(): v for k, v in (self._config.direct_translate or {}).items()}
-        self._flush_every = flush_every
-        self._flush_interval_s = flush_interval_s
 
     # NOTE: TranslateProcessor inherits ProcessorBase.fingerprint()'s default
     # ("") because cache decisions are variant-keyed per-record (see the
@@ -119,8 +114,6 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             owned_session = False
 
         window = ContextWindow(ctx.window_size)
-        last_flush_at = time.monotonic()
-        writes_since_flush = 0
 
         try:
             async for rec in upstream:
@@ -159,13 +152,7 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                         prompt_id=variant.prompt_id if variant.prompt else None,
                         prompt=variant.prompt or None,
                     )
-                    writes_since_flush += 1
-                    pending_since = writes_since_flush
-                    now = time.monotonic()
-                    if pending_since >= self._flush_every or (now - last_flush_at) >= self._flush_interval_s:
-                        await session.flush(store)
-                        writes_since_flush = 0
-                        last_flush_at = time.monotonic()
+                    await session.maybe_autoflush(store)
 
                 yield new_rec
         finally:

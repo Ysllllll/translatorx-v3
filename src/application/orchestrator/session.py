@@ -45,6 +45,7 @@ it (no async tasks captured).
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -80,12 +81,15 @@ class VideoSession:
         stored: dict[str, Any] | None,
         *,
         flush_every: int | float = float("inf"),
+        flush_interval_s: float = float("inf"),
         event_bus: "EventBus | None" = None,
     ) -> None:
         self._video_key = video_key
         self._stored = stored if isinstance(stored, dict) else {}
         self._flush_every = flush_every
+        self._flush_interval_s = flush_interval_s
         self._event_bus = event_bus
+        self._last_flush_at: float = time.monotonic()
 
         # Index stored records by id for O(1) hydrate.
         self._stored_by_id: dict[int, dict[str, Any]] = {}
@@ -112,11 +116,18 @@ class VideoSession:
         video_key: "VideoKey",
         *,
         flush_every: int | float = float("inf"),
+        flush_interval_s: float = float("inf"),
         event_bus: "EventBus | None" = None,
     ) -> "VideoSession":
         """Load existing state from ``store`` and build a session."""
         existing = await store.load_video(video_key.video)
-        return cls(video_key, existing, flush_every=flush_every, event_bus=event_bus)
+        return cls(
+            video_key,
+            existing,
+            flush_every=flush_every,
+            flush_interval_s=flush_interval_s,
+            event_bus=event_bus,
+        )
 
     # ------------------------------------------------------------------
     # Read API
@@ -256,6 +267,19 @@ class VideoSession:
         """
         self._merge_record_patch(rec_id, {"segments": list(segments_payload)})
 
+    def set_record_extra(self, rec_id: int, dotted_key: str, value: Any) -> None:
+        """Stage a generic ``record.extra.<dotted_key>`` patch.
+
+        ``dotted_key`` accepts dot notation (e.g. ``"tts.zh"``) which is
+        stored under ``extra.<dotted_key>`` in the per-record patch.
+        Used by processors that need to attach arbitrary per-record
+        metadata (TTS paths, image paths, …) without bypassing the
+        session's flush policy.
+        """
+        if not dotted_key:
+            return
+        self._merge_record_patch(rec_id, {f"extra.{dotted_key}": value})
+
     # ------------------------------------------------------------------
     # Write API — summary / fingerprints / preprocess caches
     # ------------------------------------------------------------------
@@ -302,12 +326,17 @@ class VideoSession:
     # ------------------------------------------------------------------
 
     async def maybe_autoflush(self, store: "Store") -> None:
-        """Flush if pending record count exceeds ``flush_every``.
+        """Flush if pending record count exceeds ``flush_every`` **or**
+        elapsed time since last flush exceeds ``flush_interval_s``.
 
-        No-op when ``flush_every`` is infinite (the default).
+        No-op when both thresholds are infinite (the default).
         """
         if self.pending_record_count >= self._flush_every:
             await self.flush(store)
+            return
+        if self._flush_interval_s != float("inf") and self._record_patches:
+            if (time.monotonic() - self._last_flush_at) >= self._flush_interval_s:
+                await self.flush(store)
 
     async def flush(self, store: "Store") -> None:
         """Write all pending state to ``store``.
@@ -382,6 +411,7 @@ class VideoSession:
         self._fingerprints = {}
         self._punc_cache = None
         self._chunk_cache = None
+        self._last_flush_at = time.monotonic()
 
     # ------------------------------------------------------------------
     # Internals

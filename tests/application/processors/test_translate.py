@@ -136,7 +136,7 @@ class TestMissPath:
     @pytest.mark.asyncio
     async def test_translation_persisted_with_variant_registry(self, store, video_key):
         engine = _RecordingEngine()
-        proc = TranslateProcessor(engine, _PassChecker(), flush_every=1, flush_interval_s=0.01)
+        proc = TranslateProcessor(engine, _PassChecker())
         variant = _variant(alias="alpha", prompt_id="strict", prompt="be strict")
 
         async def src():
@@ -197,7 +197,7 @@ class TestBufferedFlush:
     @pytest.mark.asyncio
     async def test_flush_by_count(self, store, video_key):
         engine = _RecordingEngine()
-        proc = TranslateProcessor(engine, _PassChecker(), flush_every=2, flush_interval_s=3600)
+        proc = TranslateProcessor(engine, _PassChecker())
 
         async def src():
             for i in range(5):
@@ -210,7 +210,7 @@ class TestBufferedFlush:
     @pytest.mark.asyncio
     async def test_final_flush_happens_on_cancel(self, store, video_key):
         engine = _RecordingEngine()
-        proc = TranslateProcessor(engine, _PassChecker(), flush_every=100, flush_interval_s=3600)
+        proc = TranslateProcessor(engine, _PassChecker())
 
         async def src():
             yield _rec(0, "a")

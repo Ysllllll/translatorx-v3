@@ -99,6 +99,7 @@ class RuntimeConfig(BaseModel):
     default_checker_profile: Literal["strict", "lenient", "minimal"] = "strict"
     max_concurrent_videos: int = 3
     flush_every: int = 100
+    flush_interval_s: float = float("inf")
 
 
 class PreprocessConfig(BaseModel):

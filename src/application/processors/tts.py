@@ -23,9 +23,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import time
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from typing import TYPE_CHECKING, AsyncIterator
 
 from application.translate import TranslationContext
 from domain.model import SentenceRecord
@@ -36,6 +35,7 @@ from ports.tts import TTS, SynthesizeOptions, Voice, VoicePicker
 if TYPE_CHECKING:
     from ports.source import VideoKey
     from adapters.storage.store import Store
+    from application.orchestrator.session import VideoSession
 
 
 logger = logging.getLogger(__name__)
@@ -53,8 +53,6 @@ class TTSProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         format: Audio container (``"mp3"`` / ``"wav"`` / ...).
         rate: Global speech-rate multiplier (e.g. ``1.05`` when target
             language is verbose and needs to fit source timing).
-        flush_every: Buffered flush threshold (records).
-        flush_interval_s: Buffered flush threshold (seconds).
         skip_if_exists: When ``True`` and the target audio file already
             exists on disk, reuse it rather than re-synthesizing.
     """
@@ -69,16 +67,12 @@ class TTSProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         default_voice: Voice | str | None = None,
         format: str = "mp3",
         rate: float = 1.0,
-        flush_every: int | float = float("inf"),
-        flush_interval_s: float = float("inf"),
         skip_if_exists: bool = True,
     ) -> None:
         self._tts = tts
         self._voice_picker = voice_picker or VoicePicker(default_voice=default_voice)
         self._format = format
         self._rate = rate
-        self._flush_every = flush_every
-        self._flush_interval_s = flush_interval_s
         self._skip_if_exists = skip_if_exists
         self._fp_cache: str | None = None
 
@@ -104,6 +98,7 @@ class TTSProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         ctx: TranslationContext,
         store: "Store",
         video_key: "VideoKey",
+        session: "VideoSession | None" = None,
     ) -> AsyncIterator[SentenceRecord]:
         target = ctx.target_lang
         fp = self.fingerprint()
@@ -115,15 +110,13 @@ class TTSProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
             )
         tts_subdir = workspace.get_subdir("tts")
 
-        buffer: dict[int, dict[str, Any]] = {}
-        last_flush_at = time.monotonic()
+        if session is None:
+            from application.orchestrator.session import VideoSession  # noqa: PLC0415
 
-        async def _flush() -> None:
-            if not buffer:
-                return
-            pending = dict(buffer)
-            buffer.clear()
-            await store.patch_video(video_key.video, records=pending)
+            session = await VideoSession.load(store, video_key)
+            owned_session = True
+        else:
+            owned_session = False
 
         try:
             async for rec in upstream:
@@ -174,16 +167,14 @@ class TTSProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                 new_rec = replace(rec, extra=new_extra)
 
                 if isinstance(rec_id, int):
-                    buffer[rec_id] = {f"extra.tts.{target}": paths}
-                    now = time.monotonic()
-                    if len(buffer) >= self._flush_every or (now - last_flush_at) >= self._flush_interval_s:
-                        await _flush()
-                        last_flush_at = time.monotonic()
+                    session.set_record_extra(rec_id, f"tts.{target}", paths)
+                    await session.maybe_autoflush(store)
 
                 yield new_rec
         finally:
-            await asyncio.shield(_flush())
-            await asyncio.shield(store.set_fingerprints(video_key.video, {self.name: fp}))
+            session.set_fingerprint(self.name, fp)
+            if owned_session:
+                await asyncio.shield(session.flush(store))
             await asyncio.shield(self.aclose())
 
     # ------------------------------------------------------------------

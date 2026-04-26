@@ -126,6 +126,8 @@ class CourseOrchestrator:
         error_reporter: ErrorReporter | None = None,
         max_concurrent_videos: int = 3,
         event_bus: "EventBus | None" = None,
+        flush_every: int | float = float("inf"),
+        flush_interval_s: float = float("inf"),
     ) -> None:
         if max_concurrent_videos < 1:
             raise ValueError("max_concurrent_videos must be >= 1")
@@ -135,6 +137,8 @@ class CourseOrchestrator:
         self._error_reporter = error_reporter
         self._max = max_concurrent_videos
         self._event_bus = event_bus
+        self._flush_every = flush_every
+        self._flush_interval_s = flush_interval_s
 
     async def run(self, videos: Sequence[VideoSpec]) -> CourseResult:
         """Execute every video concurrently (bounded) and aggregate."""
@@ -163,6 +167,8 @@ class CourseOrchestrator:
                     video_key=VideoKey(course=course, video=spec.video),
                     error_reporter=self._error_reporter,
                     event_bus=self._event_bus,
+                    flush_every=self._flush_every,
+                    flush_interval_s=self._flush_interval_s,
                 )
                 try:
                     result = await orch.run()

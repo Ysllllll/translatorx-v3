@@ -60,7 +60,6 @@ class StreamBuilder:
         processor = TranslateProcessor(
             engine,
             checker,
-            flush_every=self.app.config.runtime.flush_every,
         )
         orch = StreamingOrchestrator(
             language=self.language,
@@ -71,6 +70,8 @@ class StreamBuilder:
             split_by_speaker=self._split_by_speaker,
             error_reporter=self._error_reporter,
             event_bus=self.app.event_bus,
+            flush_every=self.app.config.runtime.flush_every,
+            flush_interval_s=self.app.config.runtime.flush_interval_s,
         )
         return LiveStreamHandle(orch)
 

@@ -286,7 +286,6 @@ class CourseBuilder:
                     TranslateProcessor(
                         _engine,
                         _checker,
-                        flush_every=self.app.config.runtime.flush_every,
                     )
                 )
                 if self._align is not None:
@@ -301,7 +300,6 @@ class CourseBuilder:
                             text_norm_ratio=self._align.text_norm_ratio,
                             text_accept_ratio=self._align.text_accept_ratio,
                             rearrange_chunk_len=self._align.rearrange_chunk_len,
-                            flush_every=self.app.config.runtime.flush_every,
                         )
                     )
                 if self._tts is not None:
@@ -317,7 +315,6 @@ class CourseBuilder:
                             default_voice=self._tts.voice or tts_cfg.default_voice or None,
                             format=self._tts.format or tts_cfg.format,
                             rate=self._tts.rate if self._tts.rate is not None else tts_cfg.rate,
-                            flush_every=self.app.config.runtime.flush_every,
                         )
                     )
                 return procs
@@ -360,6 +357,8 @@ class CourseBuilder:
                 error_reporter=self._error_reporter,
                 max_concurrent_videos=self.app.config.runtime.max_concurrent_videos,
                 event_bus=self.app.event_bus,
+                flush_every=self.app.config.runtime.flush_every,
+                flush_interval_s=self.app.config.runtime.flush_interval_s,
             )
             result = await orch.run(specs)
 

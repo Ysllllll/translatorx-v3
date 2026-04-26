@@ -323,7 +323,6 @@ class VideoBuilder:
                 TranslateProcessor(
                     engine,
                     checker,
-                    flush_every=self.app.config.runtime.flush_every,
                 )
             )
             if self._align is not None:
@@ -338,7 +337,6 @@ class VideoBuilder:
                         text_norm_ratio=self._align.text_norm_ratio,
                         text_accept_ratio=self._align.text_accept_ratio,
                         rearrange_chunk_len=self._align.rearrange_chunk_len,
-                        flush_every=self.app.config.runtime.flush_every,
                     )
                 )
             if self._tts is not None:
@@ -354,6 +352,8 @@ class VideoBuilder:
                 error_reporter=self._error_reporter,
                 progress=self._progress,
                 event_bus=self.app.event_bus,
+                flush_every=self.app.config.runtime.flush_every,
+                flush_interval_s=self.app.config.runtime.flush_interval_s,
             )
             result = await orch.run()
 
@@ -466,7 +466,6 @@ class VideoBuilder:
             default_voice=stage.voice or cfg.default_voice or None,
             format=stage.format or cfg.format,
             rate=stage.rate if stage.rate is not None else cfg.rate,
-            flush_every=self.app.config.runtime.flush_every,
         )
 
 

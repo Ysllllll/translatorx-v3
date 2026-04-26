@@ -176,6 +176,8 @@ class VideoOrchestrator:
         error_reporter: ErrorReporter | None = None,
         progress: ProgressCallback | None = None,
         event_bus: "EventBus | None" = None,
+        flush_every: int | float = float("inf"),
+        flush_interval_s: float = float("inf"),
     ) -> None:
         if not processors:
             raise ValueError("processors must not be empty")
@@ -187,11 +189,19 @@ class VideoOrchestrator:
         self._error_reporter = error_reporter
         self._progress = progress
         self._event_bus = event_bus
+        self._flush_every = flush_every
+        self._flush_interval_s = flush_interval_s
 
     async def run(self) -> VideoResult:
         start = time.monotonic()
         failed: list[ErrorInfo] = []
-        session = await VideoSession.load(self._store, self._video_key, event_bus=self._event_bus)
+        session = await VideoSession.load(
+            self._store,
+            self._video_key,
+            flush_every=self._flush_every,
+            flush_interval_s=self._flush_interval_s,
+            event_bus=self._event_bus,
+        )
         wrap = _make_wrapper(self._ctx, self._store, self._video_key, failed, self._error_reporter, session)
 
         stream: AsyncIterator[SentenceRecord] = self._source.read()
@@ -323,6 +333,8 @@ class StreamingOrchestrator:
         id_start: int = 0,
         error_reporter: ErrorReporter | None = None,
         event_bus: "EventBus | None" = None,
+        flush_every: int | float = float("inf"),
+        flush_interval_s: float = float("inf"),
     ) -> None:
         if not processors:
             raise ValueError("processors must not be empty")
@@ -332,6 +344,8 @@ class StreamingOrchestrator:
         self._video_key = video_key
         self._error_reporter = error_reporter
         self._event_bus = event_bus
+        self._flush_every = flush_every
+        self._flush_interval_s = flush_interval_s
 
         self._source = PushQueueSource(language, split_by_speaker=split_by_speaker, id_start=id_start)
         self._pq: asyncio.PriorityQueue = asyncio.PriorityQueue()
@@ -402,7 +416,13 @@ class StreamingOrchestrator:
         self._started = True
 
         self._pump_task = asyncio.create_task(self._pump(), name="streamorch-pump")
-        self._session = await VideoSession.load(self._store, self._video_key, event_bus=self._event_bus)
+        self._session = await VideoSession.load(
+            self._store,
+            self._video_key,
+            flush_every=self._flush_every,
+            flush_interval_s=self._flush_interval_s,
+            event_bus=self._event_bus,
+        )
         wrap = _make_wrapper(self._ctx, self._store, self._video_key, self._failed, self._error_reporter, self._session)
 
         if self._event_bus is not None:

@@ -71,7 +71,7 @@ class TestOrchestratorEventBus:
         bus = EventBus()
         sub = bus.subscribe()
         try:
-            proc = TranslateProcessor(_Engine(), _PassChecker(), flush_every=1)
+            proc = TranslateProcessor(_Engine(), _PassChecker())
             orch = VideoOrchestrator(source=_ListSource([_rec(0, "Hello."), _rec(1, "Bye.")]), processors=[proc], ctx=_ctx(), store=store, video_key=video_key, event_bus=bus)
             await orch.run()
 
@@ -89,7 +89,7 @@ class TestOrchestratorEventBus:
             sub.close()
 
     async def test_no_events_when_bus_absent(self, store, video_key):
-        proc = TranslateProcessor(_Engine(), _PassChecker(), flush_every=1)
+        proc = TranslateProcessor(_Engine(), _PassChecker())
         orch = VideoOrchestrator(source=_ListSource([_rec(0, "Hi.")]), processors=[proc], ctx=_ctx(), store=store, video_key=video_key)
         result = await orch.run()
         assert len(result.records) == 1
@@ -103,7 +103,7 @@ class TestOrchestratorEventBus:
                 raise RuntimeError("boom")
                 yield  # unreachable
 
-        proc = TranslateProcessor(_Engine(), _PassChecker(), flush_every=1)
+        proc = TranslateProcessor(_Engine(), _PassChecker())
         orch = VideoOrchestrator(source=_Boom(), processors=[proc], ctx=_ctx(), store=store, video_key=video_key, event_bus=bus)
         with pytest.raises(RuntimeError):
             await orch.run()

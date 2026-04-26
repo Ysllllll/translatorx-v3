@@ -86,7 +86,7 @@ class TestCourseOrchestrator:
 
         engine = _Engine()
 
-        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [TranslateProcessor(engine, _PassChecker(), flush_every=1)])
+        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [TranslateProcessor(engine, _PassChecker())])
         result = await orch.run([VideoSpec(video="a", source=SrtSource(srt_a, language="en")), VideoSpec(video="b", source=SrtSource(srt_b, language="en"))])
 
         assert isinstance(result, CourseResult)
@@ -110,7 +110,7 @@ class TestCourseOrchestrator:
         # Use a checker whose accept never blocks, so engine failure
         # bubbles up through translate_with_verify after retries.
         def factory():
-            return [TranslateProcessor(engine, _PassChecker(), flush_every=1)]
+            return [TranslateProcessor(engine, _PassChecker())]
 
         orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=factory, max_concurrent_videos=2)
         result = await orch.run([VideoSpec(video="good", source=SrtSource(srt_good, language="en")), VideoSpec(video="bad", source=SrtSource(srt_bad, language="en"))])
@@ -174,7 +174,7 @@ class TestCourseOrchestrator:
             _write_srt(p, [f"S{i}."])
             srts.append(p)
 
-        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [TranslateProcessor(shared_engine, _PassChecker(), flush_every=1)], max_concurrent_videos=2)
+        orch = CourseOrchestrator(store=store, ctx=_ctx(), processors_factory=lambda: [TranslateProcessor(shared_engine, _PassChecker())], max_concurrent_videos=2)
 
         async def release_soon():
             await asyncio.sleep(0.05)
