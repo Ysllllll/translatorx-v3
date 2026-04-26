@@ -14,6 +14,7 @@ from .build import (
     FromWhisperxParams,
     FromWhisperxStage,
 )
+from .enrich import TranslateParams, TranslateStage
 from .structure import (
     ChunkParams,
     ChunkStage,
@@ -73,6 +74,11 @@ def make_default_registry(app: "App | None" = None) -> StageRegistry:
             lambda params: _make_chunk(app, params),
             params_schema=ChunkParams,
         )
+        reg.register(
+            "translate",
+            lambda params: _make_translate(app, params),
+            params_schema=TranslateParams,
+        )
 
     return reg
 
@@ -93,3 +99,22 @@ def _make_chunk(app: "App", params: ChunkParams) -> ChunkStage:
             f"App.chunker({params.language!r}) returned None; set preprocess.chunk_mode in AppConfig",
         )
     return ChunkStage(params, fn)
+
+
+def _make_translate(app: "App", params: TranslateParams) -> TranslateStage:
+    """Build :class:`TranslateStage` with a lazy processor factory.
+
+    Engine + checker are resolved at first ``transform`` call using the
+    runtime :class:`PipelineContext.translation_ctx` for the language
+    pair (so ``Checker`` can pick the right rule profile).
+    """
+    from application.checker import default_checker
+    from application.processors.translate import TranslateProcessor
+
+    def factory(pipe_ctx):  # type: ignore[no-untyped-def]
+        tctx = pipe_ctx.translation_ctx
+        engine = app.engine()
+        checker = default_checker(tctx.source_lang, tctx.target_lang)
+        return TranslateProcessor(engine=engine, checker=checker)
+
+    return TranslateStage(params, factory)
