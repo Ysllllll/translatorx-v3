@@ -1,5 +1,6 @@
-"""Storage adapters — JsonFileStore + Workspace."""
+"""Storage adapters — JsonFileStore (default) + SqliteStore (experimental) + Workspace."""
 
+from .sqlite_store import SqliteStore
 from .store import (
     FINGERPRINT_CHAIN,
     IncompatibleStoreError,
@@ -28,6 +29,7 @@ __all__ = [
     "IncompatibleStoreError",
     "JsonFileStore",
     "SCHEMA_VERSION",
+    "SqliteStore",
     "Store",
     "empty_course_data",
     "empty_video_data",

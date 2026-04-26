@@ -423,39 +423,21 @@ class JsonFileStore:
                 for k, v in empty_video_data().items():
                     data.setdefault(k, v)
 
-            if records:
-                _apply_record_patches(data, records)
-            if failed:
-                data["failed"].extend(failed)
-            if meta:
-                data["meta"].update(meta)
-            if terms:
-                data["terms"].update(terms)
-            if source_subtitle is not None:
-                data["source_subtitle"] = list(source_subtitle)
-            if segment_type is not None:
-                data["segment_type"] = segment_type
-            if raw_segment_ref is not None:
-                data["raw_segment_ref"] = dict(raw_segment_ref)
-            if punc_cache is not None:
-                existing = data.get("punc_cache") or {}
-                existing.update(punc_cache)
-                data["punc_cache"] = existing
-            if chunk_cache is not None:
-                existing = data.get("chunk_cache") or {}
-                existing.update(chunk_cache)
-                data["chunk_cache"] = existing
-            if summary is not None:
-                data["summary"] = dict(summary)
-            if variants:
-                existing = data.get("variants") or {}
-                for k, v in variants.items():
-                    existing[k] = dict(v)
-                data["variants"] = existing
-            if prompts:
-                existing_prompts = data.get("prompts") or {}
-                existing_prompts.update(prompts)
-                data["prompts"] = existing_prompts
+            _apply_video_patch(
+                data,
+                records=records,
+                failed=failed,
+                meta=meta,
+                terms=terms,
+                source_subtitle=source_subtitle,
+                segment_type=segment_type,
+                raw_segment_ref=raw_segment_ref,
+                punc_cache=punc_cache,
+                chunk_cache=chunk_cache,
+                summary=summary,
+                variants=variants,
+                prompts=prompts,
+            )
 
             await asyncio.to_thread(_atomic_write_json, path, data)
 
@@ -480,29 +462,7 @@ class JsonFileStore:
             if data is None:
                 return
             _check_schema(data, f"{self._ws.course}/{video}")
-            ids: set[int] | None
-            ids = set(record_ids) if record_ids is not None else None
-            for rec in data.get("records", []):
-                rid = rec.get("id")
-                if ids is not None and rid not in ids:
-                    continue
-                if processor_name is None:
-                    for key in (
-                        "translations",
-                        "alignment",
-                        "tts",
-                        "errors",
-                        "_fingerprints",
-                    ):
-                        if key in rec and isinstance(rec[key], dict):
-                            rec[key].clear()
-                else:
-                    for bucket in ("errors", "_fingerprints"):
-                        if isinstance(rec.get(bucket), dict):
-                            rec[bucket].pop(processor_name, None)
-            # Drop failed entries matching the filter.
-            if "failed" in data:
-                data["failed"] = [f for f in data["failed"] if not _failed_matches(f, processor_name, ids)]
+            _apply_invalidate(data, processor_name=processor_name, record_ids=record_ids)
             await asyncio.to_thread(_atomic_write_json, path, data)
 
     # -- course ops ------------------------------------------------------
@@ -529,11 +489,7 @@ class JsonFileStore:
                 _check_schema(data, self._ws.course)
                 for k, v in empty_course_data().items():
                     data.setdefault(k, v)
-            for key, value in updates.items():
-                if key in ("videos", "meta") and isinstance(value, dict):
-                    data[key].update(value)
-                else:
-                    data[key] = value
+            _apply_course_patch(data, **updates)
             await asyncio.to_thread(_atomic_write_json, path, data)
 
     # -- raw_segment sidecar (D-069) -------------------------------------
@@ -624,12 +580,7 @@ class JsonFileStore:
                 _check_schema(data, f"{self._ws.course}/{video}")
                 for k, v in empty_video_data().items():
                     data.setdefault(k, v)
-            meta = data.setdefault("meta", {})
-            fps = meta.setdefault("_fingerprints", {})
-            if not isinstance(fps, dict):
-                fps = {}
-                meta["_fingerprints"] = fps
-            fps.update({k: v for k, v in fingerprints.items() if isinstance(v, str)})
+            _apply_set_fingerprints(data, fingerprints)
             await asyncio.to_thread(_atomic_write_json, path, data)
 
     async def invalidate_from_step(self, video: str, step: str) -> None:
@@ -663,6 +614,111 @@ def _apply_record_patches(data: dict[str, Any], records: dict[int, dict[Any, Any
         for dotted, value in patch.items():
             set_nested(rec, dotted, value)
     data["records"].sort(key=lambda r: r.get("id", 0))
+
+
+def _apply_video_patch(
+    data: dict[str, Any],
+    *,
+    records: dict[int, dict[Any, Any]] | None = None,
+    failed: list[dict[str, Any]] | None = None,
+    meta: dict[str, Any] | None = None,
+    terms: dict[str, Any] | None = None,
+    source_subtitle: list[Any] | None = None,
+    segment_type: SegmentType | None = None,
+    raw_segment_ref: dict[str, Any] | None = None,
+    punc_cache: dict[str, list[str]] | None = None,
+    chunk_cache: dict[str, list[str]] | None = None,
+    summary: dict[str, Any] | None = None,
+    variants: dict[str, dict[str, Any]] | None = None,
+    prompts: dict[str, str] | None = None,
+) -> None:
+    """In-place merge of patch fields into a video document.
+
+    Backend-agnostic — operates on the in-memory dict only. Both
+    :class:`JsonFileStore` and :class:`SqliteStore` use this so the
+    serialized document layout is identical across backends.
+    """
+    if records:
+        _apply_record_patches(data, records)
+    if failed:
+        data["failed"].extend(failed)
+    if meta:
+        data["meta"].update(meta)
+    if terms:
+        data["terms"].update(terms)
+    if source_subtitle is not None:
+        data["source_subtitle"] = list(source_subtitle)
+    if segment_type is not None:
+        data["segment_type"] = segment_type
+    if raw_segment_ref is not None:
+        data["raw_segment_ref"] = dict(raw_segment_ref)
+    if punc_cache is not None:
+        existing = data.get("punc_cache") or {}
+        existing.update(punc_cache)
+        data["punc_cache"] = existing
+    if chunk_cache is not None:
+        existing = data.get("chunk_cache") or {}
+        existing.update(chunk_cache)
+        data["chunk_cache"] = existing
+    if summary is not None:
+        data["summary"] = dict(summary)
+    if variants:
+        existing = data.get("variants") or {}
+        for k, v in variants.items():
+            existing[k] = dict(v)
+        data["variants"] = existing
+    if prompts:
+        existing_prompts = data.get("prompts") or {}
+        existing_prompts.update(prompts)
+        data["prompts"] = existing_prompts
+
+
+def _apply_invalidate(
+    data: dict[str, Any],
+    *,
+    processor_name: str | None = None,
+    record_ids: Iterable[int] | None = None,
+) -> None:
+    """In-place ``invalidate`` mutation shared by all backends."""
+    ids: set[int] | None
+    ids = set(record_ids) if record_ids is not None else None
+    for rec in data.get("records", []):
+        rid = rec.get("id")
+        if ids is not None and rid not in ids:
+            continue
+        if processor_name is None:
+            for key in (
+                "translations",
+                "alignment",
+                "tts",
+                "errors",
+                "_fingerprints",
+            ):
+                if key in rec and isinstance(rec[key], dict):
+                    rec[key].clear()
+        else:
+            for bucket in ("errors", "_fingerprints"):
+                if isinstance(rec.get(bucket), dict):
+                    rec[bucket].pop(processor_name, None)
+    if "failed" in data:
+        data["failed"] = [f for f in data["failed"] if not _failed_matches(f, processor_name, ids)]
+
+
+def _apply_course_patch(data: dict[str, Any], **updates: Any) -> None:
+    for key, value in updates.items():
+        if key in ("videos", "meta") and isinstance(value, dict):
+            data[key].update(value)
+        else:
+            data[key] = value
+
+
+def _apply_set_fingerprints(data: dict[str, Any], fingerprints: dict[str, str]) -> None:
+    meta = data.setdefault("meta", {})
+    fps = meta.setdefault("_fingerprints", {})
+    if not isinstance(fps, dict):
+        fps = {}
+        meta["_fingerprints"] = fps
+    fps.update({k: v for k, v in fingerprints.items() if isinstance(v, str)})
 
 
 def _failed_matches(
