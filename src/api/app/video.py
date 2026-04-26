@@ -8,11 +8,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from domain.model import SentenceRecord, Segment
 
-from application.orchestrator.video import VideoOrchestrator, VideoResult
-from application.processors.align import AlignProcessor
-from application.processors.summary import SummaryProcessor
-from application.processors.translate import TranslateProcessor
-from application.processors.tts import TTSProcessor
+from application.orchestrator.video import VideoResult
 from ports.source import Source, VideoKey
 from adapters.sources.srt import SrtSource
 from adapters.sources.whisperx import WhisperXSource
@@ -324,91 +320,24 @@ class VideoBuilder:
         if not src_lang:
             raise ValueError("source language unknown; pass language= to .source() / .transcribe() or src= to .translate()")
 
-        use_pipeline = self._align is None and self._tts is None
+        if self._tts is not None:
+            backend = self.app.tts_backend(library=self._tts.library)
+            if backend is None:
+                raise ValueError(
+                    "tts stage requires config.tts.library to be set, or pass library=... in params",
+                )
+
         result: VideoResult | None = None
 
         for tgt_lang in t.tgt:
-            if use_pipeline:
-                result = await self._run_via_pipeline(
-                    source=source,
-                    src_lang=src_lang,
-                    tgt_lang=tgt_lang,
-                )
-            else:
-                result = await self._run_via_orchestrator(
-                    source=source,
-                    src_lang=src_lang,
-                    tgt_lang=tgt_lang,
-                )
+            result = await self._run_via_pipeline(
+                source=source,
+                src_lang=src_lang,
+                tgt_lang=tgt_lang,
+            )
 
         assert result is not None  # at least one tgt guaranteed
         return result
-
-    async def _run_via_orchestrator(
-        self,
-        *,
-        source: Source,
-        src_lang: str,
-        tgt_lang: str,
-    ) -> VideoResult:
-        """Legacy execution path — used when align / tts is configured."""
-        t = self._translate
-        assert t is not None
-        engine = self.app.engine(t.engine_name)
-        ctx = self.app.context(src_lang, tgt_lang)
-        checker = self.app.checker(src_lang, tgt_lang)
-        store = self.app.store(self.course)
-
-        engine = self._meter(engine)
-
-        procs: list[Any] = []
-        if self._summary is not None:
-            sum_engine = self._meter(self.app.engine(self._summary.engine_name))
-            procs.append(
-                SummaryProcessor(
-                    sum_engine,
-                    source_lang=src_lang,
-                    target_lang=tgt_lang,
-                    window_words=self._summary.window_words,
-                )
-            )
-        procs.append(
-            TranslateProcessor(
-                engine,
-                checker,
-            )
-        )
-        if self._align is not None:
-            align_engine = self._meter(self.app.engine(self._align.engine_name))
-            procs.append(
-                AlignProcessor(
-                    align_engine,
-                    source_lang=src_lang,
-                    enable_text_mode=self._align.enable_text_mode,
-                    json_norm_ratio=self._align.json_norm_ratio,
-                    json_accept_ratio=self._align.json_accept_ratio,
-                    text_norm_ratio=self._align.text_norm_ratio,
-                    text_accept_ratio=self._align.text_accept_ratio,
-                    rearrange_chunk_len=self._align.rearrange_chunk_len,
-                )
-            )
-        if self._tts is not None:
-            tts_proc = self._build_tts_processor(tgt_lang)
-            procs.append(tts_proc)
-
-        orch = VideoOrchestrator(
-            source=source,
-            processors=procs,
-            ctx=ctx,
-            store=store,
-            video_key=VideoKey(course=self.course, video=self.video),
-            error_reporter=self._error_reporter,
-            progress=self._progress,
-            event_bus=self.app.event_bus,
-            flush_every=self.app.config.runtime.flush_every,
-            flush_interval_s=self.app.config.runtime.flush_interval_s,
-        )
-        return await orch.run()
 
     async def _run_via_pipeline(
         self,
@@ -417,13 +346,12 @@ class VideoBuilder:
         src_lang: str,
         tgt_lang: str,
     ) -> VideoResult:
-        """New execution path — delegate to :class:`PipelineRuntime`.
+        """Execution path — delegate to :class:`PipelineRuntime`.
 
         Wraps the pre-built ``source`` (which already carries legacy
-        preprocessing) via :class:`_FromPrebuiltSourceStage` so semantics
-        match :meth:`_run_via_orchestrator` exactly. Only ``summary`` and
-        ``translate`` flow through registered stages; ``align`` / ``tts``
-        stay on the legacy path.
+        preprocessing) via :class:`_FromPrebuiltSourceStage` so legacy
+        semantics are preserved. Summary / translate / align / tts all
+        flow through the declarative stage registry.
         """
         import time as _time
 
@@ -463,6 +391,34 @@ class VideoBuilder:
                 sum_params["window_words"] = self._summary.window_words
             enrich_defs.append(StageDef(name="summary", params=sum_params))
         enrich_defs.append(StageDef(name="translate", params={}))
+        if self._align is not None:
+            a = self._align
+            enrich_defs.append(
+                StageDef(
+                    name="align",
+                    params={
+                        "engine": a.engine_name,
+                        "enable_text_mode": a.enable_text_mode,
+                        "json_norm_ratio": a.json_norm_ratio,
+                        "json_accept_ratio": a.json_accept_ratio,
+                        "text_norm_ratio": a.text_norm_ratio,
+                        "text_accept_ratio": a.text_accept_ratio,
+                        "rearrange_chunk_len": a.rearrange_chunk_len,
+                    },
+                )
+            )
+        if self._tts is not None:
+            tt = self._tts
+            tts_params: dict[str, Any] = {}
+            if tt.library is not None:
+                tts_params["library"] = tt.library
+            if tt.voice is not None:
+                tts_params["voice"] = tt.voice
+            if tt.format is not None:
+                tts_params["format"] = tt.format
+            if tt.rate is not None:
+                tts_params["rate"] = tt.rate
+            enrich_defs.append(StageDef(name="tts", params=tts_params))
 
         defn = PipelineDef(
             name=f"video:{self.course}/{self.video}",
@@ -637,23 +593,6 @@ class VideoBuilder:
             max_len=cfg.max_len,
         )
         return src, detected_lang
-
-    def _build_tts_processor(self, target_lang: str) -> TTSProcessor:
-        stage = self._tts
-        assert stage is not None
-
-        cfg = self.app.config.tts
-        backend = self.app.tts_backend(library=stage.library)
-        if backend is None:
-            raise ValueError("VideoBuilder.tts() requires config.tts.library or an explicit library= argument")
-        voice_picker = self.app.voice_picker(target_lang)
-        return TTSProcessor(
-            backend,
-            voice_picker=voice_picker,
-            default_voice=stage.voice or cfg.default_voice or None,
-            format=stage.format or cfg.format,
-            rate=stage.rate if stage.rate is not None else cfg.rate,
-        )
 
 
 __all__ = ["VideoBuilder"]

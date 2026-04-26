@@ -233,7 +233,7 @@ def _make_tts(app: "App", params: TTSParams) -> TTSStage:
         cfg = app.config.tts
         backend = app.tts_backend(library=params.library)
         if backend is None:
-            raise RuntimeError(
+            raise ValueError(
                 "tts stage requires config.tts.library to be set, or pass library=... in params",
             )
         voice_picker = app.voice_picker(tctx.target_lang)
