@@ -130,8 +130,7 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                 new_rec = await self._translate_one(rec, ctx, window, system_prompt=system_prompt)
 
                 if isinstance(rec_id, int):
-                    session.record_translation(new_rec, target, variant)
-                    await session.maybe_autoflush(store)
+                    await session.record_translation(new_rec, target, variant)
 
                 yield new_rec
         finally:

@@ -183,10 +183,9 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                 new_rec, segments_payload, pieces = await self._align_record(ctx, rec, translation)
 
                 if isinstance(rec_id, int):
-                    session.record_alignment(rec_id, target, pieces)
+                    await session.record_alignment(rec_id, target, pieces)
                     if segments_payload is not None:
-                        session.record_segments(rec_id, segments_payload)
-                    await session.maybe_autoflush(store)
+                        await session.record_segments(rec_id, segments_payload)
 
                 yield new_rec
         finally:

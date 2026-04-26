@@ -203,7 +203,7 @@ async def test_record_translation_takes_variant_object() -> None:
     variant = VariantSpec.create(model="m1", prompt_id="strict", prompt="be precise")
     rec = SentenceRecord(src_text="hi", start=0.0, end=1.0, extra={"id": 7})
     new_rec = rec.with_translation("zh", variant.key, "你好")
-    sess.record_translation(new_rec, "zh", variant)
+    await sess.record_translation(new_rec, "zh", variant)
 
     await sess.flush(store)
     call = store.patch_calls[0]
@@ -225,7 +225,7 @@ async def test_record_translation_skips_when_text_missing() -> None:
     variant = VariantSpec.create(model="m1")
     rec = SentenceRecord(src_text="hi", start=0.0, end=1.0, extra={"id": 9})
     # rec has no translations[zh][variant.key] — record_translation is a no-op
-    sess.record_translation(rec, "zh", variant)
+    await sess.record_translation(rec, "zh", variant)
     assert sess.is_dirty is False
 
 
@@ -237,3 +237,42 @@ def test_with_translation_preserves_other_variants_and_targets() -> None:
     # new record has both v1 and v2 under zh, ja preserved
     assert new_rec.translations["zh"] == {"v1": "你好", "v2": "嗨"}
     assert new_rec.translations["ja"] == {"v1": "こんにちは"}
+
+
+@pytest.mark.asyncio
+async def test_record_translation_autoflushes_at_threshold() -> None:
+    """High-frequency record_* methods auto-call maybe_autoflush."""
+    from application.translate import VariantSpec
+
+    store = FakeStore()
+    # flush_every=1 -> every record_translation triggers a flush
+    sess = await VideoSession.load(store, _key(), flush_every=1)
+
+    variant = VariantSpec.create(model="m1")
+    rec = SentenceRecord(src_text="hi", start=0.0, end=1.0, extra={"id": 3})
+    new_rec = rec.with_translation("zh", variant.key, "你好")
+    await sess.record_translation(new_rec, "zh", variant)
+
+    # autoflush already wrote, no manual flush needed
+    assert len(store.patch_calls) == 1
+    assert sess.is_dirty is False
+
+
+@pytest.mark.asyncio
+async def test_record_alignment_autoflushes_at_threshold() -> None:
+    store = FakeStore()
+    sess = await VideoSession.load(store, _key(), flush_every=1)
+
+    await sess.record_alignment(11, "zh", ["你", "好"])
+    assert len(store.patch_calls) == 1
+    assert sess.is_dirty is False
+
+
+@pytest.mark.asyncio
+async def test_record_extra_autoflushes_at_threshold() -> None:
+    store = FakeStore()
+    sess = await VideoSession.load(store, _key(), flush_every=1)
+
+    await sess.record_extra(12, "tts.zh", ["a.wav", "b.wav"])
+    assert len(store.patch_calls) == 1
+    assert sess.is_dirty is False

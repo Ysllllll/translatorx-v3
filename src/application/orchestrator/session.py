@@ -83,12 +83,14 @@ class VideoSession:
         flush_every: int | float = float("inf"),
         flush_interval_s: float = float("inf"),
         event_bus: "EventBus | None" = None,
+        store: "Store | None" = None,
     ) -> None:
         self._video_key = video_key
         self._stored = stored if isinstance(stored, dict) else {}
         self._flush_every = flush_every
         self._flush_interval_s = flush_interval_s
         self._event_bus = event_bus
+        self._store = store
         self._last_flush_at: float = time.monotonic()
 
         # Index stored records by id for O(1) hydrate.
@@ -119,7 +121,14 @@ class VideoSession:
         flush_interval_s: float = float("inf"),
         event_bus: "EventBus | None" = None,
     ) -> "VideoSession":
-        """Load existing state from ``store`` and build a session."""
+        """Load existing state from ``store`` and build a session.
+
+        The ``store`` reference is kept on the session so async write
+        APIs (``record_translation``, ``record_alignment``,
+        ``record_segments``, ``record_extra``) can auto-trigger
+        ``maybe_autoflush`` without each caller threading the store
+        through every call.
+        """
         existing = await store.load_video(video_key.video)
         return cls(
             video_key,
@@ -127,6 +136,7 @@ class VideoSession:
             flush_every=flush_every,
             flush_interval_s=flush_interval_s,
             event_bus=event_bus,
+            store=store,
         )
 
     # ------------------------------------------------------------------
@@ -224,13 +234,13 @@ class VideoSession:
     # Write API — translation
     # ------------------------------------------------------------------
 
-    def record_translation(
+    async def record_translation(
         self,
         rec: SentenceRecord,
         target: str,
         variant: "Any",
     ) -> None:
-        """Stage a translation cell for next flush.
+        """Stage a translation cell + autoflush if thresholds reached.
 
         ``rec`` must already carry the new text under
         ``rec.translations[target][variant.key]`` — typically via
@@ -238,6 +248,10 @@ class VideoSession:
         variant metadata (``info()``, ``prompt_id``, ``prompt``) from
         the supplied ``variant`` object so the call site no longer has
         to spread it across keyword arguments.
+
+        After staging, this awaits :meth:`maybe_autoflush` so callers
+        don't have to track flush thresholds manually. Use
+        :meth:`set_translation` (sync, deprecated) for staging-only.
         """
         rec_id = rec.extra.get("id") if rec.extra else None
         if not isinstance(rec_id, int):
@@ -253,25 +267,28 @@ class VideoSession:
             self._variants[variant_key] = info
         if variant.prompt and variant.prompt_id:
             self._prompts[variant.prompt_id] = variant.prompt
+        await self._autoflush_if_store()
 
     # ------------------------------------------------------------------
-    # Write API — alignment / segments
+    # Write API — alignment / segments (async, autoflushing)
     # ------------------------------------------------------------------
 
-    def record_alignment(self, rec_id: int, target: str, pieces: list[str]) -> None:
-        """Stage ``alignment[target] = pieces`` for the given record."""
+    async def record_alignment(self, rec_id: int, target: str, pieces: list[str]) -> None:
+        """Stage ``alignment[target] = pieces`` and autoflush."""
         self._merge_record_patch(rec_id, {("alignment", target): list(pieces)})
+        await self._autoflush_if_store()
 
-    def record_segments(self, rec_id: int, segments_payload: list[dict[str, Any]]) -> None:
-        """Stage a serialized segments list for the given record.
+    async def record_segments(self, rec_id: int, segments_payload: list[dict[str, Any]]) -> None:
+        """Stage a serialized segments list and autoflush.
 
         Callers serialize segments to dicts themselves (the session
         stays domain-agnostic about the JSON shape).
         """
         self._merge_record_patch(rec_id, {"segments": list(segments_payload)})
+        await self._autoflush_if_store()
 
-    def record_extra(self, rec_id: int, dotted_key: str, value: Any) -> None:
-        """Stage a generic ``record.extra.<dotted_key>`` patch.
+    async def record_extra(self, rec_id: int, dotted_key: str, value: Any) -> None:
+        """Stage a generic ``record.extra.<dotted_key>`` patch and autoflush.
 
         ``dotted_key`` accepts dot notation (e.g. ``"tts.zh"``) which is
         stored under ``extra.<dotted_key>`` in the per-record patch.
@@ -282,9 +299,14 @@ class VideoSession:
         if not dotted_key:
             return
         self._merge_record_patch(rec_id, {f"extra.{dotted_key}": value})
+        await self._autoflush_if_store()
 
     # ------------------------------------------------------------------
-    # Write API — summary / fingerprints / preprocess caches
+    # Write API — summary / fingerprints / preprocess caches (sync)
+    #
+    # These are low-frequency video-level writes that are persisted at
+    # the orchestrator's final ``session.flush()`` rather than per-call,
+    # so they stay synchronous and don't autoflush.
     # ------------------------------------------------------------------
 
     def record_summary(self, payload: dict[str, Any]) -> None:
@@ -305,7 +327,7 @@ class VideoSession:
         self._chunk_cache = dict(cache)
 
     # ------------------------------------------------------------------
-    # Backwards-compatible aliases (deprecated set_* names)
+    # Backwards-compatible / staging-only sync aliases
     # ------------------------------------------------------------------
 
     def set_translation(
@@ -321,9 +343,8 @@ class VideoSession:
     ) -> None:
         """Deprecated: use :meth:`record_translation` with a ``VariantSpec``.
 
-        Kept for legacy tests / callers that don't yet have a Variant
-        object handy. Performs the same patch + variant + prompt merges
-        as the new API.
+        Synchronous, staging-only — does **not** autoflush. Kept for
+        legacy tests and callers that pre-stage state without I/O.
         """
         rec_id = rec.extra.get("id") if rec.extra else None
         if not isinstance(rec_id, int):
@@ -334,13 +355,38 @@ class VideoSession:
         if prompt and prompt_id:
             self._prompts[prompt_id] = prompt
 
-    set_alignment = record_alignment
-    set_segments_payload = record_segments
-    set_record_extra = record_extra
+    def set_alignment(self, rec_id: int, target: str, pieces: list[str]) -> None:
+        """Deprecated sync alias of :meth:`record_alignment` (no autoflush)."""
+        self._merge_record_patch(rec_id, {("alignment", target): list(pieces)})
+
+    def set_segments_payload(self, rec_id: int, segments_payload: list[dict[str, Any]]) -> None:
+        """Deprecated sync alias of :meth:`record_segments` (no autoflush)."""
+        self._merge_record_patch(rec_id, {"segments": list(segments_payload)})
+
+    def set_record_extra(self, rec_id: int, dotted_key: str, value: Any) -> None:
+        """Deprecated sync alias of :meth:`record_extra` (no autoflush)."""
+        if not dotted_key:
+            return
+        self._merge_record_patch(rec_id, {f"extra.{dotted_key}": value})
+
     set_summary = record_summary
     set_fingerprint = record_fingerprint
     set_punc_cache = record_punc_cache
     set_chunk_cache = record_chunk_cache
+
+    # ------------------------------------------------------------------
+    # Internal autoflush helper
+    # ------------------------------------------------------------------
+
+    async def _autoflush_if_store(self) -> None:
+        """Run :meth:`maybe_autoflush` against the stored Store ref.
+
+        No-op when the session was constructed without a store (e.g.
+        unit tests that exercise staging without I/O).
+        """
+        if self._store is None:
+            return
+        await self.maybe_autoflush(self._store)
 
     # ------------------------------------------------------------------
     # Inspection helpers
