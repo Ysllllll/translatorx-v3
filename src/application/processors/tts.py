@@ -167,12 +167,12 @@ class TTSProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                 new_rec = replace(rec, extra=new_extra)
 
                 if isinstance(rec_id, int):
-                    session.set_record_extra(rec_id, f"tts.{target}", paths)
+                    session.record_extra(rec_id, f"tts.{target}", paths)
                     await session.maybe_autoflush(store)
 
                 yield new_rec
         finally:
-            session.set_fingerprint(self.name, fp)
+            session.record_fingerprint(self.name, fp)
             if owned_session:
                 await asyncio.shield(session.flush(store))
             await asyncio.shield(self.aclose())

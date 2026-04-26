@@ -186,3 +186,54 @@ async def test_repeat_set_translation_merges_patch() -> None:
     patch = store.patch_calls[0]["records"][1]
     assert patch[("translations", "zh", "a")] == "x"
     assert patch[("translations", "zh", "b")] == "y"
+
+
+# ---------------------------------------------------------------------------
+# New record_* API (Variant-aware)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_record_translation_takes_variant_object() -> None:
+    from application.translate import VariantSpec
+
+    store = FakeStore()
+    sess = await VideoSession.load(store, _key())
+
+    variant = VariantSpec.create(model="m1", prompt_id="strict", prompt="be precise")
+    rec = SentenceRecord(src_text="hi", start=0.0, end=1.0, extra={"id": 7})
+    new_rec = rec.with_translation("zh", variant.key, "你好")
+    sess.record_translation(new_rec, "zh", variant)
+
+    await sess.flush(store)
+    call = store.patch_calls[0]
+    patch = call["records"][7]
+    assert patch[("translations", "zh", variant.key)] == "你好"
+    # variant info + prompt registry merged from variant object
+    assert call["variants"][variant.key]["model"] == "m1"
+    assert call["variants"][variant.key]["prompt_id"] == "strict"
+    assert call["prompts"]["strict"] == "be precise"
+
+
+@pytest.mark.asyncio
+async def test_record_translation_skips_when_text_missing() -> None:
+    from application.translate import VariantSpec
+
+    store = FakeStore()
+    sess = await VideoSession.load(store, _key())
+
+    variant = VariantSpec.create(model="m1")
+    rec = SentenceRecord(src_text="hi", start=0.0, end=1.0, extra={"id": 9})
+    # rec has no translations[zh][variant.key] — record_translation is a no-op
+    sess.record_translation(rec, "zh", variant)
+    assert sess.is_dirty is False
+
+
+def test_with_translation_preserves_other_variants_and_targets() -> None:
+    rec = SentenceRecord(src_text="hi", start=0.0, end=1.0, translations={"zh": {"v1": "你好"}, "ja": {"v1": "こんにちは"}})
+    new_rec = rec.with_translation("zh", "v2", "嗨")
+    # original untouched
+    assert rec.translations["zh"] == {"v1": "你好"}
+    # new record has both v1 and v2 under zh, ja preserved
+    assert new_rec.translations["zh"] == {"v1": "你好", "v2": "嗨"}
+    assert new_rec.translations["ja"] == {"v1": "こんにちは"}

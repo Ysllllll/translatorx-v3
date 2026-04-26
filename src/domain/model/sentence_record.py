@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from domain.model._helpers import fmt_time as _fmt_time
@@ -82,6 +82,18 @@ class SentenceRecord:
         first = self.segments[0]
         last = self.segments[-1]
         return _round3(first.start) == _round3(self.start) and _round3(last.end) == _round3(self.end)
+
+    def with_translation(self, target: str, variant_key: str, text: str) -> "SentenceRecord":
+        """Return a new record with ``translations[target][variant_key] = text``.
+
+        Other variants and other targets are preserved. The original
+        record is not mutated (frozen dataclass).
+        """
+        new_bucket = dict(self.translations.get(target) or {})
+        new_bucket[variant_key] = text
+        new_translations = dict(self.translations)
+        new_translations[target] = new_bucket
+        return replace(self, translations=new_translations)
 
     def to_patch_dict(self, target: str, variant_key: str, translation: str) -> dict[Any, Any]:
         """Build a translate-write patch keyed by tuple paths.

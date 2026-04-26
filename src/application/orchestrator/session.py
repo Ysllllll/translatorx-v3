@@ -224,42 +224,45 @@ class VideoSession:
     # Write API — translation
     # ------------------------------------------------------------------
 
-    def set_translation(
+    def record_translation(
         self,
         rec: SentenceRecord,
         target: str,
-        variant_key: str,
-        text: str,
-        *,
-        variant_info: dict[str, Any] | None = None,
-        prompt_id: str | None = None,
-        prompt: str | None = None,
+        variant: "Any",
     ) -> None:
-        """Mark a translation cell as dirty.
+        """Stage a translation cell for next flush.
 
-        ``rec`` must already carry ``translations[target][variant_key] = text``
-        (i.e. the in-memory record has been updated by the caller). The
-        session takes the patch shape from
-        :meth:`SentenceRecord.to_patch_dict`.
+        ``rec`` must already carry the new text under
+        ``rec.translations[target][variant.key]`` — typically via
+        :meth:`SentenceRecord.with_translation`. The session pulls
+        variant metadata (``info()``, ``prompt_id``, ``prompt``) from
+        the supplied ``variant`` object so the call site no longer has
+        to spread it across keyword arguments.
         """
         rec_id = rec.extra.get("id") if rec.extra else None
         if not isinstance(rec_id, int):
             return
+        variant_key = variant.key
+        bucket = rec.translations.get(target) or {}
+        text = bucket.get(variant_key)
+        if text is None:
+            return
         self._merge_record_patch(rec_id, rec.to_patch_dict(target, variant_key, text))
-        if variant_info is not None and variant_key:
-            self._variants[variant_key] = variant_info
-        if prompt and prompt_id:
-            self._prompts[prompt_id] = prompt
+        info = variant.info()
+        if info and variant_key:
+            self._variants[variant_key] = info
+        if variant.prompt and variant.prompt_id:
+            self._prompts[variant.prompt_id] = variant.prompt
 
     # ------------------------------------------------------------------
     # Write API — alignment / segments
     # ------------------------------------------------------------------
 
-    def set_alignment(self, rec_id: int, target: str, pieces: list[str]) -> None:
+    def record_alignment(self, rec_id: int, target: str, pieces: list[str]) -> None:
         """Stage ``alignment[target] = pieces`` for the given record."""
         self._merge_record_patch(rec_id, {("alignment", target): list(pieces)})
 
-    def set_segments_payload(self, rec_id: int, segments_payload: list[dict[str, Any]]) -> None:
+    def record_segments(self, rec_id: int, segments_payload: list[dict[str, Any]]) -> None:
         """Stage a serialized segments list for the given record.
 
         Callers serialize segments to dicts themselves (the session
@@ -267,7 +270,7 @@ class VideoSession:
         """
         self._merge_record_patch(rec_id, {"segments": list(segments_payload)})
 
-    def set_record_extra(self, rec_id: int, dotted_key: str, value: Any) -> None:
+    def record_extra(self, rec_id: int, dotted_key: str, value: Any) -> None:
         """Stage a generic ``record.extra.<dotted_key>`` patch.
 
         ``dotted_key`` accepts dot notation (e.g. ``"tts.zh"``) which is
@@ -284,22 +287,60 @@ class VideoSession:
     # Write API — summary / fingerprints / preprocess caches
     # ------------------------------------------------------------------
 
-    def set_summary(self, payload: dict[str, Any]) -> None:
+    def record_summary(self, payload: dict[str, Any]) -> None:
         """Stage a full summary blob for next flush."""
         self._summary = dict(payload)
         self._summary_dirty = True
 
-    def set_fingerprint(self, name: str, value: str) -> None:
+    def record_fingerprint(self, name: str, value: str) -> None:
         """Stage a ``meta._fingerprints[name] = value`` update."""
         if not name:
             return
         self._fingerprints[name] = value
 
-    def set_punc_cache(self, cache: dict[str, list[str]]) -> None:
+    def record_punc_cache(self, cache: dict[str, list[str]]) -> None:
         self._punc_cache = dict(cache)
 
-    def set_chunk_cache(self, cache: dict[str, list[str]]) -> None:
+    def record_chunk_cache(self, cache: dict[str, list[str]]) -> None:
         self._chunk_cache = dict(cache)
+
+    # ------------------------------------------------------------------
+    # Backwards-compatible aliases (deprecated set_* names)
+    # ------------------------------------------------------------------
+
+    def set_translation(
+        self,
+        rec: SentenceRecord,
+        target: str,
+        variant_key: str,
+        text: str,
+        *,
+        variant_info: dict[str, Any] | None = None,
+        prompt_id: str | None = None,
+        prompt: str | None = None,
+    ) -> None:
+        """Deprecated: use :meth:`record_translation` with a ``VariantSpec``.
+
+        Kept for legacy tests / callers that don't yet have a Variant
+        object handy. Performs the same patch + variant + prompt merges
+        as the new API.
+        """
+        rec_id = rec.extra.get("id") if rec.extra else None
+        if not isinstance(rec_id, int):
+            return
+        self._merge_record_patch(rec_id, rec.to_patch_dict(target, variant_key, text))
+        if variant_info is not None and variant_key:
+            self._variants[variant_key] = variant_info
+        if prompt and prompt_id:
+            self._prompts[prompt_id] = prompt
+
+    set_alignment = record_alignment
+    set_segments_payload = record_segments
+    set_record_extra = record_extra
+    set_summary = record_summary
+    set_fingerprint = record_fingerprint
+    set_punc_cache = record_punc_cache
+    set_chunk_cache = record_chunk_cache
 
     # ------------------------------------------------------------------
     # Inspection helpers

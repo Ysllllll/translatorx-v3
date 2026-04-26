@@ -183,14 +183,14 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                 new_rec, segments_payload, pieces = await self._align_record(ctx, rec, translation)
 
                 if isinstance(rec_id, int):
-                    session.set_alignment(rec_id, target, pieces)
+                    session.record_alignment(rec_id, target, pieces)
                     if segments_payload is not None:
-                        session.set_segments_payload(rec_id, segments_payload)
+                        session.record_segments(rec_id, segments_payload)
                     await session.maybe_autoflush(store)
 
                 yield new_rec
         finally:
-            session.set_fingerprint(self.name, fp)
+            session.record_fingerprint(self.name, fp)
             if owned_session:
                 await asyncio.shield(session.flush(store))
             await asyncio.shield(self.aclose())

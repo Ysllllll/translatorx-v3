@@ -170,7 +170,7 @@ class SummaryProcessor:
                 state = await self._agent.feed(state, rec.src_text)
                 new_version = state.current.version if state.current else 0
                 if new_version != prev_version:
-                    session.set_summary(self._summary_payload(state))
+                    session.record_summary(self._summary_payload(state))
                 yield rec
         finally:
             if skip_work:
@@ -185,7 +185,7 @@ class SummaryProcessor:
                     state = await self._agent.flush(state)
                 except Exception:  # noqa: BLE001
                     logger.exception("SummaryProcessor: final flush failed")
-                session.set_summary(self._summary_payload(state))
+                session.record_summary(self._summary_payload(state))
 
             await asyncio.shield(_final())
             if owned_session:

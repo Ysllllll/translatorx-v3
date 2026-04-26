@@ -31,14 +31,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import replace
 from typing import TYPE_CHECKING, AsyncIterator
 
-from application.checker import CheckReport, Checker
+from application.checker import Checker
 from application.processors.prefix import PrefixHandler, TranslateNodeConfig
 from application.translate import (
     ContextWindow,
-    TranslateResult,
     TranslationContext,
     translate_with_verify,
 )
@@ -53,16 +51,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-def _make_skipped_result(translation: str) -> TranslateResult:
-    return TranslateResult(
-        translation=translation,
-        report=CheckReport.ok(),
-        attempts=0,
-        accepted=True,
-        skipped=True,
-    )
 
 
 class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
@@ -139,19 +127,10 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
                     yield rec
                     continue
 
-                new_rec, _result = await self._translate_one(rec, ctx, target, window, variant_key=variant_key, system_prompt=system_prompt)
+                new_rec = await self._translate_one(rec, ctx, window, system_prompt=system_prompt)
 
                 if isinstance(rec_id, int):
-                    text = new_rec.translations[target][variant_key]
-                    session.set_translation(
-                        new_rec,
-                        target,
-                        variant_key,
-                        text,
-                        variant_info=variant.info(),
-                        prompt_id=variant.prompt_id if variant.prompt else None,
-                        prompt=variant.prompt or None,
-                    )
+                    session.record_translation(new_rec, target, variant)
                     await session.maybe_autoflush(store)
 
                 yield new_rec
@@ -164,45 +143,28 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         self,
         record: SentenceRecord,
         context: TranslationContext,
-        target: str,
         window: ContextWindow,
         *,
-        variant_key: str,
         system_prompt: str,
-    ) -> tuple[SentenceRecord, TranslateResult]:
+    ) -> SentenceRecord:
+        target = context.target_lang
+        variant_key = context.variant.key
         source = record.src_text
         cfg = self._config
-
-        def _store(text: str) -> dict[str, dict[str, str]]:
-            existing_bucket = dict(record.translations.get(target) or {})
-            existing_bucket[variant_key] = text
-            new_translations = dict(record.translations)
-            new_translations[target] = existing_bucket
-            return new_translations
 
         direct_hit = self._direct_map.get(source.lower())
         if direct_hit is not None:
             window.add(source, direct_hit)
-            return (
-                replace(record, translations=_store(direct_hit)),
-                _make_skipped_result(direct_hit),
-            )
+            return record.with_translation(target, variant_key, direct_hit)
 
         # Empty / whitespace-only source: nothing to translate.
         # Persist the empty string as the "translation" so downstream
         # processors don't keep re-asking the LLM about it.
         if not source.strip():
-            return (
-                replace(record, translations=_store(source)),
-                _make_skipped_result(source),
-            )
+            return record.with_translation(target, variant_key, source)
 
         if cfg.max_source_len > 0 and len(source) > cfg.max_source_len:
-            window.add(source, source)
-            return (
-                replace(record, translations=_store(source)),
-                _make_skipped_result(source),
-            )
+            return record.with_translation(target, variant_key, source)
 
         text_for_llm = source
         target_prefix: str | None = None
@@ -224,18 +186,8 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         translation = result.translation
         if self._prefix_handler is not None and target_prefix:
             translation = self._prefix_handler.readd_prefix(translation, target_prefix)
-            result = TranslateResult(
-                translation=translation,
-                report=result.report,
-                attempts=result.attempts,
-                accepted=result.accepted,
-                skipped=False,
-            )
 
-        return (
-            replace(record, translations=_store(translation)),
-            result,
-        )
+        return record.with_translation(target, variant_key, translation)
 
 
 __all__ = ["TranslateProcessor"]
