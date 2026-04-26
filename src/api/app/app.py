@@ -384,6 +384,18 @@ class App:
 
         return StreamBuilder(app=self, course=course, video=video, language=language)
 
+    def pipeline(self, *, course: str, video: str) -> "PipelineBuilder":
+        """Chainable PipelineBuilder — assembles a :class:`PipelineDef`
+        and runs it through :class:`PipelineRuntime`.
+
+        This is the new entry point for the Stage-based runtime.
+        ``VideoBuilder`` will migrate to delegate here once transcribe /
+        summary / align / tts stages exist.
+        """
+        from api.app.pipeline_builder import PipelineBuilder
+
+        return PipelineBuilder(app=self, course=course, video=video)
+
 
 # ---------------------------------------------------------------------------
 # Private helpers
