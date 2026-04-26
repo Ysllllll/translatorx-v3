@@ -28,6 +28,7 @@ from ports.middleware import Middleware, StageCall
 from .context import PipelineContext
 
 __all__ = [
+    "ProgressMiddleware",
     "RetryMiddleware",
     "TimingMiddleware",
     "TracingMiddleware",
@@ -236,3 +237,74 @@ class RetryMiddleware:
                     continue
         assert last_exc is not None
         raise last_exc
+
+
+class ProgressMiddleware:
+    """Emit :class:`ProgressEvent` notifications around enrich-tier streams.
+
+    Wraps the iterator returned by :meth:`RecordStage.transform`,
+    issuing one ``record`` event per yielded :class:`SentenceRecord`
+    plus a ``started`` / ``finished`` pair around the stream lifecycle.
+
+    The middleware is a thin parity layer with the legacy
+    :class:`VideoOrchestrator` progress channel — it does not replace
+    structured ``stage.*`` domain events from
+    :class:`TracingMiddleware`. Provide a callable that conforms to
+    :data:`application.observability.progress.ProgressCallback`. When
+    ``stage_filter`` is set, only the listed stage names emit events
+    (default: every stage).
+    """
+
+    __slots__ = ("_callback", "_stage_filter")
+
+    def __init__(
+        self,
+        callback: Any,
+        *,
+        stage_filter: tuple[str, ...] | None = None,
+    ) -> None:
+        self._callback = callback
+        self._stage_filter = stage_filter
+
+    async def around(
+        self,
+        stage_id: str,
+        stage_name: str,
+        ctx: PipelineContext,
+        call: "Any",
+    ) -> Any:
+        result = await call()
+
+        if self._callback is None:
+            return result
+        if self._stage_filter is not None and stage_name not in self._stage_filter:
+            return result
+        if not hasattr(result, "__aiter__"):
+            return result
+
+        from application.observability.progress import ProgressEvent
+
+        upstream = result
+        callback = self._callback
+
+        async def _wrap() -> Any:
+            done = 0
+            try:
+                callback(ProgressEvent(kind="started", processor=stage_name, done=0))
+            except Exception:
+                pass
+            try:
+                async for rec in upstream:
+                    done += 1
+                    try:
+                        callback(ProgressEvent(kind="record", processor=stage_name, done=done))
+                    except Exception:
+                        pass
+                    yield rec
+            finally:
+                try:
+                    callback(ProgressEvent(kind="finished", processor=stage_name, done=done))
+                except Exception:
+                    pass
+
+        return _wrap()

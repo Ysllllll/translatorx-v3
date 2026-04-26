@@ -180,3 +180,125 @@ class TestPipelineBuilderFromAudio:
         defn = app.pipeline(course="c1", video="v1").from_audio(audio).translate(src="en", tgt="zh").build()
         assert "library" not in defn.build.params
         assert "language" not in defn.build.params
+
+
+# ---------------------------------------------------------------------------
+# P2-5 — multi-tgt, error_reporter, progress, usage_sink
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineBuilderMultiTgt:
+    def test_translate_accepts_tuple(self, app: App, tmp_path: Path) -> None:
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi."])
+        b = app.pipeline(course="c1", video="v1").from_srt(srt, language="en").translate(src="en", tgt=("zh", "ja"))
+        assert b._tgt_langs == ("zh", "ja")
+
+    def test_translate_accepts_list(self, app: App, tmp_path: Path) -> None:
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi."])
+        b = app.pipeline(course="c1", video="v1").from_srt(srt, language="en").translate(src="en", tgt=["zh", "ja"])
+        assert b._tgt_langs == ("zh", "ja")
+
+    def test_translate_empty_tgt_raises(self, app: App, tmp_path: Path) -> None:
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi."])
+        with pytest.raises(ValueError, match="at least one"):
+            app.pipeline(course="c1", video="v1").from_srt(srt, language="en").translate(src="en", tgt=())
+
+    @pytest.mark.asyncio
+    async def test_run_multi_tgt_returns_tuple(self, app: App, tmp_path: Path, monkeypatch) -> None:
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        from application.checker import factory as checker_factory
+
+        monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi."])
+        result = await app.pipeline(course="c1", video="v1").from_srt(srt, language="en").translate(src="en", tgt=("zh", "ja")).run()
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+
+class TestPipelineBuilderObservability:
+    @pytest.mark.asyncio
+    async def test_with_progress_emits_events(self, app: App, tmp_path: Path, monkeypatch) -> None:
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        from application.checker import factory as checker_factory
+
+        monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi.", "There."])
+
+        events: list = []
+
+        def on_progress(ev):
+            events.append(ev)
+
+        await app.pipeline(course="c1", video="v1").from_srt(srt, language="en").translate(src="en", tgt="zh").with_progress(on_progress).run()
+
+        kinds = [e.kind for e in events]
+        assert "started" in kinds
+        assert "finished" in kinds
+        assert kinds.count("record") >= 1
+
+    @pytest.mark.asyncio
+    async def test_with_usage_sink_meters_engine(self, app: App, tmp_path: Path, monkeypatch) -> None:
+        from domain.model.usage import Usage
+
+        class _SinkEngine:
+            model = "test-model"
+
+            async def complete(self, messages, **_):
+                return CompletionResult(text="[hi]", usage=Usage(prompt_tokens=1, completion_tokens=1))
+
+            async def stream(self, messages, **_):
+                yield "[hi]"
+
+        monkeypatch.setattr(app, "engine", lambda name="default": _SinkEngine())
+        from application.checker import factory as checker_factory
+
+        monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
+
+        sink_calls: list = []
+
+        async def sink(usage):  # MeteringEngine signature
+            sink_calls.append((usage.prompt_tokens, usage.completion_tokens))
+
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi."])
+        await app.pipeline(course="c1", video="v1").from_srt(srt, language="en").translate(src="en", tgt="zh").with_usage_sink(sink).run()
+        assert len(sink_calls) >= 1
+
+    @pytest.mark.asyncio
+    async def test_with_error_reporter_threads_into_ctx(self, app: App, tmp_path: Path, monkeypatch) -> None:
+        captured: dict = {}
+
+        from application.pipeline.context import PipelineContext as _PC
+
+        original_init = _PC.__init__
+
+        def spy_init(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            captured["reporter"] = self.reporter
+
+        monkeypatch.setattr(_PC, "__init__", spy_init)
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        from application.checker import factory as checker_factory
+
+        monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
+
+        class _Rep:
+            async def report(self, *a, **kw):
+                pass
+
+            async def flush(self):
+                pass
+
+        rep = _Rep()
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi."])
+        await app.pipeline(course="c1", video="v1").from_srt(srt, language="en").translate(src="en", tgt="zh").with_error_reporter(rep).run()
+        assert captured.get("reporter") is rep

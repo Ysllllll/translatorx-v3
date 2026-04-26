@@ -130,6 +130,19 @@ def _make_chunk(app: "App", params: ChunkParams) -> ChunkStage:
     return ChunkStage(params, fn)
 
 
+def _meter(engine: Any, ctx: Any) -> Any:
+    """Wrap ``engine`` with :class:`MeteringEngine` when ctx has a usage sink."""
+    sink = None
+    extra = getattr(ctx, "extra", None)
+    if extra is not None:
+        sink = extra.get("usage_sink")
+    if sink is None:
+        return engine
+    from adapters.engines import MeteringEngine
+
+    return MeteringEngine(engine, sink)
+
+
 def _make_translate(app: "App", params: TranslateParams) -> TranslateStage:
     """Build :class:`TranslateStage` with a lazy processor factory.
 
@@ -142,7 +155,7 @@ def _make_translate(app: "App", params: TranslateParams) -> TranslateStage:
 
     def factory(pipe_ctx):  # type: ignore[no-untyped-def]
         tctx = pipe_ctx.translation_ctx
-        engine = app.engine()
+        engine = _meter(app.engine(), pipe_ctx)
         checker = default_checker(tctx.source_lang, tctx.target_lang)
         return TranslateProcessor(engine=engine, checker=checker)
 
@@ -150,18 +163,12 @@ def _make_translate(app: "App", params: TranslateParams) -> TranslateStage:
 
 
 def _make_summary(app: "App", params: SummaryParams) -> SummaryStage:
-    """Build :class:`SummaryStage` with a lazy processor factory.
-
-    Engine + language pair are resolved on first ``transform`` from
-    :class:`PipelineContext.translation_ctx`, mirroring the translate
-    stage. The ``params.engine`` slot lets the YAML/builder pin a
-    non-default engine name (e.g. ``"summary"``).
-    """
+    """Build :class:`SummaryStage` with a lazy processor factory."""
     from application.processors.summary import SummaryProcessor
 
     def factory(pipe_ctx):  # type: ignore[no-untyped-def]
         tctx = pipe_ctx.translation_ctx
-        engine = app.engine(params.engine)
+        engine = _meter(app.engine(params.engine), pipe_ctx)
         return SummaryProcessor(
             engine=engine,
             source_lang=tctx.source_lang,

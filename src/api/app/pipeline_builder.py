@@ -45,9 +45,12 @@ class PipelineBuilder:
     _structure: tuple[StageDef, ...] = ()
     _enrich: tuple[StageDef, ...] = ()
     _src_lang: str | None = None
-    _tgt_lang: str | None = None
+    _tgt_langs: tuple[str, ...] = ()
     _engine_name: str = "default"
     _middlewares: tuple[Any, ...] = ()
+    _error_reporter: Any = None
+    _progress: Any = None
+    _usage_sink: Any = None
     _extra: dict[str, Any] = field(default_factory=dict)
 
     # ---- build tier ----------------------------------------------------
@@ -183,13 +186,26 @@ class PipelineBuilder:
         self,
         *,
         src: str | None = None,
-        tgt: str,
+        tgt: str | tuple[str, ...] | list[str],
         engine: str = "default",
     ) -> PipelineBuilder:
+        """Append a translate stage; ``tgt`` may be a single code or a tuple/list.
+
+        When multiple target languages are supplied, :meth:`run` loops
+        over them, executing the full pipeline once per target. Each
+        run returns a separate :class:`PipelineResult`; :meth:`run`
+        returns a tuple in that case.
+        """
+        if isinstance(tgt, str):
+            tgts: tuple[str, ...] = (tgt,)
+        else:
+            tgts = tuple(tgt)
+        if not tgts:
+            raise ValueError("translate(tgt=...) requires at least one target language")
         return replace(
             self,
             _src_lang=src or self._src_lang,
-            _tgt_lang=tgt,
+            _tgt_langs=tgts,
             _engine_name=engine,
             _enrich=self._enrich + (StageDef(name="translate", params={}),),
         )
@@ -198,6 +214,31 @@ class PipelineBuilder:
 
     def with_middleware(self, mw: Any) -> PipelineBuilder:
         return replace(self, _middlewares=self._middlewares + (mw,))
+
+    def with_error_reporter(self, reporter: Any) -> PipelineBuilder:
+        """Route stage / processor errors through ``reporter``.
+
+        The reporter is exposed to stages via :attr:`PipelineContext.reporter`.
+        """
+        return replace(self, _error_reporter=reporter)
+
+    def with_progress(self, callback: Any) -> PipelineBuilder:
+        """Attach a :data:`ProgressCallback` for enrich-tier streams.
+
+        Internally registers a :class:`ProgressMiddleware` (kept off
+        the public middleware list so it survives copies via
+        :meth:`with_middleware`).
+        """
+        return replace(self, _progress=callback)
+
+    def with_usage_sink(self, sink: Any) -> PipelineBuilder:
+        """Wrap the engine with :class:`MeteringEngine` and forward usage to ``sink``.
+
+        The sink is exposed through ``ctx.extra["usage_sink"]``; the
+        ``translate`` and ``summary`` registry factories pick it up
+        and wrap their resolved engine.
+        """
+        return replace(self, _usage_sink=sink)
 
     # ---- terminal ------------------------------------------------------
 
@@ -211,9 +252,27 @@ class PipelineBuilder:
             enrich=self._enrich,
         )
 
-    async def run(self) -> PipelineResult:
+    async def run(self) -> PipelineResult | tuple[PipelineResult, ...]:
+        """Execute the pipeline.
+
+        For a single target language returns a :class:`PipelineResult`.
+        For multiple targets (passed via ``translate(tgt=(...))``) the
+        pipeline is re-run per target and a tuple of results is
+        returned in the same order.
+        """
+        if not self._tgt_langs:
+            return await self._run_once(target=None)
+        if len(self._tgt_langs) == 1:
+            return await self._run_once(target=self._tgt_langs[0])
+        results: list[PipelineResult] = []
+        for tgt in self._tgt_langs:
+            results.append(await self._run_once(target=tgt))
+        return tuple(results)
+
+    async def _run_once(self, *, target: str | None) -> PipelineResult:
         from application.pipeline.context import PipelineContext
         from application.pipeline.runtime import PipelineRuntime
+        from application.pipeline.middleware import ProgressMiddleware
         from application.orchestrator.session import VideoSession
         from application.stages import make_default_registry
 
@@ -230,23 +289,35 @@ class PipelineBuilder:
         )
 
         translation_ctx = None
-        if self._enrich and any(s.name == "translate" for s in self._enrich):
-            if self._src_lang is None or self._tgt_lang is None:
+        has_translate = bool(self._enrich) and any(s.name == "translate" for s in self._enrich)
+        if has_translate:
+            if self._src_lang is None or target is None:
                 raise ValueError("translate() requires both src and tgt languages (or set source language via .from_*)")
-            translation_ctx = self.app.context(self._src_lang, self._tgt_lang)
+            translation_ctx = self.app.context(self._src_lang, target)
 
-        ctx = PipelineContext(
+        ctx_kwargs: dict[str, Any] = dict(
             session=session,
             store=store,
             translation_ctx=translation_ctx,
-            event_bus=self.app.event_bus or PipelineContext.__dataclass_fields__["event_bus"].default_factory(),
         )
+        if self.app.event_bus is not None:
+            ctx_kwargs["event_bus"] = self.app.event_bus
+        if self._error_reporter is not None:
+            ctx_kwargs["reporter"] = self._error_reporter
+        extra: dict[str, Any] = {}
+        if self._usage_sink is not None:
+            extra["usage_sink"] = self._usage_sink
+        if extra:
+            ctx_kwargs["extra"] = extra
+
+        ctx = PipelineContext(**ctx_kwargs)
+
+        mws = list(self._middlewares)
+        if self._progress is not None:
+            mws.append(ProgressMiddleware(self._progress))
 
         registry = make_default_registry(self.app)
-        runtime = PipelineRuntime(
-            registry,
-            middlewares=list(self._middlewares) or None,
-        )
+        runtime = PipelineRuntime(registry, middlewares=mws or None)
         try:
             return await runtime.run(defn, ctx)
         finally:
