@@ -4,6 +4,8 @@ These stages implement :class:`RecordStage` and pass each record
 through their underlying processor without breaking streaming.
 
 Phase 2 / Step 1: ``SummaryStage`` mirrors :class:`TranslateStage`.
+Phase 3: ``AlignStage`` and ``TTSStage`` join the same pattern so the
+declarative pipeline owns the full enrich tier.
 """
 
 from __future__ import annotations
@@ -12,13 +14,19 @@ from typing import Any, AsyncIterator, Callable
 
 from pydantic import BaseModel, Field
 
+from application.processors.align import AlignProcessor
 from application.processors.summary import SummaryProcessor
 from application.processors.translate import TranslateProcessor
+from application.processors.tts import TTSProcessor
 from domain.model import SentenceRecord
 
 __all__ = [
+    "AlignParams",
+    "AlignStage",
     "SummaryParams",
     "SummaryStage",
+    "TTSParams",
+    "TTSStage",
     "TranslateParams",
     "TranslateStage",
 ]
@@ -128,6 +136,127 @@ class SummaryStage:
         if translation_ctx is None:
             raise RuntimeError(
                 "SummaryStage requires PipelineContext.translation_ctx",
+            )
+        if self._proc is None:
+            self._proc = self._factory(ctx)
+        session = ctx.session
+        return self._proc.process(
+            upstream,
+            ctx=translation_ctx,
+            store=ctx.store,
+            video_key=session.video_key,
+            session=session,
+        )
+
+
+# ---------------------------------------------------------------------------
+# align
+# ---------------------------------------------------------------------------
+
+
+class AlignParams(BaseModel):
+    """Align stage params — mirror :class:`AlignProcessor` knobs."""
+
+    enable_text_mode: bool = False
+    json_norm_ratio: float = 5.0
+    json_accept_ratio: float = 5.0
+    text_norm_ratio: float = 3.0
+    text_accept_ratio: float = 3.0
+    rearrange_chunk_len: int = 90
+    engine: str = Field(default="default", description="App engine name to resolve")
+
+
+class AlignStage:
+    """Wrap :class:`AlignProcessor` as a :class:`RecordStage`.
+
+    Mirrors :class:`TranslateStage` — processor built lazily on first
+    ``transform`` so the source language can be pulled from the runtime
+    :class:`TranslationContext`.
+    """
+
+    name = "align"
+
+    __slots__ = ("_factory", "_proc")
+
+    def __init__(
+        self,
+        params: AlignParams,
+        processor_factory: Callable[[Any], AlignProcessor],
+    ) -> None:
+        del params
+        self._factory = processor_factory
+        self._proc: AlignProcessor | None = None
+
+    def transform(
+        self,
+        upstream: AsyncIterator[SentenceRecord],
+        ctx: Any,
+    ) -> AsyncIterator[SentenceRecord]:
+        translation_ctx = ctx.translation_ctx
+        if translation_ctx is None:
+            raise RuntimeError(
+                "AlignStage requires PipelineContext.translation_ctx",
+            )
+        if self._proc is None:
+            self._proc = self._factory(ctx)
+        session = ctx.session
+        return self._proc.process(
+            upstream,
+            ctx=translation_ctx,
+            store=ctx.store,
+            video_key=session.video_key,
+            session=session,
+        )
+
+
+# ---------------------------------------------------------------------------
+# tts
+# ---------------------------------------------------------------------------
+
+
+class TTSParams(BaseModel):
+    """TTS stage params.
+
+    Library / voice / format / rate fall back to ``AppConfig.tts``
+    defaults when left as ``None``.
+    """
+
+    library: str | None = None
+    voice: str | None = None
+    format: str | None = None
+    rate: float | None = None
+
+
+class TTSStage:
+    """Wrap :class:`TTSProcessor` as a :class:`RecordStage`.
+
+    Voice picker is target-language-specific, so the processor is built
+    lazily on first ``transform`` from the runtime
+    :class:`PipelineContext.translation_ctx`.
+    """
+
+    name = "tts"
+
+    __slots__ = ("_factory", "_proc")
+
+    def __init__(
+        self,
+        params: TTSParams,
+        processor_factory: Callable[[Any], TTSProcessor],
+    ) -> None:
+        del params
+        self._factory = processor_factory
+        self._proc: TTSProcessor | None = None
+
+    def transform(
+        self,
+        upstream: AsyncIterator[SentenceRecord],
+        ctx: Any,
+    ) -> AsyncIterator[SentenceRecord]:
+        translation_ctx = ctx.translation_ctx
+        if translation_ctx is None:
+            raise RuntimeError(
+                "TTSStage requires PipelineContext.translation_ctx",
             )
         if self._proc is None:
             self._proc = self._factory(ctx)

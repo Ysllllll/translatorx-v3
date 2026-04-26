@@ -16,7 +16,16 @@ from .build import (
     FromWhisperxParams,
     FromWhisperxStage,
 )
-from .enrich import SummaryParams, SummaryStage, TranslateParams, TranslateStage
+from .enrich import (
+    AlignParams,
+    AlignStage,
+    SummaryParams,
+    SummaryStage,
+    TTSParams,
+    TTSStage,
+    TranslateParams,
+    TranslateStage,
+)
 from .structure import (
     ChunkParams,
     ChunkStage,
@@ -99,6 +108,16 @@ def make_default_registry(
             params_schema=SummaryParams,
         )
         reg.register(
+            "align",
+            lambda params: _make_align(app, params),
+            params_schema=AlignParams,
+        )
+        reg.register(
+            "tts",
+            lambda params: _make_tts(app, params),
+            params_schema=TTSParams,
+        )
+        reg.register(
             "from_audio",
             lambda params: _make_from_audio(app, params),
             params_schema=FromAudioParams,
@@ -178,6 +197,55 @@ def _make_summary(app: "App", params: SummaryParams) -> SummaryStage:
         )
 
     return SummaryStage(params, factory)
+
+
+def _make_align(app: "App", params: AlignParams) -> AlignStage:
+    """Build :class:`AlignStage` with a lazy processor factory."""
+    from application.processors.align import AlignProcessor
+
+    def factory(pipe_ctx):  # type: ignore[no-untyped-def]
+        tctx = pipe_ctx.translation_ctx
+        engine = _meter(app.engine(params.engine), pipe_ctx)
+        return AlignProcessor(
+            engine,
+            source_lang=tctx.source_lang,
+            enable_text_mode=params.enable_text_mode,
+            json_norm_ratio=params.json_norm_ratio,
+            json_accept_ratio=params.json_accept_ratio,
+            text_norm_ratio=params.text_norm_ratio,
+            text_accept_ratio=params.text_accept_ratio,
+            rearrange_chunk_len=params.rearrange_chunk_len,
+        )
+
+    return AlignStage(params, factory)
+
+
+def _make_tts(app: "App", params: TTSParams) -> TTSStage:
+    """Build :class:`TTSStage` with a lazy processor factory.
+
+    Library / voice / format / rate fall back to ``AppConfig.tts``
+    defaults when ``params`` leaves them as ``None``.
+    """
+    from application.processors.tts import TTSProcessor
+
+    def factory(pipe_ctx):  # type: ignore[no-untyped-def]
+        tctx = pipe_ctx.translation_ctx
+        cfg = app.config.tts
+        backend = app.tts_backend(library=params.library)
+        if backend is None:
+            raise RuntimeError(
+                "tts stage requires config.tts.library to be set, or pass library=... in params",
+            )
+        voice_picker = app.voice_picker(tctx.target_lang)
+        return TTSProcessor(
+            backend,
+            voice_picker=voice_picker,
+            default_voice=params.voice or cfg.default_voice or None,
+            format=params.format or cfg.format,
+            rate=params.rate if params.rate is not None else cfg.rate,
+        )
+
+    return TTSStage(params, factory)
 
 
 def _make_from_audio(app: "App", params: FromAudioParams) -> FromAudioStage:
