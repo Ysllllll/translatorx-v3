@@ -29,6 +29,7 @@ from typing import Any
 
 
 _DEFAULT_PROMPT_ID = "default"
+_READABLE_MAX_LEN = 64
 
 
 @dataclass(frozen=True)
@@ -91,17 +92,50 @@ class VariantSpec:
     def key(self) -> str:
         """Stable variant key.
 
-        ``alias`` if set, else ``sha256(model|prompt_id|config_json)[:8]``.
+        Resolution order:
+
+        1. ``alias`` when set — explicit user override.
+        2. A *readable* key derived from ``(model, prompt_id, config)``
+           when short enough. The readable form is::
+
+               <model>[:<prompt_id_if_not_default>][@<cfg-hash6>]
+
+           and is preferred whenever the resulting string is at most
+           ``_READABLE_MAX_LEN`` characters. This keeps simple cases
+           like just-a-model-name (``"Qwen/Qwen3-32B"``) or
+           model+prompt (``"Qwen/Qwen3-32B:strict"``) fully self-evident
+           on disk.
+        3. ``sha256(model|prompt_id|config_json)[:8]`` as a fallback
+           when no other identity is available or readable form is too
+           long.
+
         ``prompt`` body is intentionally **not** part of the key — two
         variants with same ``prompt_id`` but different prompt text are a
-        misconfiguration, not a new variant. (The user picks the prompt
-        registry semantics.)
+        misconfiguration, not a new variant.
         """
         if self.alias:
             return self.alias
+        readable = self._readable_key()
+        if readable and len(readable) <= _READABLE_MAX_LEN:
+            return readable
         cfg_repr = json.dumps(dict(self.config), sort_keys=True, ensure_ascii=False)
         sig = f"model={self.model}|pid={self.prompt_id}|cfg={cfg_repr}"
         return hashlib.sha256(sig.encode("utf-8")).hexdigest()[:8]
+
+    def _readable_key(self) -> str:
+        """Best-effort human-friendly key. Empty when nothing identifies it."""
+        parts: list[str] = []
+        if self.model:
+            parts.append(self.model)
+        if self.prompt_id and self.prompt_id != _DEFAULT_PROMPT_ID:
+            parts.append(self.prompt_id)
+        if not parts:
+            return ""
+        readable = ":".join(parts)
+        if self.config:
+            cfg_repr = json.dumps(dict(self.config), sort_keys=True, ensure_ascii=False)
+            readable += "@" + hashlib.sha256(cfg_repr.encode("utf-8")).hexdigest()[:6]
+        return readable
 
     def info(self) -> dict[str, Any]:
         """Serialize key_info for the ``variants`` registry in ``translate.json``."""

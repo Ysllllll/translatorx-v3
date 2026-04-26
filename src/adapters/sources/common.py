@@ -37,7 +37,7 @@ def assign_ids(records: Iterable[SentenceRecord], start: int = 0) -> list[Senten
     for i, rec in enumerate(records, start=start):
         extra = dict(rec.extra or {})
         extra["id"] = i
-        extra["src_hash"] = compute_src_hash(rec.src_text)
+        extra["src_hash"] = compute_src_hash(str(i) + rec.src_text)
         out.append(replace(rec, extra=extra))
     return out
 
