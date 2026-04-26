@@ -167,7 +167,14 @@ class PipelineBuilder:
         defn = self.build()
         store = self.app.store(self.course)
         video_key = VideoKey(course=self.course, video=self.video)
-        session = await VideoSession.load(store, video_key)
+        runtime_cfg = self.app.config.runtime
+        session = await VideoSession.load(
+            store,
+            video_key,
+            flush_every=runtime_cfg.flush_every,
+            flush_interval_s=runtime_cfg.flush_interval_s,
+            event_bus=self.app.event_bus,
+        )
 
         translation_ctx = None
         if self._enrich and any(s.name == "translate" for s in self._enrich):
@@ -187,4 +194,10 @@ class PipelineBuilder:
             registry,
             middlewares=list(self._middlewares) or None,
         )
-        return await runtime.run(defn, ctx)
+        try:
+            return await runtime.run(defn, ctx)
+        finally:
+            import asyncio as _asyncio
+
+            if session.is_dirty:
+                await _asyncio.shield(session.flush(store))
