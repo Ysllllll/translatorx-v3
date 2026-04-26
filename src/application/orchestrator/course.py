@@ -23,7 +23,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING, Awaitable, Callable, Sequence
 
 from application.translate import TranslationContext
 from domain.model import SentenceRecord
@@ -32,6 +32,9 @@ from ports.errors import ErrorInfo, ErrorReporter
 from application.orchestrator.video import VideoOrchestrator, VideoResult
 from ports.source import Processor, Source
 from adapters.storage.store import Store
+
+if TYPE_CHECKING:  # pragma: no cover
+    from application.events import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +125,7 @@ class CourseOrchestrator:
         processors_factory: ProcessorsFactory,
         error_reporter: ErrorReporter | None = None,
         max_concurrent_videos: int = 3,
+        event_bus: "EventBus | None" = None,
     ) -> None:
         if max_concurrent_videos < 1:
             raise ValueError("max_concurrent_videos must be >= 1")
@@ -130,6 +134,7 @@ class CourseOrchestrator:
         self._factory = processors_factory
         self._error_reporter = error_reporter
         self._max = max_concurrent_videos
+        self._event_bus = event_bus
 
     async def run(self, videos: Sequence[VideoSpec]) -> CourseResult:
         """Execute every video concurrently (bounded) and aggregate."""
@@ -157,6 +162,7 @@ class CourseOrchestrator:
                     store=self._store,
                     video_key=VideoKey(course=course, video=spec.video),
                     error_reporter=self._error_reporter,
+                    event_bus=self._event_bus,
                 )
                 try:
                     result = await orch.run()

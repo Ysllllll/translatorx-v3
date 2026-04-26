@@ -30,6 +30,7 @@ class App:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self._engines: dict[str, OpenAICompatEngine] = {}
+        self._event_bus = None  # type: ignore[var-annotated]
 
     @classmethod
     def from_config(cls, path: str | Path) -> App:
@@ -110,6 +111,24 @@ class App:
     def checker(self, src: str, tgt: str) -> Checker:
         """Return a default :class:`Checker` for the pair."""
         return default_checker(src, tgt)
+
+    @property
+    def event_bus(self):
+        """Return the lazy :class:`EventBus` singleton for this App.
+
+        Created on first access. Builders thread this into orchestrators so
+        every video/course/stream run on the App publishes domain events to
+        the same bus, suitable for a global SSE fan-out endpoint.
+        """
+        if self._event_bus is None:
+            from application.events import EventBus
+
+            self._event_bus = EventBus()
+        return self._event_bus
+
+    def set_event_bus(self, bus) -> None:
+        """Override the cached :class:`EventBus` (testing / wiring)."""
+        self._event_bus = bus
 
     def workspace(self, course: str) -> Workspace:
         """Materialize a :class:`Workspace` under the configured store root."""

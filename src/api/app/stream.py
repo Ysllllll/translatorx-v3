@@ -70,6 +70,7 @@ class StreamBuilder:
             video_key=VideoKey(course=self.course, video=self.video),
             split_by_speaker=self._split_by_speaker,
             error_reporter=self._error_reporter,
+            event_bus=self.app.event_bus,
         )
         return LiveStreamHandle(orch)
 

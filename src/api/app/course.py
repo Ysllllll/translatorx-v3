@@ -359,6 +359,7 @@ class CourseBuilder:
                 processors_factory=factory,
                 error_reporter=self._error_reporter,
                 max_concurrent_videos=self.app.config.runtime.max_concurrent_videos,
+                event_bus=self.app.event_bus,
             )
             result = await orch.run(specs)
 

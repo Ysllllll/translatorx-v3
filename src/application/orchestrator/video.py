@@ -30,7 +30,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Sequence
+from typing import TYPE_CHECKING, AsyncIterator, Sequence
 
 from application.translate import TranslationContext
 from domain.model import SentenceRecord, Segment
@@ -41,6 +41,9 @@ from ports.errors import ErrorInfo, ErrorReporter
 from ports.source import Priority, Processor, Source, VideoKey
 from adapters.sources.push import PushQueueSource
 from adapters.storage.store import Store
+
+if TYPE_CHECKING:  # pragma: no cover
+    from application.events import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +175,7 @@ class VideoOrchestrator:
         video_key: VideoKey,
         error_reporter: ErrorReporter | None = None,
         progress: ProgressCallback | None = None,
+        event_bus: "EventBus | None" = None,
     ) -> None:
         if not processors:
             raise ValueError("processors must not be empty")
@@ -182,11 +186,12 @@ class VideoOrchestrator:
         self._video_key = video_key
         self._error_reporter = error_reporter
         self._progress = progress
+        self._event_bus = event_bus
 
     async def run(self) -> VideoResult:
         start = time.monotonic()
         failed: list[ErrorInfo] = []
-        session = await VideoSession.load(self._store, self._video_key)
+        session = await VideoSession.load(self._store, self._video_key, event_bus=self._event_bus)
         wrap = _make_wrapper(self._ctx, self._store, self._video_key, failed, self._error_reporter, session)
 
         stream: AsyncIterator[SentenceRecord] = self._source.read()
@@ -195,6 +200,11 @@ class VideoOrchestrator:
 
         records: list[SentenceRecord] = []
         _fire(self._progress, ProgressEvent(kind="started", processor="orchestrator", done=0))
+        success = False
+        if self._event_bus is not None:
+            from application.events import orchestrator_started
+
+            await self._event_bus.publish(orchestrator_started(self._video_key.course, self._video_key.video))
         try:
             try:
                 async for rec in stream:
@@ -208,6 +218,7 @@ class VideoOrchestrator:
                             record_id=rec.extra.get("id") if rec.extra else None,
                         ),
                     )
+                success = True
             except BaseException:
                 logger.exception(
                     "VideoOrchestrator.run failed for %s/%s",
@@ -225,6 +236,10 @@ class VideoOrchestrator:
                 raise
         finally:
             await asyncio.shield(session.flush(self._store))
+            if self._event_bus is not None:
+                from application.events import orchestrator_finished
+
+                await self._event_bus.publish(orchestrator_finished(self._video_key.course, self._video_key.video, success=success))
 
         stale: set[int] = set()
         for rec in records:
@@ -235,6 +250,17 @@ class VideoOrchestrator:
                 if proc.output_is_stale(rec):
                     stale.add(rid)
                     break
+
+        if stale and self._event_bus is not None:
+            from application.events import video_invalidated
+
+            await self._event_bus.publish(
+                video_invalidated(
+                    self._video_key.course,
+                    self._video_key.video,
+                    record_ids=sorted(stale),
+                )
+            )
 
         _fire(
             self._progress,
@@ -296,6 +322,7 @@ class StreamingOrchestrator:
         split_by_speaker: bool = False,
         id_start: int = 0,
         error_reporter: ErrorReporter | None = None,
+        event_bus: "EventBus | None" = None,
     ) -> None:
         if not processors:
             raise ValueError("processors must not be empty")
@@ -304,6 +331,7 @@ class StreamingOrchestrator:
         self._store = store
         self._video_key = video_key
         self._error_reporter = error_reporter
+        self._event_bus = event_bus
 
         self._source = PushQueueSource(language, split_by_speaker=split_by_speaker, id_start=id_start)
         self._pq: asyncio.PriorityQueue = asyncio.PriorityQueue()
@@ -374,15 +402,21 @@ class StreamingOrchestrator:
         self._started = True
 
         self._pump_task = asyncio.create_task(self._pump(), name="streamorch-pump")
-        self._session = await VideoSession.load(self._store, self._video_key)
+        self._session = await VideoSession.load(self._store, self._video_key, event_bus=self._event_bus)
         wrap = _make_wrapper(self._ctx, self._store, self._video_key, self._failed, self._error_reporter, self._session)
 
+        if self._event_bus is not None:
+            from application.events import orchestrator_started
+
+            await self._event_bus.publish(orchestrator_started(self._video_key.course, self._video_key.video))
+        success = False
         try:
             stream: AsyncIterator[SentenceRecord] = self._source.read()
             for proc in self._processors:
                 stream = wrap(stream, proc)
             async for rec in stream:
                 yield rec
+            success = True
         finally:
             if self._pump_task is not None and not self._pump_task.done():
                 self._pump_task.cancel()
@@ -392,6 +426,10 @@ class StreamingOrchestrator:
                     pass
             if self._session is not None:
                 await asyncio.shield(self._session.flush(self._store))
+            if self._event_bus is not None:
+                from application.events import orchestrator_finished
+
+                await self._event_bus.publish(orchestrator_finished(self._video_key.course, self._video_key.video, success=success))
 
     # ---- internals ---------------------------------------------------
 

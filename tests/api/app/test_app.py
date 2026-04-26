@@ -176,6 +176,23 @@ class TestBuilderEnhancements:
         app = App.from_yaml(text)
         assert app.engine("default").config.model == "m2"
 
+    def test_app_event_bus_is_lazy_singleton(self, tmp_path: Path):
+        from application.events import EventBus
+
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}})
+        bus1 = app.event_bus
+        bus2 = app.event_bus
+        assert isinstance(bus1, EventBus)
+        assert bus1 is bus2
+
+    def test_app_set_event_bus_overrides_singleton(self, tmp_path: Path):
+        from application.events import EventBus
+
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}})
+        custom = EventBus()
+        app.set_event_bus(custom)
+        assert app.event_bus is custom
+
     @pytest.mark.asyncio
     async def test_video_source_kind_autodetected_from_suffix(self, app: App, tmp_path: Path, monkeypatch):
         fake = _FakeEngine()

@@ -353,6 +353,7 @@ class VideoBuilder:
                 video_key=VideoKey(course=self.course, video=self.video),
                 error_reporter=self._error_reporter,
                 progress=self._progress,
+                event_bus=self.app.event_bus,
             )
             result = await orch.run()
 

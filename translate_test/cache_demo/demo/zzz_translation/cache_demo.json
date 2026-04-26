@@ -1,0 +1,904 @@
+{
+  "schema_version": 2,
+  "meta": {},
+  "source_subtitle": [],
+  "records": [
+    {
+      "id": 0,
+      "translations": {
+        "zh": {
+          "1b094599": "欢迎来到提示压缩与查询优化。"
+        }
+      },
+      "src_text": "Welcome to Prompt Compression and Query Optimization.",
+      "time": "00:00:00.000 → 00:00:03.100",
+      "segments": [
+        {
+          "text": "Welcome to Prompt Compression and Query Optimization.",
+          "w": [0, 7]
+        }
+      ],
+      "words": ["Welcome\t0.0\t0.462", "to\t0.462\t0.594", "Prompt\t0.594\t0.989", "Compression\t0.989\t1.715", "and\t1.715\t1.913", "Query\t1.913\t2.243", "Optimization.\t2.243\t3.1"]
+    },
+    {
+      "id": 1,
+      "translations": {
+        "zh": {
+          "1b094599": "本课程与 MongoDB 联合打造，由 Richmond Alake 主讲。"
+        }
+      },
+      "src_text": "Built in partnership with MongoDB and taught by Richmond Alake.",
+      "time": "00:00:03.400 → 00:00:07.200",
+      "segments": [
+        {
+          "text": "Built in partnership with MongoDB and taught by Richmond Alake.",
+          "w": [0, 10]
+        }
+      ],
+      "words": ["Built\t3.4\t3.752", "in\t3.752\t3.893", "partnership\t3.893\t4.667", "with\t4.667\t4.948", "MongoDB\t4.948\t5.441", "and\t5.441\t5.652", "taught\t5.652\t6.074", "by\t6.074\t6.215", "Richmond\t6.215\t6.778", "Alake.\t6.778\t7.2"]
+    },
+    {
+      "id": 2,
+      "translations": {
+        "zh": {
+          "1b094599": "Richmond 是 MongoDB 的开发者布道师，曾担任机器学习架构师，并多年讲授人工智能和机器学习课程。"
+        }
+      },
+      "src_text": "Richmond is a developer advocate at MongoDB and has worked as a machine learning architect and taught AI and ML for many years.",
+      "time": "00:00:08.200 → 00:00:16.133",
+      "segments": [
+        {
+          "text": "Richmond is a developer advocate at MongoDB",
+          "w": [0, 7]
+        },
+        {
+          "text": "and has worked as a machine learning architect and taught AI and ML for many years.",
+          "w": [7, 23]
+        }
+      ],
+      "words": ["Richmond\t8.2\t8.853", "is\t8.853\t9.016", "a\t9.016\t9.098", "developer\t9.098\t9.833", "advocate\t9.833\t10.486", "at\t10.486\t10.649", "MongoDB\t10.649\t11.22", "and\t11.22\t11.465", "has\t11.465\t11.71", "worked\t11.71\t12.2", "as\t12.2\t12.34", "a\t12.34\t12.411", "machine\t12.411\t12.902", "learning\t12.902\t13.464", "architect\t13.464\t14.096", "and\t14.096\t14.307", "taught\t14.307\t14.728", "AI\t14.728\t14.869", "and\t14.869\t15.08", "ML\t15.08\t15.22", "for\t15.22\t15.431", "many\t15.431\t15.712", "years.\t15.712\t16.133"]
+    },
+    {
+      "id": 3,
+      "translations": {
+        "zh": {
+          "1b094599": "谢谢，Andrew。"
+        }
+      },
+      "src_text": "Thanks, Andrew.",
+      "time": "00:00:16.400 → 00:00:17.900",
+      "segments": [
+        {
+          "text": "Thanks, Andrew.",
+          "w": [0, 2]
+        }
+      ],
+      "words": ["Thanks,\t16.4\t17.15", "Andrew.\t17.15\t17.9"]
+    },
+    {
+      "id": 4,
+      "translations": {
+        "zh": {
+          "1b094599": "本课程将向你展示如何将一个成熟稳定数据库的功能与向量检索相结合，从而降低运行大型 RAG 应用的成本。"
+        }
+      },
+      "src_text": "This course shows you how to combine features of a mature, established database with vector search to reduce the cost of serving a large RAG application.",
+      "time": "00:00:17.900 → 00:00:27.200",
+      "segments": [
+        {
+          "text": "This course shows you how to combine features of a mature, established database",
+          "w": [0, 13]
+        },
+        {
+          "text": "with vector search to reduce the cost of serving a large RAG application.",
+          "w": [13, 26]
+        }
+      ],
+      "words": ["This\t17.9\t18.175", "course\t18.175\t18.587", "shows\t18.587\t18.93", "you\t18.93\t19.136", "how\t19.136\t19.342", "to\t19.342\t19.479", "combine\t19.479\t19.96", "features\t19.96\t20.509", "of\t20.509\t20.646", "a\t20.646\t20.715", "mature,\t20.715\t21.196", "established\t21.196\t21.951", "database\t21.951\t22.5", "with\t22.6\t22.902", "vector\t22.902\t23.354", "search\t23.354\t23.807", "to\t23.807\t23.957", "reduce\t23.957\t24.41", "the\t24.41\t24.636", "cost\t24.636\t24.938", "of\t24.938\t25.089", "serving\t25.089\t25.616", "a\t25.616\t25.692", "large\t25.692\t26.069", "RAG\t26.069\t26.295", "application.\t26.295\t27.2"]
+    },
+    {
+      "id": 5,
+      "translations": {
+        "zh": {
+          "1b094599": "假设你正在构建一个对话式 RAG 应用，帮助用户选择租赁房产。"
+        }
+      },
+      "src_text": "Say you're building a conversational RAG application that helps users select a rental property.",
+      "time": "00:00:28.000 → 00:00:33.600",
+      "segments": [
+        {
+          "text": "Say you're building a conversational RAG application",
+          "w": [0, 7]
+        },
+        {
+          "text": "that helps users select a rental property.",
+          "w": [7, 14]
+        }
+      ],
+      "words": ["Say\t28.0\t28.17", "you're\t28.17\t28.509", "building\t28.509\t28.961", "a\t28.961\t29.017", "conversational\t29.017\t29.809", "RAG\t29.809\t29.978", "application\t29.978\t30.6", "that\t30.6\t30.933", "helps\t30.933\t31.35", "users\t31.35\t31.767", "select\t31.767\t32.267", "a\t32.267\t32.35", "rental\t32.35\t32.85", "property.\t32.85\t33.6"]
+    },
+    {
+      "id": 6,
+      "translations": {
+        "zh": {
+          "1b094599": "用户可能会输入一条文本查询，例如“带一层的独立屋，位于安静的街道上”。"
+        }
+      },
+      "src_text": "A user might enter a text query for one level ranch on a quiet street.",
+      "time": "00:00:33.933 → 00:00:38.100",
+      "segments": [
+        {
+          "text": "A user might enter a text query for one level ranch on a quiet street.",
+          "w": [0, 15]
+        }
+      ],
+      "words": ["A\t33.933\t34.007", "user\t34.007\t34.305", "might\t34.305\t34.677", "enter\t34.677\t35.049", "a\t35.049\t35.124", "text\t35.124\t35.421", "query\t35.421\t35.793", "for\t35.793\t36.016", "one\t36.016\t36.24", "level\t36.24\t36.612", "ranch\t36.612\t36.984", "on\t36.984\t37.133", "a\t37.133\t37.207", "quiet\t37.207\t37.579", "street.\t37.579\t38.1"]
+    },
+    {
+      "id": 7,
+      "translations": {
+        "zh": {
+          "1b094599": "你可以使用语义检索来找到与用户描述相近的匹配结果。"
+        }
+      },
+      "src_text": "You can use semantic search to find a close match to the user description.",
+      "time": "00:00:38.500 → 00:00:42.233",
+      "segments": [
+        {
+          "text": "You can use semantic search to find a close match to the user description.",
+          "w": [0, 14]
+        }
+      ],
+      "words": ["You\t38.5\t38.684", "can\t38.684\t38.867", "use\t38.867\t39.051", "semantic\t39.051\t39.54", "search\t39.54\t39.908", "to\t39.908\t40.03", "find\t40.03\t40.275", "a\t40.275\t40.336", "close\t40.336\t40.642", "match\t40.642\t40.948", "to\t40.948\t41.07", "the\t41.07\t41.254", "user\t41.254\t41.499", "description.\t41.499\t42.233"]
+    },
+    {
+      "id": 8,
+      "translations": {
+        "zh": {
+          "1b094599": "通过将用户请求生成嵌入表示，并在向量数据库中搜索匹配的房屋描述来实现。"
+        }
+      },
+      "src_text": "Using an embedding of the user requests and searching a vector database for homes with descriptions that match.",
+      "time": "00:00:42.300 → 00:00:47.800",
+      "segments": [
+        {
+          "text": "Using an embedding of the user requests",
+          "w": [0, 7]
+        },
+        {
+          "text": "and searching a vector database for homes with descriptions that match.",
+          "w": [7, 18]
+        }
+      ],
+      "words": ["Using\t42.3\t42.573", "an\t42.573\t42.682", "embedding\t42.682\t43.173", "of\t43.173\t43.282", "the\t43.282\t43.445", "user\t43.445\t43.664", "requests\t43.664\t44.1", "and\t44.1\t44.282", "searching\t44.282\t44.828", "a\t44.828\t44.889", "vector\t44.889\t45.252", "database\t45.252\t45.738", "for\t45.738\t45.92", "homes\t45.92\t46.223", "with\t46.223\t46.466", "descriptions\t46.466\t47.193", "that\t47.193\t47.436", "match.\t47.436\t47.8"]
+    },
+    {
+      "id": 9,
+      "translations": {
+        "zh": {
+          "1b094599": "但用户可能还有一些硬性要求，比如三间卧室、两间浴室，或者明确不要游泳池。"
+        }
+      },
+      "src_text": "But the user may also have hard requirements like three bedrooms, two bathrooms, and maybe no swimming pool.",
+      "time": "00:00:48.333 → 00:00:55.033",
+      "segments": [
+        {
+          "text": "But the user may also have hard requirements like three bedrooms, two bathrooms,",
+          "w": [0, 13]
+        },
+        {
+          "text": "and maybe no swimming pool.",
+          "w": [13, 18]
+        }
+      ],
+      "words": ["But\t48.333\t48.579", "the\t48.579\t48.826", "user\t48.826\t49.154", "may\t49.154\t49.401", "also\t49.401\t49.729", "have\t49.729\t50.058", "hard\t50.058\t50.386", "requirements\t50.386\t51.372", "like\t51.372\t51.7", "three\t51.9\t52.213", "bedrooms,\t52.213\t52.777", "two\t52.777\t52.965", "bathrooms,\t52.965\t53.592", "and\t53.592\t53.78", "maybe\t53.78\t54.093", "no\t54.093\t54.218", "swimming\t54.218\t54.72", "pool.\t54.72\t55.033"]
+    },
+    {
+      "id": 10,
+      "translations": {
+        "zh": {
+          "1b094599": "这些需求更适合通过传统的检索方式来处理，即根据数据库中的字段筛选数据，并明确存储卧室数量、浴室数量等信息。"
+        }
+      },
+      "src_text": "These are better handled with a more traditional retrieval by selecting data based on fields in the database and explicitly store the number of bedrooms, bathrooms, and so on.",
+      "time": "00:00:55.500 → 00:01:06.100",
+      "segments": [
+        {
+          "text": "These are better handled with a more traditional retrieval",
+          "w": [0, 9]
+        },
+        {
+          "text": "by selecting data based on fields in the database",
+          "w": [9, 18]
+        },
+        {
+          "text": "and explicitly store the number of bedrooms, bathrooms, and so on.",
+          "w": [18, 29]
+        }
+      ],
+      "words": ["These\t55.5\t55.89", "are\t55.89\t56.124", "better\t56.124\t56.592", "handled\t56.592\t57.138", "with\t57.138\t57.45", "a\t57.45\t57.528", "more\t57.528\t57.84", "traditional\t57.84\t58.698", "retrieval\t58.698\t59.4", "by\t59.7\t59.841", "selecting\t59.841\t60.478", "data\t60.478\t60.761", "based\t60.761\t61.115", "on\t61.115\t61.256", "fields\t61.256\t61.68", "in\t61.68\t61.822", "the\t61.822\t62.034", "database\t62.034\t62.6", "and\t62.6\t62.788", "explicitly\t62.788\t63.413", "store\t63.413\t63.725", "the\t63.725\t63.913", "number\t63.913\t64.287", "of\t64.287\t64.412", "bedrooms,\t64.412\t64.975", "bathrooms,\t64.975\t65.6", "and\t65.6\t65.787", "so\t65.787\t65.912", "on.\t65.912\t66.1"]
+    },
+    {
+      "id": 11,
+      "translations": {
+        "zh": {
+          "1b094599": "在本课程中，你将学习如何结合两者的优势，使用带有向量索引的传统数据库。"
+        }
+      },
+      "src_text": "In this course, you learn to use the best of both worlds, a traditional database with an added vector index.",
+      "time": "00:01:06.700 → 00:01:13.000",
+      "segments": [
+        {
+          "text": "In this course, you learn to use the best of both worlds,",
+          "w": [0, 12]
+        },
+        {
+          "text": "a traditional database with an added vector index.",
+          "w": [12, 20]
+        }
+      ],
+      "words": ["In\t66.7\t66.828", "this\t66.828\t67.083", "course,\t67.083\t67.529", "you\t67.529\t67.72", "learn\t67.72\t68.039", "to\t68.039\t68.166", "use\t68.166\t68.358", "the\t68.358\t68.549", "best\t68.549\t68.804", "of\t68.804\t68.932", "both\t68.932\t69.187", "worlds,\t69.187\t69.633", "a\t69.633\t69.711", "traditional\t69.711\t70.573", "database\t70.573\t71.199", "with\t71.199\t71.512", "an\t71.512\t71.669", "added\t71.669\t72.06", "vector\t72.06\t72.53", "index.\t72.53\t73.0"]
+    },
+    {
+      "id": 12,
+      "translations": {
+        "zh": {
+          "1b094599": "在 RAG 应用中，检索结果用于为大语言模型提供最终处理的输入。"
+        }
+      },
+      "src_text": "In RAG applications to retrieve results that provide an LLM for final processing.",
+      "time": "00:01:13.300 → 00:01:18.300",
+      "segments": [
+        {
+          "text": "In RAG applications to retrieve results that provide an LLM for final processing.",
+          "w": [0, 13]
+        }
+      ],
+      "words": ["In\t73.3\t73.445", "RAG\t73.445\t73.662", "applications\t73.662\t74.532", "to\t74.532\t74.677", "retrieve\t74.677\t75.257", "results\t75.257\t75.764", "that\t75.764\t76.054", "provide\t76.054\t76.561", "an\t76.561\t76.706", "LLM\t76.706\t76.923", "for\t76.923\t77.141", "final\t77.141\t77.503", "processing.\t77.503\t78.3"]
+    },
+    {
+      "id": 13,
+      "translations": {
+        "zh": {
+          "1b094599": "如果检索到的上下文非常长，会导致生成的提示也非常长，从而产生较高的成本，例如返回 10,000 个 token 的检索结果。"
+        }
+      },
+      "src_text": "If the retrieve context is very long, this results in a very long prompt and can thus be costly where retrieval to return, say 10,000 tokens.",
+      "time": "00:01:18.900 → 00:01:27.900",
+      "segments": [
+        {
+          "text": "If the retrieve context is very long,",
+          "w": [0, 7]
+        },
+        {
+          "text": "this results in a very long prompt and can thus be costly where retrieval to return,",
+          "w": [7, 23]
+        },
+        {
+          "text": "say 10,000 tokens.",
+          "w": [23, 26]
+        }
+      ],
+      "words": ["If\t78.9\t79.04", "the\t79.04\t79.25", "retrieve\t79.25\t79.811", "context\t79.811\t80.301", "is\t80.301\t80.441", "very\t80.441\t80.721", "long,\t80.721\t81.072", "this\t81.072\t81.352", "results\t81.352\t81.842", "in\t81.842\t81.982", "a\t81.982\t82.052", "very\t82.052\t82.332", "long\t82.332\t82.613", "prompt\t82.613\t83.033", "and\t83.033\t83.289", "can\t83.289\t83.545", "thus\t83.545\t83.887", "be\t83.887\t84.058", "costly\t84.058\t84.57", "where\t84.57\t84.997", "retrieval\t84.997\t85.765", "to\t85.765\t85.936", "return,\t85.936\t86.534", "say\t86.534\t86.79", "10,000\t86.79\t87.302", "tokens.\t87.302\t87.9"]
+    },
+    {
+      "id": 14,
+      "translations": {
+        "zh": {
+          "1b094599": "如果你要运行一个租房对比网站，每天处理大约一百万次查询，而大语言模型的输入 token 成本为每百万个 token 10 美元，那么你每年可能要花费超过 3600 万美元。"
+        }
+      },
+      "src_text": "If you were to run a rental comparison website to search, say, a million queries per day, and if LLM input tokens cost $10 per million tokens, you could be spending over $36 million a year.",
+      "time": "00:01:28.500 → 00:01:41.300",
+      "segments": [
+        {
+          "text": "If you were to run a rental comparison website to search, say, a million queries per day,",
+          "w": [0, 17]
+        },
+        {
+          "text": "and if LLM input tokens cost $10 per million tokens,",
+          "w": [17, 27]
+        },
+        {
+          "text": "you could be spending over $36 million a year.",
+          "w": [27, 36]
+        }
+      ],
+      "words": ["If\t88.5\t88.642", "you\t88.642\t88.856", "were\t88.856\t89.141", "to\t89.141\t89.283", "run\t89.283\t89.497", "a\t89.497\t89.568", "rental\t89.568\t89.995", "comparison\t89.995\t90.707", "website\t90.707\t91.205", "to\t91.205\t91.347", "search,\t91.347\t91.846", "say,\t91.846\t92.131", "a\t92.131\t92.202", "million\t92.202\t92.7", "queries\t92.7\t93.306", "per\t93.306\t93.565", "day,\t93.565\t93.912", "and\t93.912\t94.171", "if\t94.171\t94.344", "LLM\t94.344\t94.604", "input\t94.604\t95.037", "tokens\t95.037\t95.556", "cost\t95.556\t95.902", "$10\t95.902\t96.162", "per\t96.162\t96.421", "million\t96.421\t97.027", "tokens,\t97.027\t97.633", "you\t97.9\t98.168", "could\t98.168\t98.616", "be\t98.616\t98.795", "spending\t98.795\t99.511", "over\t99.511\t99.868", "$36\t99.868\t100.137", "million\t100.137\t100.763", "a\t100.763\t100.853", "year.\t100.853\t101.3"]
+    },
+    {
+      "id": 15,
+      "translations": {
+        "zh": {
+          "1b094599": "为了帮助你降低成本，本课程还将介绍如何尽可能使检索结果保持简洁且相关的方法。"
+        }
+      },
+      "src_text": "So, to help you reduce costs, this course, will also cover ways to keep the retrieved results as small and relevant as possible.",
+      "time": "00:01:41.700 → 00:01:49.733",
+      "segments": [
+        {
+          "text": "So, to help you reduce costs, this course,",
+          "w": [0, 8]
+        },
+        {
+          "text": "will also cover ways to keep the retrieved results as small and relevant as possible.",
+          "w": [8, 23]
+        }
+      ],
+      "words": ["So,\t101.7\t101.913", "to\t101.913\t102.056", "help\t102.056\t102.34", "you\t102.34\t102.554", "reduce\t102.554\t102.981", "costs,\t102.981\t103.408", "this\t103.408\t103.692", "course,\t103.692\t104.19", "will\t104.19\t104.475", "also\t104.475\t104.76", "cover\t104.76\t105.115", "ways\t105.115\t105.4", "to\t105.7\t105.849", "keep\t105.849\t106.148", "the\t106.148\t106.372", "retrieved\t106.372\t107.044", "results\t107.044\t107.567", "as\t107.567\t107.717", "small\t107.717\t108.09", "and\t108.09\t108.314", "relevant\t108.314\t108.911", "as\t108.911\t109.061", "possible.\t109.061\t109.733"]
+    },
+    {
+      "id": 16,
+      "translations": {
+        "zh": {
+          "1b094599": "谢谢，Andrew。"
+        }
+      },
+      "src_text": "Thanks, Andrew.",
+      "time": "00:01:50.200 → 00:01:51.800",
+      "segments": [
+        {
+          "text": "Thanks, Andrew.",
+          "w": [0, 2]
+        }
+      ],
+      "words": ["Thanks,\t110.2\t111.0", "Andrew.\t111.0\t111.8"]
+    },
+    {
+      "id": 17,
+      "translations": {
+        "zh": {
+          "1b094599": "让我来介绍一些你将学到的技术。"
+        }
+      },
+      "src_text": "Let me describe some of the techniques you will learn.",
+      "time": "00:01:51.800 → 00:01:54.700",
+      "segments": [
+        {
+          "text": "Let me describe some of the techniques you will learn.",
+          "w": [0, 10]
+        }
+      ],
+      "words": ["Let\t111.8\t111.993", "me\t111.993\t112.122", "describe\t112.122\t112.638", "some\t112.638\t112.896", "of\t112.896\t113.024", "the\t113.024\t113.218", "techniques\t113.218\t113.862", "you\t113.862\t114.056", "will\t114.056\t114.313", "learn.\t114.313\t114.7"]
+    },
+    {
+      "id": 18,
+      "translations": {
+        "zh": {
+          "1b094599": "在考虑你的租房应用时，根据卧室或浴室数量进行筛选可以通过预筛选（pre-filter）或后筛选（post-filter）来实现。"
+        }
+      },
+      "src_text": "Let's consider your rental app filtering on the number of bedrooms or bathrooms can be done with a pre-filter or post-filter.",
+      "time": "00:01:54.700 → 00:02:02.400",
+      "segments": [
+        {
+          "text": "Let's consider your rental app filtering on the number of bedrooms or bathrooms",
+          "w": [0, 13]
+        },
+        {
+          "text": "can be done with a pre-filter or post-filter.",
+          "w": [13, 21]
+        }
+      ],
+      "words": ["Let's\t114.7\t115.013", "consider\t115.013\t115.513", "your\t115.513\t115.763", "rental\t115.763\t116.138", "app\t116.138\t116.325", "filtering\t116.325\t116.888", "on\t116.888\t117.013", "the\t117.013\t117.2", "number\t117.2\t117.575", "of\t117.575\t117.7", "bedrooms\t117.7\t118.2", "or\t118.6\t118.755", "bathrooms\t118.755\t119.453", "can\t119.453\t119.686", "be\t119.686\t119.841", "done\t119.841\t120.151", "with\t120.151\t120.461", "a\t120.461\t120.539", "pre-filter\t120.539\t121.314", "or\t121.314\t121.469", "post-filter.\t121.469\t122.4"]
+    },
+    {
+      "id": 19,
+      "translations": {
+        "zh": {
+          "1b094599": "高效的预筛选是在数据库创建索引的阶段完成的。"
+        }
+      },
+      "src_text": "Efficient pre-filter is done in the database index creation stage.",
+      "time": "00:02:03.200 → 00:02:07.200",
+      "segments": [
+        {
+          "text": "Efficient pre-filter is done in the database index creation stage.",
+          "w": [0, 10]
+        }
+      ],
+      "words": ["Efficient\t123.2\t123.832", "pre-filter\t123.832\t124.533", "is\t124.533\t124.674", "done\t124.674\t124.954", "in\t124.954\t125.095", "the\t125.095\t125.305", "database\t125.305\t125.867", "index\t125.867\t126.218", "creation\t126.218\t126.779", "stage.\t126.779\t127.2"]
+    },
+    {
+      "id": 20,
+      "translations": {
+        "zh": {
+          "1b094599": "你构建一个新索引，其中包含匹配常见查询的条目。"
+        }
+      },
+      "src_text": "You build a new index of entries that match common queries.",
+      "time": "00:02:07.700 → 00:02:10.800",
+      "segments": [
+        {
+          "text": "You build a new index of entries that match common queries.",
+          "w": [0, 11]
+        }
+      ],
+      "words": ["You\t127.7\t127.89", "build\t127.89\t128.206", "a\t128.206\t128.269", "new\t128.269\t128.459", "index\t128.459\t128.776", "of\t128.776\t128.902", "entries\t128.902\t129.345", "that\t129.345\t129.598", "match\t129.598\t129.914", "common\t129.914\t130.294", "queries.\t130.294\t130.8"]
+    },
+    {
+      "id": 21,
+      "translations": {
+        "zh": {
+          "1b094599": "例如，如果你经常收到关于卧室数量的查询，你可以构建一个包含卧室字段的索引。"
+        }
+      },
+      "src_text": "So for example, if you know you frequently get queries for bedroom units, you can build an index that includes the bedroom field.",
+      "time": "00:02:11.100 → 00:02:18.133",
+      "segments": [
+        {
+          "text": "So for example, if you know you frequently get queries for bedroom units,",
+          "w": [0, 13]
+        },
+        {
+          "text": "you can build an index that includes the bedroom field.",
+          "w": [13, 23]
+        }
+      ],
+      "words": ["So\t131.1\t131.235", "for\t131.235\t131.437", "example,\t131.437\t131.976", "if\t131.976\t132.111", "you\t132.111\t132.313", "know\t132.313\t132.583", "you\t132.583\t132.785", "frequently\t132.785\t133.459", "get\t133.459\t133.661", "queries\t133.661\t134.133", "for\t134.133\t134.327", "bedroom\t134.327\t134.778", "units,\t134.778\t135.165", "you\t135.165\t135.359", "can\t135.359\t135.552", "build\t135.552\t135.875", "an\t135.875\t136.004", "index\t136.004\t136.327", "that\t136.327\t136.585", "includes\t136.585\t137.101", "the\t137.101\t137.294", "bedroom\t137.294\t137.746", "field.\t137.746\t138.133"]
+    },
+    {
+      "id": 22,
+      "translations": {
+        "zh": {
+          "1b094599": "这就是预筛选。"
+        }
+      },
+      "src_text": "So that's pre-filtering.",
+      "time": "00:02:19.200 → 00:02:21.000",
+      "segments": [
+        {
+          "text": "So that's pre-filtering.",
+          "w": [0, 3]
+        }
+      ],
+      "words": ["So\t139.2\t139.364", "that's\t139.364\t139.855", "pre-filtering.\t139.855\t141.0"]
+    },
+    {
+      "id": 23,
+      "translations": {
+        "zh": {
+          "1b094599": "相比之下，后筛选通常是在执行向量搜索查询之后进行的，此时你会对搜索结果应用一个过滤器，以选出符合特定条件的子集。"
+        }
+      },
+      "src_text": "In contrast, post filtering is done often a vector search query is performed where you then apply a filter to this result to select the sub set matching the required condition.",
+      "time": "00:02:21.000 → 00:02:31.300",
+      "segments": [
+        {
+          "text": "In contrast, post filtering is done often a vector search query is performed",
+          "w": [0, 13]
+        },
+        {
+          "text": "where you then apply a filter to this result",
+          "w": [13, 22]
+        },
+        {
+          "text": "to select the sub set matching the required condition.",
+          "w": [22, 31]
+        }
+      ],
+      "words": ["In\t141.0\t141.149", "contrast,\t141.149\t141.819", "post\t141.819\t142.117", "filtering\t142.117\t142.786", "is\t142.786\t142.935", "done\t142.935\t143.233", "often\t143.233\t143.566", "a\t143.566\t143.633", "vector\t143.633\t144.033", "search\t144.033\t144.433", "query\t144.433\t144.766", "is\t144.766\t144.9", "performed\t144.9\t145.5", "where\t145.5\t145.833", "you\t145.833\t146.033", "then\t146.033\t146.3", "apply\t146.3\t146.633", "a\t146.633\t146.7", "filter\t146.7\t147.1", "to\t147.1\t147.245", "this\t147.245\t147.534", "result\t147.534\t147.969", "to\t147.969\t148.114", "select\t148.114\t148.548", "the\t148.548\t148.766", "sub\t148.766\t148.983", "set\t148.983\t149.2", "matching\t149.2\t149.779", "the\t149.779\t149.997", "required\t149.997\t150.576", "condition.\t150.576\t151.3"]
+    },
+    {
+      "id": 24,
+      "translations": {
+        "zh": {
+          "1b094599": "大规模应用可能会同时使用这两种技术。"
+        }
+      },
+      "src_text": "Large scale applications may use both of these techniques simultaneously.",
+      "time": "00:02:31.500 → 00:02:35.533",
+      "segments": [
+        {
+          "text": "Large scale applications may use both of these techniques simultaneously.",
+          "w": [0, 10]
+        }
+      ],
+      "words": ["Large\t151.5\t151.815", "scale\t151.815\t152.13", "applications\t152.13\t152.886", "may\t152.886\t153.075", "use\t153.075\t153.264", "both\t153.264\t153.516", "of\t153.516\t153.643", "these\t153.643\t153.958", "techniques\t153.958\t154.588", "simultaneously.\t154.588\t155.533"]
+    },
+    {
+      "id": 25,
+      "translations": {
+        "zh": {
+          "1b094599": "另一种减小输出规模的技术称为投影（projection），它会选择查询返回字段中的一个子集。"
+        }
+      },
+      "src_text": "Another technique to minimize the size of the output is something called projection, which selects a subset of the fields returned from a query.",
+      "time": "00:02:36.500 → 00:02:44.633",
+      "segments": [
+        {
+          "text": "Another technique to minimize the size of the output is something called projection,",
+          "w": [0, 13]
+        },
+        {
+          "text": "which selects a subset of the fields returned from a query.",
+          "w": [13, 24]
+        }
+      ],
+      "words": ["Another\t156.5\t156.89", "technique\t156.89\t157.392", "to\t157.392\t157.503", "minimize\t157.503\t157.949", "the\t157.949\t158.116", "size\t158.116\t158.339", "of\t158.339\t158.451", "the\t158.451\t158.618", "output\t158.618\t158.952", "is\t158.952\t159.064", "something\t159.064\t159.566", "called\t159.566\t159.9", "projection,\t159.9\t160.768", "which\t160.768\t161.162", "selects\t161.162\t161.714", "a\t161.714\t161.793", "subset\t161.793\t162.267", "of\t162.267\t162.424", "the\t162.424\t162.661", "fields\t162.661\t163.134", "returned\t163.134\t163.765", "from\t163.765\t164.081", "a\t164.081\t164.16", "query.\t164.16\t164.633"]
+    },
+    {
+      "id": 26,
+      "translations": {
+        "zh": {
+          "1b094599": "例如，对于一套潜在的出租房源，虽然它有15个字段，但你可能只想返回其中的三个。"
+        }
+      },
+      "src_text": "For example, out of 15 fields of a potential rental, you may want to return only three of them.",
+      "time": "00:02:45.100 → 00:02:51.800",
+      "segments": [
+        {
+          "text": "For example, out of 15 fields of a potential rental,",
+          "w": [0, 10]
+        },
+        {
+          "text": "you may want to return only three of them.",
+          "w": [10, 19]
+        }
+      ],
+      "words": ["For\t165.1\t165.358", "example,\t165.358\t166.047", "out\t166.047\t166.305", "of\t166.305\t166.477", "15\t166.477\t166.649", "fields\t166.649\t167.165", "of\t167.165\t167.337", "a\t167.337\t167.423", "potential\t167.423\t168.198", "rental,\t168.198\t168.8", "you\t169.033\t169.277", "may\t169.277\t169.521", "want\t169.521\t169.847", "to\t169.847\t170.01", "return\t170.01\t170.498", "only\t170.498\t170.823", "three\t170.823\t171.23", "of\t171.23\t171.393", "them.\t171.393\t171.8"]
+    },
+    {
+      "id": 27,
+      "translations": {
+        "zh": {
+          "1b094599": "名称、卧室数量和价格。"
+        }
+      },
+      "src_text": "Name, number of bedrooms, and price.",
+      "time": "00:02:51.800 → 00:02:54.833",
+      "segments": [
+        {
+          "text": "Name, number of bedrooms, and price.",
+          "w": [0, 6]
+        }
+      ],
+      "words": ["Name,\t171.8\t172.289", "number\t172.289\t172.876", "of\t172.876\t173.072", "bedrooms,\t173.072\t173.952", "and\t173.952\t174.246", "price.\t174.246\t174.833"]
+    },
+    {
+      "id": 28,
+      "translations": {
+        "zh": {
+          "1b094599": "你当然可以在应用程序中直接实现所有这些操作，但数据库可以针对性能对这些操作进行优化，并强制执行基于角色的访问控制。"
+        }
+      },
+      "src_text": "Now you could implement all of this operation directly in your application, but the database can optimize all this operation for performance and enforce role-based access control.",
+      "time": "00:02:55.800 → 00:03:06.633",
+      "segments": [
+        {
+          "text": "Now you could implement all of this operation directly in your application,",
+          "w": [0, 12]
+        },
+        {
+          "text": "but the database can optimize all this operation",
+          "w": [12, 20]
+        },
+        {
+          "text": "for performance and enforce role-based access control.",
+          "w": [20, 27]
+        }
+      ],
+      "words": ["Now,\t175.8\t176.034", "you\t176.034\t176.209", "could\t176.209\t176.502", "implement\t176.502\t177.028", "all\t177.028\t177.203", "of\t177.203\t177.32", "this\t177.32\t177.554", "operation\t177.554\t178.08", "directly\t178.08\t178.548", "in\t178.548\t178.665", "your\t178.665\t178.898", "application,\t178.898\t179.6", "but\t180.0\t180.22", "the\t180.22\t180.439", "database\t180.439\t181.024", "can\t181.024\t181.244", "optimize\t181.244\t181.829", "all\t181.829\t182.049", "this\t182.049\t182.341", "operation\t182.341\t183.0", "for\t183.133\t183.352", "performance\t183.352\t184.154", "and\t184.154\t184.373", "enforce\t184.373\t184.883", "role-based\t184.883\t185.612", "access\t185.612\t186.05", "control.\t186.05\t186.633"]
+    },
+    {
+      "id": 29,
+      "translations": {
+        "zh": {
+          "1b094599": "所以，这些操作最好在数据库中完成。"
+        }
+      },
+      "src_text": "So they are best accomplished there.",
+      "time": "00:03:07.100 → 00:03:09.333",
+      "segments": [
+        {
+          "text": "So they are best accomplished there.",
+          "w": [0, 6]
+        }
+      ],
+      "words": ["So\t187.1\t187.244", "they\t187.244\t187.532", "are\t187.532\t187.748", "best\t187.748\t188.036", "accomplished\t188.036\t188.901", "there.\t188.901\t189.333"]
+    },
+    {
+      "id": 30,
+      "translations": {
+        "zh": {
+          "1b094599": "另一个强大的技术是对搜索结果进行重新排序。"
+        }
+      },
+      "src_text": "And another powerful technique is reranking the results of a search.",
+      "time": "00:03:09.333 → 00:03:14.100",
+      "segments": [
+        {
+          "text": "And another powerful technique is reranking the results of a search.",
+          "w": [0, 11]
+        }
+      ],
+      "words": ["And\t189.333\t189.58", "another\t189.58\t190.155", "powerful\t190.155\t190.812", "technique\t190.812\t191.552", "is\t191.552\t191.716", "reranking\t191.716\t192.456", "the\t192.456\t192.703", "results\t192.703\t193.278", "of\t193.278\t193.442", "a\t193.442\t193.525", "search.\t193.525\t194.1"]
+    },
+    {
+      "id": 31,
+      "translations": {
+        "zh": {
+          "1b094599": "例如，在使用租客描述的文本嵌入执行语义搜索后，你可以根据其他数据字段（如平均星级评分或评分数量）对结果重新排序，从而将更受欢迎的结果排在列表的更前面。"
+        }
+      },
+      "src_text": "For example, after using the text embeddings of the renter description to perform a semantic search, you can rerank the results based on other data fields, such as average star rating or number of ratings, to move the more desired results higher up the list of results.",
+      "time": "00:03:14.700 → 00:03:30.433",
+      "segments": [
+        {
+          "text": "For example,",
+          "w": [0, 2]
+        },
+        {
+          "text": "after using the text embeddings of the renter description to perform a semantic search,",
+          "w": [2, 16]
+        },
+        {
+          "text": "you can rerank the results based on other data fields,",
+          "w": [16, 26]
+        },
+        {
+          "text": "such as average star rating or number of ratings,",
+          "w": [26, 35]
+        },
+        {
+          "text": "to move the more desired results higher up the list of results.",
+          "w": [35, 47]
+        }
+      ],
+      "words": ["For\t194.7\t194.91", "example,\t194.91\t195.47", "after\t195.47\t195.82", "using\t195.82\t196.17", "the\t196.17\t196.38", "text\t196.38\t196.66", "embeddings\t196.66\t197.36", "of\t197.36\t197.5", "the\t197.5\t197.71", "renter\t197.71\t198.13", "description\t198.13\t198.9", "to\t198.9\t199.049", "perform\t199.049\t199.572", "a\t199.572\t199.647", "semantic\t199.647\t200.244", "search,\t200.244\t200.767", "you\t200.767\t200.991", "can\t200.991\t201.215", "rerank\t201.215\t201.663", "the\t201.663\t201.887", "results\t201.887\t202.41", "based\t202.41\t202.784", "on\t202.784\t202.933", "other\t202.933\t203.314", "data\t203.314\t203.619", "fields\t203.619\t204.076", "such\t204.076\t204.381", "as\t204.381\t204.533", "average\t204.533\t205.066", "star\t205.066\t205.371", "rating\t205.371\t205.828", "or\t205.828\t205.981", "number\t205.981\t206.438", "of\t206.438\t206.59", "ratings,\t206.59\t207.2", "to\t207.2\t207.324", "move\t207.324\t207.573", "the\t207.573\t207.76", "more\t207.76\t208.008", "desired\t208.008\t208.443", "results\t208.443\t208.879", "higher\t208.879\t209.252", "up\t209.252\t209.376", "the\t209.376\t209.563", "list\t209.563\t209.811", "of\t209.811\t209.936", "results.\t209.936\t210.433"]
+    },
+    {
+      "id": 32,
+      "translations": {
+        "zh": {
+          "1b094599": "从而为 LLM 生成更优质的上下文。"
+        }
+      },
+      "src_text": "In order to then generate better context for the LLM.",
+      "time": "00:03:30.733 → 00:03:33.833",
+      "segments": [
+        {
+          "text": "In order to then generate better context for the LLM.",
+          "w": [0, 10]
+        }
+      ],
+      "words": ["In\t210.733\t210.874", "order\t210.874\t211.226", "to\t211.226\t211.367", "then\t211.367\t211.649", "generate\t211.649\t212.213", "better\t212.213\t212.635", "context\t212.635\t213.128", "for\t213.128\t213.34", "the\t213.34\t213.551", "LLM.\t213.551\t213.833"]
+    },
+    {
+      "id": 33,
+      "translations": {
+        "zh": {
+          "1b094599": "最后一种技术是提示压缩。"
+        }
+      },
+      "src_text": "One final technique is prompt compression.",
+      "time": "00:03:34.733 → 00:03:37.733",
+      "segments": [
+        {
+          "text": "One final technique is prompt compression.",
+          "w": [0, 6]
+        }
+      ],
+      "words": ["One\t214.733\t214.976", "final\t214.976\t215.382", "technique\t215.382\t216.111", "is\t216.111\t216.274", "prompt\t216.274\t216.76", "compression.\t216.76\t217.733"]
+    },
+    {
+      "id": 34,
+      "translations": {
+        "zh": {
+          "1b094599": "如果检索到的信息非常长，将所有这些上下文塞入 LLM 的提示中会导致提示长度过长，从而增加处理成本。"
+        }
+      },
+      "src_text": "If the retrieve information is very lengthy, seeking all this context into an LLM prompt results in a very long, prompt length, which is expensive to process.",
+      "time": "00:03:38.100 → 00:03:46.933",
+      "segments": [
+        {
+          "text": "If the retrieve information is very lengthy,",
+          "w": [0, 7]
+        },
+        {
+          "text": "seeking all this context into an LLM prompt results in a very long, prompt length,",
+          "w": [7, 22]
+        },
+        {
+          "text": "which is expensive to process.",
+          "w": [22, 27]
+        }
+      ],
+      "words": ["If\t218.1\t218.249", "the\t218.249\t218.473", "retrieve\t218.473\t219.069", "information\t219.069\t219.889", "is\t219.889\t220.038", "very\t220.038\t220.337", "lengthy,\t220.337\t220.933", "seeking\t220.933\t221.419", "all\t221.419\t221.627", "this\t221.627\t221.905", "context\t221.905\t222.391", "into\t222.391\t222.669", "an\t222.669\t222.808", "LLM\t222.808\t223.016", "prompt\t223.016\t223.433", "results\t223.433\t223.855", "in\t223.855\t223.976", "a\t223.976\t224.036", "very\t224.036\t224.278", "long,\t224.278\t224.58", "prompt\t224.58\t224.942", "length,\t224.942\t225.364", "which\t225.364\t225.666", "is\t225.666\t225.786", "expensive\t225.786\t226.33", "to\t226.33\t226.45", "process.\t226.45\t226.933"]
+    },
+    {
+      "id": 35,
+      "translations": {
+        "zh": {
+          "1b094599": "为了降低这一成本，可以在将提示发送给最终的 LLM 之前，使用一个小型且成本较低的、经过微调的 LLM 来压缩提示内容。"
+        }
+      },
+      "src_text": "To reduce this costs, you can use a small, low cost LLM fine tuned to compress prompts before sending them to the final LLM.",
+      "time": "00:03:47.200 → 00:03:54.600",
+      "segments": [
+        {
+          "text": "To reduce this costs, you can use a small,",
+          "w": [0, 9]
+        },
+        {
+          "text": "low cost LLM fine tuned to compress prompts before sending them to the final LLM.",
+          "w": [9, 24]
+        }
+      ],
+      "words": ["To\t227.2\t227.362", "reduce\t227.362\t227.85", "this\t227.85\t228.175", "costs,\t228.175\t228.662", "you\t228.662\t228.906", "can\t228.906\t229.15", "use\t229.15\t229.394", "a\t229.394\t229.475", "small,\t229.475\t229.963", "low\t229.963\t230.206", "cost\t230.206\t230.531", "LLM\t230.531\t230.775", "fine\t230.775\t231.1", "tuned\t231.1\t231.43", "to\t231.43\t231.562", "compress\t231.562\t232.091", "prompts\t232.091\t232.553", "before\t232.553\t232.949", "sending\t232.949\t233.411", "them\t233.411\t233.675", "to\t233.675\t233.808", "the\t233.808\t234.006", "final\t234.006\t234.336", "LLM.\t234.336\t234.6"]
+    },
+    {
+      "id": 36,
+      "translations": {
+        "zh": {
+          "1b094599": "在提升相关性和节省成本方面，有许多可以改进的地方。"
+        }
+      },
+      "src_text": "There are many opportunities to improve relevance and save costs.",
+      "time": "00:03:54.900 → 00:03:58.600",
+      "segments": [
+        {
+          "text": "There are many opportunities to improve relevance and save costs.",
+          "w": [0, 10]
+        }
+      ],
+      "words": ["There\t234.9\t235.23", "are\t235.23\t235.429", "many\t235.429\t235.693", "opportunities\t235.693\t236.552", "to\t236.552\t236.684", "improve\t236.684\t237.146", "relevance\t237.146\t237.741", "and\t237.741\t237.939", "save\t237.939\t238.204", "costs.\t238.204\t238.6"]
+    },
+    {
+      "id": 37,
+      "translations": {
+        "zh": {
+          "1b094599": "谢谢 Andrew。"
+        }
+      },
+      "src_text": "Thank you Andrew.",
+      "time": "00:03:59.600 → 00:04:01.200",
+      "segments": [
+        {
+          "text": "Thank you Andrew.",
+          "w": [0, 3]
+        }
+      ],
+      "words": ["Thank\t239.6\t240.133", "you\t240.133\t240.453", "Andrew.\t240.453\t241.2"]
+    },
+    {
+      "id": 38,
+      "translations": {
+        "zh": {
+          "1b094599": "你将在接下来的几节课中学习所有这些技术。"
+        }
+      },
+      "src_text": "You will learn all these techniques in the next few lesson.",
+      "time": "00:04:01.200 → 00:04:04.300",
+      "segments": [
+        {
+          "text": "You will learn all these techniques in the next few lesson.",
+          "w": [0, 11]
+        }
+      ],
+      "words": ["You\t241.2\t241.39", "will\t241.39\t241.643", "learn\t241.643\t241.959", "all\t241.959\t242.149", "these\t242.149\t242.465", "techniques\t242.465\t243.098", "in\t243.098\t243.224", "the\t243.224\t243.414", "next\t243.414\t243.667", "few\t243.667\t243.857", "lesson.\t243.857\t244.3"]
+    },
+    {
+      "id": 39,
+      "translations": {
+        "zh": {
+          "1b094599": "你将从实现一个基础的向量检索开始本课程的学习，并以实现提示压缩技术作为结束。"
+        }
+      },
+      "src_text": "You will start this course by implementing a vanilla vector search and end by implementing prompts compression.",
+      "time": "00:04:04.900 → 00:04:11.600",
+      "segments": [
+        {
+          "text": "You will start this course by implementing a vanilla vector search",
+          "w": [0, 11]
+        },
+        {
+          "text": "and end by implementing prompts compression.",
+          "w": [11, 17]
+        }
+      ],
+      "words": ["You\t244.9\t245.07", "will\t245.07\t245.298", "start\t245.298\t245.582", "this\t245.582\t245.809", "course\t245.809\t246.15", "by\t246.15\t246.264", "implementing\t246.264\t246.945", "a\t246.945\t247.002", "vanilla\t247.002\t247.4", "vector\t247.4\t247.892", "search\t247.892\t248.385", "and\t248.385\t248.631", "end\t248.631\t248.877", "by\t248.877\t249.041", "implementing\t249.041\t250.026", "prompts\t250.026\t250.6", "compression.\t250.6\t251.6"]
+    },
+    {
+      "id": 40,
+      "translations": {
+        "zh": {
+          "1b094599": "MongoDB 的这门课程凝聚了许多人的努力与付出。"
+        }
+      },
+      "src_text": "Many people have worked to create this course from MongoDB.",
+      "time": "00:04:11.600 → 00:04:15.200",
+      "segments": [
+        {
+          "text": "Many people have worked to create this course from MongoDB.",
+          "w": [0, 10]
+        }
+      ],
+      "words": ["Many\t251.6\t251.888", "people\t251.888\t252.32", "have\t252.32\t252.608", "worked\t252.608\t253.04", "to\t253.04\t253.184", "create\t253.184\t253.616", "this\t253.616\t253.904", "course\t253.904\t254.336", "from\t254.336\t254.624", "MongoDB.\t254.624\t255.2"]
+    },
+    {
+      "id": 41,
+      "translations": {
+        "zh": {
+          "1b094599": "我要感谢 Apoorva Joshi、Pavel Duchovny、Prakul Agarwal、Jesse Hall、Rita Rodrigues、Henry Weller 和 Shubham Ranjan，同时也要感谢来自 DeepLearning.AI 的 Esmaeil Gargari 对本课程所做的贡献。"
+        }
+      },
+      "src_text": "I'd like to thank Apoorva Joshi, Pavel Duchovny, Prakul Agarwal, Jesse Hall, Rita Rodrigues, Henry Weller and Shubham Ranjan, and also Esmaeil Gargari from DeepLearning.AI had also contributed to this course.",
+      "time": "00:04:15.333 → 00:04:30.700",
+      "segments": [
+        {
+          "text": "I'd like to thank Apoorva Joshi, Pavel Duchovny, Prakul Agarwal, Jesse Hall,",
+          "w": [0, 12]
+        },
+        {
+          "text": "Rita Rodrigues, Henry Weller and Shubham Ranjan,",
+          "w": [12, 19]
+        },
+        {
+          "text": "and also Esmaeil Gargari from DeepLearning.AI had also contributed to this course.",
+          "w": [19, 31]
+        }
+      ],
+      "words": ["I'd\t255.333\t255.606", "like\t255.606\t255.969", "to\t255.969\t256.151", "thank\t256.151\t256.606", "Apoorva\t256.606\t257.242", "Joshi,\t257.242\t257.788", "Pavel\t257.788\t258.242", "Duchovny,\t258.242\t259.06", "Prakul\t259.06\t259.606", "Agarwal,\t259.606\t260.333", "Jesse\t261.0\t261.481", "Hall,\t261.481\t261.962", "Rita\t261.962\t262.346", "Rodrigues,\t262.346\t263.308", "Henry\t263.308\t263.788", "Weller\t263.788\t264.365", "and\t264.365\t264.654", "Shubham\t264.654\t265.327", "Ranjan,\t265.327\t266.0", "and\t266.0\t266.199", "also\t266.199\t266.463", "Esmaeil\t266.463\t266.927", "Gargari\t266.927\t267.39", "from\t267.39\t267.655", "DeepLearning.AI\t267.655\t268.648", "had\t268.648\t268.846", "also\t268.846\t269.111", "contributed\t269.111\t269.839", "to\t269.839\t269.972", "this\t269.972\t270.237", "course.\t270.237\t270.7"]
+    },
+    {
+      "id": 42,
+      "translations": {
+        "zh": {
+          "1b094599": "希望你喜欢这门课程。"
+        }
+      },
+      "src_text": "I hope you enjoy this course.",
+      "time": "00:04:31.233 → 00:04:33.000",
+      "segments": [
+        {
+          "text": "I hope you enjoy this course.",
+          "w": [0, 6]
+        }
+      ],
+      "words": ["I\t271.233\t271.307", "hope\t271.307\t271.601", "you\t271.601\t271.822", "enjoy\t271.822\t272.19", "this\t272.19\t272.485", "course.\t272.485\t273.0"]
+    },
+    {
+      "id": 43,
+      "translations": {
+        "zh": {
+          "1b094599": "请观看下一个视频，我们开始深入学习吧。"
+        }
+      },
+      "src_text": "Please go to the next video and let's dive in.",
+      "time": "00:04:33.000 → 00:04:35.700",
+      "segments": [
+        {
+          "text": "Please go to the next video and let's dive in.",
+          "w": [0, 10]
+        }
+      ],
+      "words": ["Please\t273.0\t273.438", "go\t273.438\t273.584", "to\t273.584\t273.73", "the\t273.73\t273.949", "next\t273.949\t274.241", "video\t274.241\t274.605", "and\t274.605\t274.824", "let's\t274.824\t275.189", "dive\t275.189\t275.481", "in.\t275.481\t275.7"]
+    }
+  ],
+  "failed": [],
+  "terms": {},
+  "variants": {
+    "1b094599": {
+      "prompt_id": "default"
+    }
+  },
+  "prompts": {},
+  "punc_cache": {
+    "If you were to run a rental comparison website to search, say, a million queries per day, and if LLM input tokens cost $10 per million tokens, you could be spending over $36 million a year.": ["If you were to run a rental comparison website to search, say, a million queries per day, and if LLM input tokens cost $10 per million tokens, you could be spending over $36 million a year."],
+    "Now, you could implement all of this operation directly in your application, but the database can optimize all this operation for performance and enforce role-based access control.": ["Now you could implement all of this operation directly in your application, but the database can optimize all this operation for performance and enforce role-based access control."],
+    "For example, after using the text embeddings of the renter description to perform a semantic search, you can rerank the results based on other data fields such as average star rating or number of ratings, to move the more desired results higher up the list of results.": ["For example, after using the text embeddings of the renter description to perform a semantic search, you can rerank the results based on other data fields, such as average star rating or number of ratings, to move the more desired results higher up the list of results."],
+    "I'd like to thank Apoorva Joshi, Pavel Duchovny, Prakul Agarwal, Jesse Hall, Rita Rodrigues, Henry Weller and Shubham Ranjan, and also Esmaeil Gargari from DeepLearning.AI had also contributed to this course.": ["I'd like to thank Apoorva Joshi, Pavel Duchovny, Prakul Agarwal, Jesse Hall, Rita Rodrigues, Henry Weller and Shubham Ranjan, and also Esmaeil Gargari from DeepLearning.AI had also contributed to this course."]
+  },
+  "chunk_cache": {
+    "Richmond is a developer advocate at MongoDB and has worked as a machine learning architect and taught AI and ML for many years.": ["Richmond is a developer advocate at MongoDB", "and has worked as a machine learning architect and taught AI and ML for many years."],
+    "established database with vector search to reduce the cost of serving a large RAG application.": ["established database", "with vector search to reduce the cost of serving a large RAG application."],
+    "Say you're building a conversational RAG application that helps users select a rental property.": ["Say you're building a conversational RAG application", "that helps users select a rental property."],
+    "Using an embedding of the user requests and searching a vector database for homes with descriptions that match.": ["Using an embedding of the user requests", "and searching a vector database for homes with descriptions that match."],
+    "These are better handled with a more traditional retrieval by selecting data based on fields in the database and explicitly store the number of bedrooms,": ["These are better handled with a more traditional retrieval", "by selecting data based on fields in the database", "and explicitly store the number of bedrooms,"],
+    "Let's consider your rental app filtering on the number of bedrooms or bathrooms can be done with a pre-filter or post-filter.": ["Let's consider", "your rental app filtering on the number of bedrooms or bathrooms", "can be done with a pre-filter or post-filter."],
+    "post filtering is done often a vector search query is performed where you then apply a filter to this result to select the sub set matching the required condition.": ["post filtering is done", "often a vector search query is performed", "where you then apply a filter to this result", "to select the sub set matching the required condition."],
+    "but the database can optimize all this operation for performance and enforce role-based access control.": ["but the database can optimize all this operation", "for performance and enforce role-based access control."],
+    "You will start this course by implementing a vanilla vector search and end by implementing prompts compression.": ["You will start this course by implementing a vanilla vector search", "and end by implementing prompts compression."]
+  }
+}
