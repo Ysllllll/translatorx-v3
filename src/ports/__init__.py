@@ -14,6 +14,7 @@ from .media import (
     MediaSource,
     PlaylistInfo,
 )
+from .middleware import Middleware, StageCall
 from .observability import (
     BoundLogger,
     Clock,
@@ -60,6 +61,7 @@ __all__ = [
     "MediaSource",
     "Message",
     "MetricsRegistry",
+    "Middleware",
     "NoOpAuditSink",
     "NoOpMetrics",
     "NoOpTracer",
@@ -77,6 +79,7 @@ __all__ = [
     "Source",
     "SourceStage",
     "Span",
+    "StageCall",
     "StageDef",
     "StageResult",
     "StageStatus",

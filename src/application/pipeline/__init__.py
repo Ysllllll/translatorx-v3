@@ -1,6 +1,7 @@
 """application.pipeline — Pipeline DSL runtime (Phase 1, Step 2)."""
 
 from .context import PipelineContext
+from .middleware import RetryMiddleware, TimingMiddleware, TracingMiddleware, compose
 from .noops import (
     AsyncioSemaphoreLimiter,
     ConcurrencyLimiter,
@@ -31,8 +32,12 @@ __all__ = [
     "PipelineCache",
     "PipelineContext",
     "PipelineRuntime",
+    "RetryMiddleware",
     "StageEntry",
     "StageFactory",
     "StageRegistry",
     "SystemClock",
+    "TimingMiddleware",
+    "TracingMiddleware",
+    "compose",
 ]

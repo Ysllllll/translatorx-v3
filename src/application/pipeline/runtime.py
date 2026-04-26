@@ -11,8 +11,9 @@ Responsibilities (Phase 1):
 5. Drain the final iterator into ``records``, package
    :class:`PipelineResult`, run cleanups under :class:`CancelScope`.
 
-Phase 1 keeps middleware out of the path entirely (Step 3 reintroduces
-:class:`Middleware` as an onion wrapper).
+Each *atomic* stage operation (``Source.open``, ``Subtitle.apply``,
+``Record.transform`` setup) is onion-wrapped through the configured
+:class:`~ports.middleware.Middleware` chain (Step 3).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from typing import Any, AsyncIterator
 from domain.model import SentenceRecord
 from ports.cancel import CancelScope, CancelToken
 from ports.errors import ErrorInfo
+from ports.middleware import Middleware
 from ports.pipeline import (
     ErrorPolicy,
     PipelineDef,
@@ -34,6 +36,7 @@ from ports.pipeline import (
 from ports.stage import RecordStage, SourceStage, StageStatus, SubtitleStage
 
 from .context import PipelineContext
+from .middleware import compose
 from .registry import DEFAULT_REGISTRY, StageRegistry
 
 __all__ = ["PipelineRuntime"]
@@ -47,10 +50,16 @@ async def _replay(items: list[SentenceRecord]) -> AsyncIterator[SentenceRecord]:
 class PipelineRuntime:
     """Executes a :class:`PipelineDef` against a :class:`PipelineContext`."""
 
-    __slots__ = ("_registry",)
+    __slots__ = ("_registry", "_middlewares")
 
-    def __init__(self, registry: StageRegistry | None = None) -> None:
+    def __init__(
+        self,
+        registry: StageRegistry | None = None,
+        *,
+        middlewares: list[Middleware] | None = None,
+    ) -> None:
         self._registry = registry or DEFAULT_REGISTRY
+        self._middlewares: list[Middleware] = list(middlewares or [])
 
     async def run(
         self,
@@ -70,7 +79,7 @@ class PipelineRuntime:
             stream: AsyncIterator[SentenceRecord]
             t0 = time.monotonic()
             try:
-                await source.open(ctx)
+                await self._call(defn.build, ctx, lambda: source.open(ctx))
                 stream = source.stream(ctx)
                 scope.push_cleanup(source.close)
             except Exception as e:
@@ -101,7 +110,7 @@ class PipelineRuntime:
                 t0 = time.monotonic()
                 try:
                     collected: list[SentenceRecord] = [r async for r in stream]
-                    transformed = await stage.apply(collected, ctx)
+                    transformed = await self._call(sdef, ctx, lambda s=stage, c=collected: s.apply(c, ctx))
                     stream = _replay(list(transformed))
                 except Exception as e:
                     stage_results.append(_failed_result(sdef, time.monotonic() - t0, e))
@@ -129,7 +138,9 @@ class PipelineRuntime:
             enrich_stages: list[tuple[StageDef, RecordStage, float]] = []
             for sdef in defn.enrich:
                 rstage: RecordStage = self._registry.build(sdef)  # type: ignore[assignment]
-                stream = rstage.transform(stream, ctx)
+                # Wrap only transform-setup; per-record events are emitted
+                # by stages that opt into per-record instrumentation.
+                stream = await self._call(sdef, ctx, lambda s=rstage, up=stream: _transform_async(s, up, ctx))
                 enrich_stages.append((sdef, rstage, time.monotonic()))
 
             # ---- drain ------------------------------------------------
@@ -169,6 +180,37 @@ class PipelineRuntime:
             stage_results=tuple(stage_results),
             errors=tuple(errors),
         )
+
+    async def _call(
+        self,
+        sdef: StageDef,
+        ctx: PipelineContext,
+        fn,
+    ) -> Any:
+        """Run ``fn`` (zero-arg coroutine factory) through the middleware onion."""
+
+        chain = compose(
+            self._middlewares,
+            stage_id=sdef.id or sdef.name,
+            stage_name=sdef.name,
+            ctx=ctx,
+            call=fn,
+        )
+        return await chain()
+
+
+async def _transform_async(
+    stage: RecordStage,
+    upstream: AsyncIterator[SentenceRecord],
+    ctx: PipelineContext,
+) -> AsyncIterator[SentenceRecord]:
+    """Trivial coroutine wrapper around the synchronous ``transform`` call.
+
+    Middlewares expect an awaitable; ``RecordStage.transform`` is a
+    sync function returning an iterator, so we wrap it.
+    """
+
+    return stage.transform(upstream, ctx)
 
 
 def _to_error_info(stage_name: str, exc: BaseException) -> ErrorInfo:
