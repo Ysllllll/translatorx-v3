@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from domain.model import SentenceRecord, Segment
 
@@ -21,6 +21,32 @@ if TYPE_CHECKING:
     from api.app.app import App
     from ports.errors import ErrorReporter
     from application.observability.progress import ProgressCallback
+
+
+# ---------------------------------------------------------------------------
+# Internal: passthrough source stage used by the PipelineRuntime delegation
+# path (P2-6). Wraps a pre-built ``Source`` so VideoBuilder retains its
+# legacy preprocessing semantics (punc_position, chunk_llm baked into the
+# Source's ``read()``) while still flowing through the new runtime.
+# ---------------------------------------------------------------------------
+
+
+class _FromPrebuiltSourceStage:
+    name = "from_source"
+
+    def __init__(self, source: Source) -> None:
+        self._source = source
+        self._iter: AsyncIterator[SentenceRecord] | None = None
+
+    async def open(self, ctx: Any) -> None:
+        self._iter = self._source.read()
+
+    def stream(self, ctx: Any) -> AsyncIterator[SentenceRecord]:
+        assert self._iter is not None, "_FromPrebuiltSourceStage.open() must be called first"
+        return self._iter
+
+    async def close(self) -> None:
+        self._iter = None
 
 
 _AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".mp4", ".mkv", ".mov", ".ts", ".flv", ".wmv", ".webm"}
@@ -298,67 +324,228 @@ class VideoBuilder:
         if not src_lang:
             raise ValueError("source language unknown; pass language= to .source() / .transcribe() or src= to .translate()")
 
+        use_pipeline = self._align is None and self._tts is None
         result: VideoResult | None = None
 
         for tgt_lang in t.tgt:
-            engine = self.app.engine(t.engine_name)
-            ctx = self.app.context(src_lang, tgt_lang)
-            checker = self.app.checker(src_lang, tgt_lang)
-            store = self.app.store(self.course)
-
-            engine = self._meter(engine)
-
-            procs: list[Any] = []
-            if self._summary is not None:
-                sum_engine = self._meter(self.app.engine(self._summary.engine_name))
-                procs.append(
-                    SummaryProcessor(
-                        sum_engine,
-                        source_lang=src_lang,
-                        target_lang=tgt_lang,
-                        window_words=self._summary.window_words,
-                    )
+            if use_pipeline:
+                result = await self._run_via_pipeline(
+                    source=source,
+                    src_lang=src_lang,
+                    tgt_lang=tgt_lang,
                 )
-            procs.append(
-                TranslateProcessor(
-                    engine,
-                    checker,
+            else:
+                result = await self._run_via_orchestrator(
+                    source=source,
+                    src_lang=src_lang,
+                    tgt_lang=tgt_lang,
                 )
-            )
-            if self._align is not None:
-                align_engine = self._meter(self.app.engine(self._align.engine_name))
-                procs.append(
-                    AlignProcessor(
-                        align_engine,
-                        source_lang=src_lang,
-                        enable_text_mode=self._align.enable_text_mode,
-                        json_norm_ratio=self._align.json_norm_ratio,
-                        json_accept_ratio=self._align.json_accept_ratio,
-                        text_norm_ratio=self._align.text_norm_ratio,
-                        text_accept_ratio=self._align.text_accept_ratio,
-                        rearrange_chunk_len=self._align.rearrange_chunk_len,
-                    )
-                )
-            if self._tts is not None:
-                tts_proc = self._build_tts_processor(tgt_lang)
-                procs.append(tts_proc)
-
-            orch = VideoOrchestrator(
-                source=source,
-                processors=procs,
-                ctx=ctx,
-                store=store,
-                video_key=VideoKey(course=self.course, video=self.video),
-                error_reporter=self._error_reporter,
-                progress=self._progress,
-                event_bus=self.app.event_bus,
-                flush_every=self.app.config.runtime.flush_every,
-                flush_interval_s=self.app.config.runtime.flush_interval_s,
-            )
-            result = await orch.run()
 
         assert result is not None  # at least one tgt guaranteed
         return result
+
+    async def _run_via_orchestrator(
+        self,
+        *,
+        source: Source,
+        src_lang: str,
+        tgt_lang: str,
+    ) -> VideoResult:
+        """Legacy execution path — used when align / tts is configured."""
+        t = self._translate
+        assert t is not None
+        engine = self.app.engine(t.engine_name)
+        ctx = self.app.context(src_lang, tgt_lang)
+        checker = self.app.checker(src_lang, tgt_lang)
+        store = self.app.store(self.course)
+
+        engine = self._meter(engine)
+
+        procs: list[Any] = []
+        if self._summary is not None:
+            sum_engine = self._meter(self.app.engine(self._summary.engine_name))
+            procs.append(
+                SummaryProcessor(
+                    sum_engine,
+                    source_lang=src_lang,
+                    target_lang=tgt_lang,
+                    window_words=self._summary.window_words,
+                )
+            )
+        procs.append(
+            TranslateProcessor(
+                engine,
+                checker,
+            )
+        )
+        if self._align is not None:
+            align_engine = self._meter(self.app.engine(self._align.engine_name))
+            procs.append(
+                AlignProcessor(
+                    align_engine,
+                    source_lang=src_lang,
+                    enable_text_mode=self._align.enable_text_mode,
+                    json_norm_ratio=self._align.json_norm_ratio,
+                    json_accept_ratio=self._align.json_accept_ratio,
+                    text_norm_ratio=self._align.text_norm_ratio,
+                    text_accept_ratio=self._align.text_accept_ratio,
+                    rearrange_chunk_len=self._align.rearrange_chunk_len,
+                )
+            )
+        if self._tts is not None:
+            tts_proc = self._build_tts_processor(tgt_lang)
+            procs.append(tts_proc)
+
+        orch = VideoOrchestrator(
+            source=source,
+            processors=procs,
+            ctx=ctx,
+            store=store,
+            video_key=VideoKey(course=self.course, video=self.video),
+            error_reporter=self._error_reporter,
+            progress=self._progress,
+            event_bus=self.app.event_bus,
+            flush_every=self.app.config.runtime.flush_every,
+            flush_interval_s=self.app.config.runtime.flush_interval_s,
+        )
+        return await orch.run()
+
+    async def _run_via_pipeline(
+        self,
+        *,
+        source: Source,
+        src_lang: str,
+        tgt_lang: str,
+    ) -> VideoResult:
+        """New execution path — delegate to :class:`PipelineRuntime`.
+
+        Wraps the pre-built ``source`` (which already carries legacy
+        preprocessing) via :class:`_FromPrebuiltSourceStage` so semantics
+        match :meth:`_run_via_orchestrator` exactly. Only ``summary`` and
+        ``translate`` flow through registered stages; ``align`` / ``tts``
+        stay on the legacy path.
+        """
+        import time as _time
+
+        from pydantic import BaseModel
+
+        from application.orchestrator.session import VideoSession
+        from application.pipeline.context import PipelineContext
+        from application.pipeline.middleware import ProgressMiddleware
+        from application.pipeline.runtime import PipelineRuntime
+        from application.stages import make_default_registry
+        from ports.pipeline import PipelineDef, StageDef
+
+        t = self._translate
+        assert t is not None
+        store = self.app.store(self.course)
+        video_key = VideoKey(course=self.course, video=self.video)
+        translation_ctx = self.app.context(src_lang, tgt_lang)
+        runtime_cfg = self.app.config.runtime
+
+        registry = make_default_registry(self.app)
+
+        class _NoParams(BaseModel):
+            model_config = {"extra": "forbid"}
+
+        prebuilt_stage = _FromPrebuiltSourceStage(source)
+        registry.unregister("from_source")
+        registry.register(
+            "from_source",
+            lambda _params: prebuilt_stage,
+            params_schema=_NoParams,
+        )
+
+        enrich_defs: list[StageDef] = []
+        if self._summary is not None:
+            sum_params: dict[str, Any] = {"engine": self._summary.engine_name}
+            if self._summary.window_words is not None:
+                sum_params["window_words"] = self._summary.window_words
+            enrich_defs.append(StageDef(name="summary", params=sum_params))
+        enrich_defs.append(StageDef(name="translate", params={}))
+
+        defn = PipelineDef(
+            name=f"video:{self.course}/{self.video}",
+            build=StageDef(name="from_source", params={}),
+            enrich=tuple(enrich_defs),
+        )
+
+        session = await VideoSession.load(
+            store,
+            video_key,
+            flush_every=runtime_cfg.flush_every,
+            flush_interval_s=runtime_cfg.flush_interval_s,
+            event_bus=self.app.event_bus,
+        )
+
+        ctx_kwargs: dict[str, Any] = dict(
+            session=session,
+            store=store,
+            translation_ctx=translation_ctx,
+        )
+        if self.app.event_bus is not None:
+            ctx_kwargs["event_bus"] = self.app.event_bus
+        if self._error_reporter is not None:
+            ctx_kwargs["reporter"] = self._error_reporter
+        extra: dict[str, Any] = {}
+        if self._usage_sink is not None:
+            extra["usage_sink"] = self._usage_sink
+        if extra:
+            ctx_kwargs["extra"] = extra
+
+        ctx = PipelineContext(**ctx_kwargs)
+
+        mws: list[Any] = []
+        if self._progress is not None:
+            mws.append(ProgressMiddleware(self._progress))
+
+        runtime = PipelineRuntime(registry, middlewares=mws or None)
+        started = _time.perf_counter()
+        try:
+            result = await runtime.run(defn, ctx)
+        finally:
+            import asyncio as _asyncio
+
+            if session.is_dirty:
+                await _asyncio.shield(session.flush(store))
+        elapsed = _time.perf_counter() - started
+
+        from ports.pipeline import PipelineState
+
+        if result.state is PipelineState.FAILED and result.errors:
+            # Legacy parity: VideoOrchestrator propagates engine errors up
+            # to the caller. PipelineRuntime captures them in result.errors;
+            # re-raise so callers using pytest.raises / try-except keep
+            # working. The original exception type is lost (ErrorInfo
+            # doesn't carry the live exception); we use RuntimeError with
+            # the captured message which still preserves substring matches.
+            first = result.errors[0]
+            raise RuntimeError(first.message)
+
+        # Legacy parity: emit a `kind="finished"` ProgressEvent with both
+        # ``done`` and ``total`` so consumers (Task runtime, SSE) that key
+        # off ``event.total`` keep working under the pipeline path.
+        if self._progress is not None:
+            from application.observability.progress import ProgressEvent
+
+            try:
+                self._progress(
+                    ProgressEvent(
+                        kind="finished",
+                        processor="orchestrator",
+                        done=len(result.records),
+                        total=len(result.records),
+                    )
+                )
+            except Exception:  # pragma: no cover — progress is best-effort
+                pass
+
+        return VideoResult(
+            records=list(result.records),
+            stale_ids=(),
+            failed=tuple(result.errors),
+            elapsed_s=elapsed,
+        )
 
     # ------------------------------------------------------------------
     # helpers

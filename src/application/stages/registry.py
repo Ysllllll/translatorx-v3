@@ -156,7 +156,7 @@ def _make_translate(app: "App", params: TranslateParams) -> TranslateStage:
     def factory(pipe_ctx):  # type: ignore[no-untyped-def]
         tctx = pipe_ctx.translation_ctx
         engine = _meter(app.engine(), pipe_ctx)
-        checker = default_checker(tctx.source_lang, tctx.target_lang)
+        checker = app.checker(tctx.source_lang, tctx.target_lang)
         return TranslateProcessor(engine=engine, checker=checker)
 
     return TranslateStage(params, factory)
