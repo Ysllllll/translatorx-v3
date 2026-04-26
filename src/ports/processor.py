@@ -70,14 +70,20 @@ class ProcessorBase(ABC, Generic[In, Out]):
     # Required hooks
     # ------------------------------------------------------------------
 
-    @abstractmethod
     def fingerprint(self) -> str:
         """Return a stable SHA-256 hex digest of the processor config.
 
-        Includes at minimum ``(engine_id, model, prompt_template,
+        Used by processors that gate cache validity on a global
+        per-config signature (currently align / tts / summary). Includes
+        at minimum ``(engine_id, model, prompt_template,
         relevant_config)``. Computed once at init time; reused for every
         cache-hit check (D-043 R4).
+
+        Default implementation returns an empty string for processors
+        that don't use a global fingerprint (e.g. :class:`TranslateProcessor`,
+        which decides cache hits per record by variant key).
         """
+        return ""
 
     @abstractmethod
     def process(

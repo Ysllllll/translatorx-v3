@@ -82,26 +82,25 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         self._flush_every = flush_every
         self._flush_interval_s = flush_interval_s
 
-    def fingerprint(self) -> str:
-        """Stable-per-process digest.
-
-        With variant-keyed translation storage the cache decision is
-        made *per record* by ``variant_key`` lookup, not by a global
-        fingerprint. We still emit a digest so that the
-        :class:`ProcessorBase` contract is satisfied and downstream
-        processors (align/tts) can derive their own fingerprint without
-        cascading staleness from translate.
-        """
-        return "variant"
+    # NOTE: TranslateProcessor inherits ProcessorBase.fingerprint()'s default
+    # ("") because cache decisions are variant-keyed per-record (see the
+    # module docstring), not gated by a global processor signature.
 
     @staticmethod
     def _hydrate_from_stored(rec: SentenceRecord, stored: dict[str, Any]) -> SentenceRecord:
         """Merge persisted ``translations`` / ``selected`` into ``rec``.
 
-        Stored values are taken as the base; the in-memory record's
-        translations/selected layer on top so any not-yet-flushed work
-        wins. Legacy bare-string translations (pre-variant schema) are
-        promoted under a ``"legacy"`` variant key.
+        Why this exists: upstream sources (``SrtSource``, ``WhisperXSource``,
+        ``PushQueueSource``) emit *fresh* :class:`SentenceRecord` objects
+        built from the raw subtitle / WhisperX payload — they have no
+        knowledge of the JSON store and therefore carry no prior
+        translations. Without merging in the persisted state, every
+        record would look like a cache miss on every run.
+
+        Merge order: stored values form the base, the in-memory record's
+        translations / selected layer on top so any not-yet-flushed work
+        from this run wins. Legacy bare-string translations (pre-variant
+        schema) are promoted under a ``"legacy"`` variant key.
         """
         stored_tr = stored.get("translations") if isinstance(stored, dict) else None
         stored_sel = stored.get("selected") if isinstance(stored, dict) else None
