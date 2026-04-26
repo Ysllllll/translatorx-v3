@@ -160,3 +160,23 @@ class TestPipelineBuilderSummary:
         defn = app.pipeline(course="c1", video="v1").from_srt(srt, language="en").summary().translate(src="en", tgt="zh").build()
         summary_stage = next(s for s in defn.enrich if s.name == "summary")
         assert summary_stage.params["engine"] == "default"
+
+
+class TestPipelineBuilderFromAudio:
+    def test_from_audio_records_build_stage(self, app: App, tmp_path: Path) -> None:
+        audio = tmp_path / "a.wav"
+        audio.write_bytes(b"")
+        defn = app.pipeline(course="c1", video="v1").from_audio(audio, library="whisperx", language="en", word_timestamps=True).translate(src="en", tgt="zh").build()
+        assert defn.build is not None
+        assert defn.build.name == "from_audio"
+        assert defn.build.params["library"] == "whisperx"
+        assert defn.build.params["language"] == "en"
+        assert defn.build.params["word_timestamps"] is True
+        assert str(audio) == defn.build.params["audio_path"]
+
+    def test_from_audio_omits_optional_params(self, app: App, tmp_path: Path) -> None:
+        audio = tmp_path / "a.wav"
+        audio.write_bytes(b"")
+        defn = app.pipeline(course="c1", video="v1").from_audio(audio).translate(src="en", tgt="zh").build()
+        assert "library" not in defn.build.params
+        assert "language" not in defn.build.params

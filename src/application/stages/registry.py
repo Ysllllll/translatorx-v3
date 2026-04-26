@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 from application.pipeline.registry import StageRegistry
 
 from .build import (
+    FromAudioParams,
+    FromAudioStage,
     FromPushParams,
     FromPushStage,
     FromSrtParams,
@@ -25,7 +27,10 @@ from .structure import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from api.app.app import App
+    from ports.source import VideoKey
 
 __all__ = ["make_default_registry"]
 
@@ -92,6 +97,11 @@ def make_default_registry(
             "summary",
             lambda params: _make_summary(app, params),
             params_schema=SummaryParams,
+        )
+        reg.register(
+            "from_audio",
+            lambda params: _make_from_audio(app, params),
+            params_schema=FromAudioParams,
         )
 
     if discover_plugins:
@@ -161,3 +171,30 @@ def _make_summary(app: "App", params: SummaryParams) -> SummaryStage:
         )
 
     return SummaryStage(params, factory)
+
+
+def _make_from_audio(app: "App", params: FromAudioParams) -> FromAudioStage:
+    """Build :class:`FromAudioStage` with services resolved from ``app``."""
+    transcriber = app.transcriber(library=params.library)
+    if transcriber is None:
+        raise RuntimeError(
+            "from_audio stage requires config.transcriber.library to be set, or pass library=... in params",
+        )
+
+    cfg = app.config.preprocess
+
+    def json_path_resolver(vk: "VideoKey") -> "Path":
+        workspace = app.workspace(vk.course)
+        subtitle_dir = workspace.get_subdir("subtitle")
+        return subtitle_dir.path_for(vk.video, suffix=".json")
+
+    return FromAudioStage(
+        params,
+        transcriber=transcriber,
+        json_path_resolver=json_path_resolver,
+        punc_factory=app.punc_restorer,
+        chunk_factory=app.chunker,
+        punc_position=cfg.punc_position,
+        merge_under=cfg.merge_under,
+        max_len=cfg.max_len,
+    )

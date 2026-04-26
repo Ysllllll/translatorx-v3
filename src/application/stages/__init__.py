@@ -14,6 +14,7 @@ component (e.g. an :class:`~adapters.preprocess.PuncRestorer`-derived
 """
 
 from .build import (
+    FromAudioStage,
     FromPushStage,
     FromSrtStage,
     FromWhisperxStage,
@@ -24,6 +25,7 @@ from .structure import ChunkStage, MergeStage, PuncStage
 
 __all__ = [
     "ChunkStage",
+    "FromAudioStage",
     "FromPushStage",
     "FromSrtStage",
     "FromWhisperxStage",

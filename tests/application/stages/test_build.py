@@ -78,3 +78,98 @@ async def test_from_push_stage_feed_then_close() -> None:
     items = [r async for r in stage.stream(ctx)]
     assert len(items) >= 1
     await stage.close()
+
+
+# ---------------------------------------------------------------------------
+# FromAudioStage
+# ---------------------------------------------------------------------------
+
+from application.stages.build import FromAudioParams, FromAudioStage
+from domain.model import Word
+from ports.transcriber import TranscribeOptions, TranscriptionResult
+
+
+class _FakeTranscriber:
+    def __init__(self, language: str = "en") -> None:
+        self._lang = language
+        self.calls: list[tuple] = []
+
+    async def transcribe(self, audio, opts: TranscribeOptions | None = None) -> TranscriptionResult:
+        self.calls.append((audio, opts))
+        seg = Segment(start=0.0, end=1.0, text="Hello world.", words=(Word(word="Hello", start=0.0, end=0.5), Word(word="world.", start=0.5, end=1.0)))
+        return TranscriptionResult(segments=[seg], language=self._lang, duration=1.0)
+
+
+@pytest.mark.asyncio
+async def test_from_audio_writes_json_and_streams(tmp_path: Path) -> None:
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    json_target = tmp_path / "out.json"
+
+    transcriber = _FakeTranscriber(language="en")
+    stage = FromAudioStage(FromAudioParams(audio_path=audio, language="en"), transcriber=transcriber, json_path_resolver=lambda vk: json_target)
+    ctx = await _ctx()
+    await stage.open(ctx)
+    items = [r async for r in stage.stream(ctx)]
+    await stage.close()
+
+    assert len(items) >= 1
+    assert json_target.exists()
+    payload = json_target.read_text(encoding="utf-8")
+    assert '"language": "en"' in payload
+    assert '"word_segments"' in payload
+    assert stage.language == "en"
+    assert len(transcriber.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_from_audio_uses_detected_language(tmp_path: Path) -> None:
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    json_target = tmp_path / "out.json"
+
+    transcriber = _FakeTranscriber(language="zh")
+    stage = FromAudioStage(FromAudioParams(audio_path=audio), transcriber=transcriber, json_path_resolver=lambda vk: json_target)
+    ctx = await _ctx()
+    await stage.open(ctx)
+    [r async for r in stage.stream(ctx)]
+    await stage.close()
+    assert stage.language == "zh"
+
+
+@pytest.mark.asyncio
+async def test_from_audio_raises_when_no_language(tmp_path: Path) -> None:
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    transcriber = _FakeTranscriber(language="")
+    stage = FromAudioStage(FromAudioParams(audio_path=audio), transcriber=transcriber, json_path_resolver=lambda vk: tmp_path / "x.json")
+    ctx = await _ctx()
+    with pytest.raises(ValueError, match="language"):
+        await stage.open(ctx)
+
+
+@pytest.mark.asyncio
+async def test_from_audio_invokes_punc_chunk_factories(tmp_path: Path) -> None:
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"")
+    json_target = tmp_path / "out.json"
+
+    punc_calls: list[str] = []
+    chunk_calls: list[str] = []
+
+    def punc_factory(lang: str):
+        punc_calls.append(lang)
+        return None  # disable wiring but record call
+
+    def chunk_factory(lang: str):
+        chunk_calls.append(lang)
+        return None
+
+    stage = FromAudioStage(FromAudioParams(audio_path=audio, language="en"), transcriber=_FakeTranscriber(language="en"), json_path_resolver=lambda vk: json_target, punc_factory=punc_factory, chunk_factory=chunk_factory)
+    ctx = await _ctx()
+    await stage.open(ctx)
+    [r async for r in stage.stream(ctx)]
+    await stage.close()
+
+    assert punc_calls == ["en"]
+    assert chunk_calls == ["en"]

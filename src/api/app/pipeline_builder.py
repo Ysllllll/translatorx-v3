@@ -92,6 +92,35 @@ class PipelineBuilder:
             _src_lang=language or self._src_lang,
         )
 
+    def from_audio(
+        self,
+        audio_path: Path | str,
+        *,
+        library: str | None = None,
+        language: str | None = None,
+        word_timestamps: bool = True,
+    ) -> PipelineBuilder:
+        """Transcribe ``audio_path`` then stream the WhisperX-shaped output.
+
+        ``library`` selects the transcriber backend (e.g. ``whisperx``,
+        ``openai``); when omitted, :class:`AppConfig.transcriber.library`
+        is used. ``language``, when supplied, is forwarded to the
+        transcriber and also recorded as the pipeline's source
+        language; otherwise the language detected by the transcriber
+        is used at run-time (downstream ``punc`` / ``chunk`` stages
+        configured with ``language="auto"`` will pick it up).
+        """
+        params: dict[str, Any] = {"audio_path": str(audio_path), "word_timestamps": word_timestamps}
+        if library is not None:
+            params["library"] = library
+        if language is not None:
+            params["language"] = language
+        return replace(
+            self,
+            _build=StageDef(name="from_audio", params=params),
+            _src_lang=language or self._src_lang,
+        )
+
     # ---- structure tier ------------------------------------------------
 
     def punc(self, *, language: str | None = None) -> PipelineBuilder:

@@ -39,6 +39,7 @@ def test_default_registry_with_app_registers_punc_chunk() -> None:
     assert reg.is_registered("chunk")
     assert reg.is_registered("translate")
     assert reg.is_registered("summary")
+    assert reg.is_registered("from_audio")
     stage = reg.build(StageDef(name="punc", params={"language": "en"}))
     assert stage.name == "punc"
 
