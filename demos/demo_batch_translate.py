@@ -1,36 +1,31 @@
-"""demo_batch_translate — preprocess → SentenceRecord → TranslateProcessor，再叠加 Workspace 持久化 + cache hit 演示。
+"""demo_batch_translate — 模拟真实应用：一份 SRT = 一个单视频 course，全程走 Workspace + VideoSession。
 
-主链路：
+抽象：
 
-    sanitize_srt → parse_srt → Subtitle(...).sentences()
-        .transform(restore_punc, scope='joined', cache=punc_cache)
-        .sentences().clauses(...).transform(chunk_fn, scope='chunk', cache=chunk_cache)
-        .merge().records()
-                  │  AsyncIterator[SentenceRecord]
-                  ▼
-            TranslateProcessor.process(upstream, ctx, store, video_key)
-                  │  rec.translations[tgt] 已就位
-                  ▼
-            Bilingual table
+    Workspace(root, course)
+        ├── <video>.srt                         （源字幕，可选）
+        ├── zzz_translation/<video>.json        ← Store/VideoSession 唯一落地
+        │       ├── records (SentenceRecord 序列)
+        │       ├── punc_cache / chunk_cache    （预处理缓存）
+        │       └── variants / prompts          （多方案对比）
+        └── metadata.json                       （course 级，本 demo 暂不用）
 
-STEP 4 演示 **persist 一切到一份 ``<video>.json``**：
-* records + variants/prompts 顶层 registry（A/B 多变体）
-* punc_cache / chunk_cache（store.patch_video 原生支持）
+主链路（**全程同一个 Workspace + Store**）：
 
-跑两轮：第一轮 miss → 全译；第二轮 hit → 零 LLM 调用，且预处理缓存从 disk
-重建出来。
-
-进阶能力（dynamic terms / prompt degrade / chunked overlap / summary
-integration）已经拆到独立的 ``demo_advanced_features.py``。
+    1. 启动时加载 <video>.json → 拿到 punc_cache / chunk_cache（可能为空）
+    2. preprocess (sanitize→parse→punc→chunk→merge→records) 用这两份 cache
+    3. patch_video(punc_cache=..., chunk_cache=...)  写回
+    4. TranslateProcessor.process(records, store, video_key) 流式翻译并持久化
+    5. STEP 4: 再跑一遍同样的 Workspace，第二轮全部命中（preprocess 0 LLM，translate 0 LLM）
 
 运行::
 
-    python demos/demo_batch_translate.py                              # 默认开启 STEP 4
-    python demos/demo_batch_translate.py --no-demo-cache              # 关闭 STEP 4
-    python demos/demo_batch_translate.py --srt foo.srt                # 自定义 SRT
-    python demos/demo_batch_translate.py --cache                      # punc/chunk 跑两遍
+    python demos/demo_batch_translate.py                                  # 默认 STEP 4 启用
+    python demos/demo_batch_translate.py --no-demo-cache                  # 跳过 STEP 4
+    python demos/demo_batch_translate.py --srt foo.srt                    # 自定义 SRT
     python demos/demo_batch_translate.py --engine http://host:port/v1
-    python demos/demo_batch_translate.py --workspace /tmp/myws        # 持久化 Workspace
+    python demos/demo_batch_translate.py --workspace /tmp/myws            # 自定义 Workspace 根
+    python demos/demo_batch_translate.py --fresh                          # 启动前清空本 video 的持久化数据
 """
 
 from __future__ import annotations
@@ -59,7 +54,6 @@ from _demo_shared import (
     render_records,
     render_translations,
     step,
-    translate_records,
     truncate,
 )
 from adapters.storage import JsonFileStore, Workspace
@@ -72,91 +66,97 @@ from ports.source import VideoKey
 
 
 # =====================================================================
-# STEP 4 — Cache hit demo (preprocess caches + per-record provenance)
+# Workspace helpers — 一份 SRT = 一个单视频 course
 # =====================================================================
 
 
-async def step_cache_demo(
-    records: list[SentenceRecord],
+async def _load_caches(store: JsonFileStore, video: str) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """从 <video>.json 读出 punc_cache / chunk_cache（不存在则给空 dict）。"""
+    data = await store.load_video(video)
+    return dict(data.get("punc_cache") or {}), dict(data.get("chunk_cache") or {})
+
+
+async def _persist_caches(
+    store: JsonFileStore,
+    video: str,
     *,
+    punc_cache: dict[str, list[str]],
+    chunk_cache: dict[str, list[str]],
+) -> None:
+    """把内存中的 cache dict 落到 <video>.json。"""
+    await store.patch_video(
+        video,
+        punc_cache=punc_cache or None,
+        chunk_cache=chunk_cache or None,
+    )
+
+
+async def _run_one_pass(
+    srt_text: str,
+    *,
+    language_override: str | None,
+    engine: LLMEngine,
     src: str,
     tgt: str,
-    engine: LLMEngine,
     terms: dict[str, str] | None,
-    workspace_root: Path,
-    punc_cache: dict[str, list[str]] | None = None,
-    chunk_cache: dict[str, list[str]] | None = None,
-) -> None:
-    """Persist records + preprocess caches to a fixed Workspace, run translate
-    twice, second pass should be hit-only.
+    store: JsonFileStore,
+    video_key: VideoKey,
+    show_records: bool,
+) -> tuple[list[SentenceRecord], str, dict[str, float]]:
+    """完整一遍：load caches → preprocess → save caches → translate（持久化到同一 store）。
 
-    If ``punc_cache`` / ``chunk_cache`` are provided (populated by STEP 1),
-    they are persisted into the same per-video JSON between pass1 and pass2,
-    then **reloaded from disk** before pass2 to demonstrate cross-run reuse
-    (verifies the in-memory dicts can be fully reconstructed from store).
+    返回 (translated_records, language, timings)。
     """
-    step(
-        "STEP 4",
-        "Cache hit (per-record provenance + preprocess caches in JSON)",
-        "同一 Workspace 跑两轮：第一轮 miss 全译 + 持久化 punc/chunk caches；第二轮 hit 全跳 LLM，预处理缓存从 JSON 重建。",
+    timings: dict[str, float] = {}
+
+    # ── 1) 从 store 加载预处理 cache ─────────────────────────────────
+    punc_cache, chunk_cache = await _load_caches(store, video_key.video)
+    timings["punc_cache_loaded"] = len(punc_cache)
+    timings["chunk_cache_loaded"] = len(chunk_cache)
+
+    # ── 2) preprocess ───────────────────────────────────────────────
+    t0 = time.perf_counter()
+    records, language = preprocess(
+        srt_text,
+        language_override=language_override,
+        engine=engine,
+        punc_cache=punc_cache,
+        chunk_cache=chunk_cache,
     )
-    course_root = workspace_root / "cache_demo"
-    if course_root.exists():
-        shutil.rmtree(course_root)
+    timings["preprocess"] = time.perf_counter() - t0
 
-    ws = Workspace(root=course_root, course="demo")
-    store = JsonFileStore(ws)
-    video_key = VideoKey(course="demo", video="cache_demo")
+    # ── 3) 把（可能新增了的）cache 写回 store ───────────────────────
+    await _persist_caches(store, video_key.video, punc_cache=punc_cache, chunk_cache=chunk_cache)
+    timings["punc_cache_after"] = len(punc_cache)
+    timings["chunk_cache_after"] = len(chunk_cache)
 
-    async def _one_pass() -> tuple[float, list[SentenceRecord]]:
-        ctx = create_context(src, tgt, terms=terms)
-        checker = default_checker(src, tgt)
-        proc = TranslateProcessor(engine, checker)
+    if show_records:
+        render_records("post-preprocess", records, language=language)
 
-        async def _gen() -> AsyncIterator[SentenceRecord]:
-            for r in records:
-                yield r
+    # ── 4) translate（同一 store + video_key，processor 自动 hydrate）─
+    ctx = create_context(src, tgt, terms=terms)
+    checker = default_checker(src, tgt)
+    processor = TranslateProcessor(engine, checker)
 
-        t0 = time.perf_counter()
-        out: list[SentenceRecord] = []
-        async for rec in proc.process(_gen(), ctx=ctx, store=store, video_key=video_key):
-            out.append(rec)
-        return time.perf_counter() - t0, out
+    async def _gen() -> AsyncIterator[SentenceRecord]:
+        for r in records:
+            yield r
 
-    # ── Pass 1: translate + persist preprocess caches ─────────────────
-    t1, _ = await _one_pass()
+    translated: list[SentenceRecord] = []
+    t1 = time.perf_counter()
+    async for rec in processor.process(_gen(), ctx=ctx, store=store, video_key=video_key):
+        translated.append(rec)
+        idx = len(translated)
+        dt = time.perf_counter() - t1
+        if show_records:
+            tgt_text = rec.get_translation(tgt) or ""
+            console.print(
+                f"  [bold green]✓[/bold green] [dim]({idx}/{len(records)} +{dt:.2f}s)[/dim] [cyan]{truncate(rec.src_text, 120)}[/cyan]"
+            )
+            console.print(f"      [magenta]→[/magenta] {truncate(tgt_text, 200)}")
+    timings["translate"] = time.perf_counter() - t1
 
-    if punc_cache or chunk_cache:
-        await store.patch_video(
-            video_key.video,
-            punc_cache=punc_cache or None,
-            chunk_cache=chunk_cache or None,
-        )
-
-    on_disk = await store.load_video(video_key.video)
-    disk_punc = on_disk.get("punc_cache") or {}
-    disk_chunk = on_disk.get("chunk_cache") or {}
-
-    # ── Pass 2: rerun translate (should be all hits) ──────────────────
-    t2, recs2 = await _one_pass()
-    speedup = t1 / max(t2, 1e-6)
-    console.print(
-        f"  [bold]pass1[/bold]={t1:.2f}s  [bold]pass2[/bold]={t2:.2f}s  "
-        f"[green]speedup={speedup:.1f}x[/green]  "
-        f"records cached on disk = {sum(1 for r in recs2 if r.get_translation(tgt))}"
-    )
-    console.print(f"  [dim]preprocess caches in JSON[/dim]  punc_cache_keys={len(disk_punc)}  chunk_cache_keys={len(disk_chunk)}")
-
-    fp_path = course_root / "demo" / "zzz_translation" / "cache_demo.json"
-    if fp_path.exists():
-        import json
-
-        data = json.loads(fp_path.read_text(encoding="utf-8"))
-        records_on_disk = data.get("records", [])
-        n_records = len(records_on_disk)
-        sections = [k for k in ("records", "punc_cache", "chunk_cache", "summary", "variants", "prompts") if data.get(k)]
-        variants = data.get("variants", {})
-        console.print(f"  [dim]on-disk[/dim] sections={sections}  records={n_records}  variants={list(variants.keys())}")
+    return translated, language, timings
 
 
 # =====================================================================
@@ -170,102 +170,104 @@ async def run(
     language_override: str | None,
     engine_url: str | None,
     terms: dict[str, str] | None,
-    use_cache: bool,
     src_for_translate: str,
     tgt_for_translate: str,
     workspace_root: Path,
+    course: str,
+    video: str,
+    fresh: bool,
     demo_cache: bool,
 ) -> None:
     engine = make_engine(engine_url)
 
-    if use_cache:
-        punc_cache: dict[str, list[str]] | None = {}
-        chunk_cache: dict[str, list[str]] | None = {}
-    else:
-        punc_cache = None
-        chunk_cache = None
+    # ── 单一 Workspace + Store + VideoKey 贯穿全 demo ────────────────
+    workspace_root.mkdir(parents=True, exist_ok=True)
+    if fresh:
+        course_dir = workspace_root / course
+        if course_dir.exists():
+            shutil.rmtree(course_dir)
 
-    # ── STEP 1: preprocess ────────────────────────────────────────────
+    ws = Workspace(root=workspace_root, course=course)
+    store = JsonFileStore(ws)
+    video_key = VideoKey(course=course, video=video)
+    json_path = ws.translation.path_for(video_key.video)
+
+    console.print(f"  [dim]workspace[/dim] root=[cyan]{workspace_root}[/cyan] course=[cyan]{course}[/cyan] video=[cyan]{video}[/cyan]")
+    console.print(f"  [dim]video json[/dim] {json_path}")
+
+    # ── PASS 1: 真跑（可能 miss，也可能因之前 run 留下的数据而 hit）──
     step(
-        "STEP 1",
-        "preprocess (sanitize → parse → punc → chunk → merge → records)",
-        f"PUNC_THRESHOLD={PUNC_THRESHOLD}, CHUNK_LEN={CHUNK_LEN}, cache={'on' if use_cache else 'off'}",
+        "PASS 1",
+        "preprocess + translate（共享 Workspace；从 <video>.json 加载 cache）",
+        f"PUNC_THRESHOLD={PUNC_THRESHOLD}, CHUNK_LEN={CHUNK_LEN}",
     )
-    t0 = time.perf_counter()
-    records, language = preprocess(
+    translated1, language, t1 = await _run_one_pass(
         srt_text,
         language_override=language_override,
         engine=engine,
-        punc_cache=punc_cache,
-        chunk_cache=chunk_cache,
+        src=src_for_translate,
+        tgt=tgt_for_translate,
+        terms=terms,
+        store=store,
+        video_key=video_key,
+        show_records=True,
     )
-    elapsed_pre = time.perf_counter() - t0
-
-    if use_cache:
-        # 第二轮用同一对 dict 跑一遍演示命中
-        t1 = time.perf_counter()
-        records, language = preprocess(
-            srt_text,
-            language_override=language_override,
-            engine=engine,
-            punc_cache=punc_cache,
-            chunk_cache=chunk_cache,
-        )
-        elapsed_warm = time.perf_counter() - t1
-        console.print(
-            f"  preprocess pass1={elapsed_pre:.2f}s  pass2={elapsed_warm:.2f}s  "
-            f"speedup={elapsed_pre / max(elapsed_warm, 1e-6):.2f}x  "
-            f"punc_cache={len(punc_cache or {})}  chunk_cache={len(chunk_cache or {})}"
-        )
-    else:
-        console.print(f"  preprocess elapsed={elapsed_pre:.2f}s")
-
+    console.print(
+        f"  [bold]preprocess[/bold]={t1['preprocess']:.2f}s  "
+        f"[bold]translate[/bold]={t1['translate']:.2f}s  "
+        f"records={len(translated1)}  "
+        f"punc_cache {int(t1['punc_cache_loaded'])}→{int(t1['punc_cache_after'])}  "
+        f"chunk_cache {int(t1['chunk_cache_loaded'])}→{int(t1['chunk_cache_after'])}"
+    )
     console.print(
         f"  detected language=[bold]{language}[/bold]  →  src=[bold]{src_for_translate}[/bold] tgt=[bold]{tgt_for_translate}[/bold]"
     )
-    render_records("post-preprocess", records, language=language)
 
-    # ── STEP 2: translate (streaming bilingual print) ─────────────────
-    step(
-        "STEP 2",
-        "TranslateProcessor.process(records → records)  [streaming]",
-        f"terms injected: {sorted((terms or {}).keys())}  · 每条完成立即打印译文",
-    )
-    total = len(records)
-    translated: list[SentenceRecord] = []
-    t2 = time.perf_counter()
-    async for rec in translate_records(
-        records,
-        src=src_for_translate,
-        tgt=tgt_for_translate,
-        engine=engine,
-        terms=terms,
-    ):
-        translated.append(rec)
-        idx = len(translated)
-        dt = time.perf_counter() - t2
-        tgt_text = rec.get_translation(tgt_for_translate) or ""
-        console.print(f"  [bold green]✓[/bold green] [dim]({idx}/{total} +{dt:.2f}s)[/dim] [cyan]{truncate(rec.src_text, 120)}[/cyan]")
-        console.print(f"      [magenta]→[/magenta] {truncate(tgt_text, 200)}")
-    elapsed_tx = time.perf_counter() - t2
-    console.print(f"\n  translate elapsed={elapsed_tx:.2f}s for {len(translated)} record(s)")
+    # ── 渲染最终对照 ────────────────────────────────────────────────
+    step("RENDER", "Bilingual side-by-side", "rec.translations[tgt] 已被 TranslateProcessor 写入。")
+    render_translations(translated1, tgt_for_translate)
 
-    # ── STEP 3: render summary ────────────────────────────────────────
-    step("STEP 3", "Bilingual side-by-side (summary)", "rec.translations[tgt] 已被 TranslateProcessor 写入。")
-    render_translations(translated, tgt_for_translate)
-
-    # ── STEP 4: cache hit demo ────────────────────────────────────────
+    # ── PASS 2: 在同一 Workspace 上再跑一次，期望全部命中 ──────────
     if demo_cache:
-        await step_cache_demo(
-            records,
+        step(
+            "PASS 2",
+            "Re-run on the same Workspace (cache hit demo)",
+            "preprocess 命中 punc/chunk cache；translate 命中已落盘 records。",
+        )
+        translated2, _, t2 = await _run_one_pass(
+            srt_text,
+            language_override=language_override,
+            engine=engine,
             src=src_for_translate,
             tgt=tgt_for_translate,
-            engine=engine,
             terms=terms,
-            workspace_root=workspace_root,
-            punc_cache=punc_cache,
-            chunk_cache=chunk_cache,
+            store=store,
+            video_key=video_key,
+            show_records=False,
         )
+        speed_pre = t1["preprocess"] / max(t2["preprocess"], 1e-6)
+        speed_tx = t1["translate"] / max(t2["translate"], 1e-6)
+        console.print(
+            f"  [bold]preprocess[/bold] pass1={t1['preprocess']:.2f}s pass2={t2['preprocess']:.2f}s [green]speedup={speed_pre:.1f}x[/green]"
+        )
+        console.print(
+            f"  [bold]translate[/bold]  pass1={t1['translate']:.2f}s pass2={t2['translate']:.2f}s [green]speedup={speed_tx:.1f}x[/green]"
+        )
+        console.print(
+            f"  punc_cache pass2 loaded=[bold]{int(t2['punc_cache_loaded'])}[/bold] "
+            f"chunk_cache pass2 loaded=[bold]{int(t2['chunk_cache_loaded'])}[/bold]"
+        )
+        translated_count = sum(1 for r in translated2 if r.get_translation(tgt_for_translate))
+        console.print(f"  records translated on pass2 = {translated_count}/{len(translated2)} (hits via store)")
+
+    # ── on-disk 概览 ─────────────────────────────────────────────────
+    if json_path.exists():
+        import json
+
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+        sections = [k for k in ("records", "punc_cache", "chunk_cache", "summary", "variants", "prompts") if data.get(k)]
+        n_records = len(data.get("records") or [])
+        console.print(f"  [dim]on-disk[/dim] path={json_path}  sections={sections}  records={n_records}")
 
 
 # =====================================================================
@@ -281,11 +283,6 @@ def main() -> None:
     parser.add_argument("--tgt", default="zh", help="翻译目标语言（默认 zh）。")
     parser.add_argument("--engine", default=None, help="覆盖 LLM base_url。")
     parser.add_argument(
-        "--cache",
-        action="store_true",
-        help="开启 punc/chunk 内存 cache，preprocess 跑两遍展示命中。translate 不缓存。",
-    )
-    parser.add_argument(
         "--no-terms",
         action="store_true",
         help="清空默认术语映射（不做术语注入）。",
@@ -293,23 +290,43 @@ def main() -> None:
     parser.add_argument(
         "--workspace",
         default=str(Path(tempfile.gettempdir()) / "trx_demo_translate_workspace"),
-        help="STEP 4 cache demo 用的持久化 Workspace 根目录（默认 /tmp/trx_demo_translate_workspace）。",
+        help="持久化 Workspace 根目录（默认 /tmp/trx_demo_translate_workspace）。",
     )
-    parser.add_argument("--no-demo-cache", action="store_true", help="跳过 STEP 4 cache hit demo。")
+    parser.add_argument("--course", default="demo", help='Workspace course 名称（默认 "demo"）。')
+    parser.add_argument(
+        "--video",
+        default=None,
+        help="video 名（默认取自 SRT 文件名 stem，未指定 SRT 时为 'sample'）。",
+    )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="启动前清空 <workspace>/<course>/，相当于全新跑（默认增量复用）。",
+    )
+    parser.add_argument("--no-demo-cache", action="store_true", help="跳过 PASS 2（cache hit 演示）。")
     args = parser.parse_args()
 
     srt_text = Path(args.srt).read_text(encoding="utf-8") if args.srt else DEFAULT_SRT
     terms = None if args.no_terms else dict(DEFAULT_TERMS)
 
+    if args.video:
+        video = args.video
+    elif args.srt:
+        video = Path(args.srt).stem
+    else:
+        video = "sample"
+
     header = (
         f"[bold]src[/bold]=[cyan]{args.src}[/cyan]  "
         f"[bold]tgt[/bold]=[cyan]{args.tgt}[/cyan]  "
         f"[bold]engine[/bold]=[cyan]{args.engine or os.environ.get('LLM_ENGINE_URL', 'default')}[/cyan]  "
-        f"[bold]cache[/bold]={'on' if args.cache else 'off'}  "
         f"[bold]terms[/bold]={len(terms) if terms else 0}  "
-        f"[bold]workspace[/bold]={args.workspace}"
+        f"[bold]workspace[/bold]={args.workspace}  "
+        f"[bold]course[/bold]={args.course}  "
+        f"[bold]video[/bold]={video}  "
+        f"[bold]fresh[/bold]={'on' if args.fresh else 'off'}"
     )
-    console.print(Panel.fit(header, title="batch translate", border_style="green"))
+    console.print(Panel.fit(header, title="batch translate (workspace-driven)", border_style="green"))
 
     asyncio.run(
         run(
@@ -317,10 +334,12 @@ def main() -> None:
             language_override=args.language,
             engine_url=args.engine,
             terms=terms,
-            use_cache=args.cache,
             src_for_translate=args.src,
             tgt_for_translate=args.tgt,
             workspace_root=Path(args.workspace),
+            course=args.course,
+            video=video,
+            fresh=args.fresh,
             demo_cache=not args.no_demo_cache,
         )
     )
