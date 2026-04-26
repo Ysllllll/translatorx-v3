@@ -52,6 +52,7 @@ from domain.model import SentenceRecord
 
 if TYPE_CHECKING:  # pragma: no cover
     from adapters.storage.store import Store
+    from application.events import EventBus
     from ports.source import VideoKey
 
 logger = logging.getLogger(__name__)
@@ -79,10 +80,12 @@ class VideoSession:
         stored: dict[str, Any] | None,
         *,
         flush_every: int | float = float("inf"),
+        event_bus: "EventBus | None" = None,
     ) -> None:
         self._video_key = video_key
         self._stored = stored if isinstance(stored, dict) else {}
         self._flush_every = flush_every
+        self._event_bus = event_bus
 
         # Index stored records by id for O(1) hydrate.
         self._stored_by_id: dict[int, dict[str, Any]] = {}
@@ -109,10 +112,11 @@ class VideoSession:
         video_key: "VideoKey",
         *,
         flush_every: int | float = float("inf"),
+        event_bus: "EventBus | None" = None,
     ) -> "VideoSession":
         """Load existing state from ``store`` and build a session."""
         existing = await store.load_video(video_key.video)
-        return cls(video_key, existing, flush_every=flush_every)
+        return cls(video_key, existing, flush_every=flush_every, event_bus=event_bus)
 
     # ------------------------------------------------------------------
     # Read API
@@ -343,6 +347,31 @@ class VideoSession:
 
         if fingerprints:
             await store.set_fingerprints(self._video_key.video, fingerprints)
+
+        # Emit domain events AFTER successful writes so subscribers
+        # never observe a state that wasn't persisted (D-074).
+        if self._event_bus is not None:
+            from application.events import (
+                video_fingerprints_set,
+                video_records_patched,
+            )
+
+            if records:
+                await self._event_bus.publish(
+                    video_records_patched(
+                        course=self._video_key.course,
+                        video=self._video_key.video,
+                        record_ids=sorted(records.keys()),
+                    )
+                )
+            if fingerprints:
+                await self._event_bus.publish(
+                    video_fingerprints_set(
+                        course=self._video_key.course,
+                        video=self._video_key.video,
+                        fingerprints=fingerprints,
+                    )
+                )
 
         # Clear dirty buffers atomically only after both writes succeed.
         self._record_patches = {}
