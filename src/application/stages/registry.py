@@ -14,7 +14,7 @@ from .build import (
     FromWhisperxParams,
     FromWhisperxStage,
 )
-from .enrich import TranslateParams, TranslateStage
+from .enrich import SummaryParams, SummaryStage, TranslateParams, TranslateStage
 from .structure import (
     ChunkParams,
     ChunkStage,
@@ -88,6 +88,11 @@ def make_default_registry(
             lambda params: _make_translate(app, params),
             params_schema=TranslateParams,
         )
+        reg.register(
+            "summary",
+            lambda params: _make_summary(app, params),
+            params_schema=SummaryParams,
+        )
 
     if discover_plugins:
         from application.pipeline.plugins import discover_stages
@@ -132,3 +137,27 @@ def _make_translate(app: "App", params: TranslateParams) -> TranslateStage:
         return TranslateProcessor(engine=engine, checker=checker)
 
     return TranslateStage(params, factory)
+
+
+def _make_summary(app: "App", params: SummaryParams) -> SummaryStage:
+    """Build :class:`SummaryStage` with a lazy processor factory.
+
+    Engine + language pair are resolved on first ``transform`` from
+    :class:`PipelineContext.translation_ctx`, mirroring the translate
+    stage. The ``params.engine`` slot lets the YAML/builder pin a
+    non-default engine name (e.g. ``"summary"``).
+    """
+    from application.processors.summary import SummaryProcessor
+
+    def factory(pipe_ctx):  # type: ignore[no-untyped-def]
+        tctx = pipe_ctx.translation_ctx
+        engine = app.engine(params.engine)
+        return SummaryProcessor(
+            engine=engine,
+            source_lang=tctx.source_lang,
+            target_lang=tctx.target_lang,
+            window_words=params.window_words,
+            max_input_chars=params.max_input_chars,
+        )
+
+    return SummaryStage(params, factory)

@@ -17,6 +17,7 @@ def test_default_registry_no_app_registers_build_and_merge() -> None:
     assert not reg.is_registered("punc")
     assert not reg.is_registered("chunk")
     assert not reg.is_registered("translate")
+    assert not reg.is_registered("summary")
 
 
 def test_default_registry_unknown_stage_raises() -> None:
@@ -37,8 +38,25 @@ def test_default_registry_with_app_registers_punc_chunk() -> None:
     assert reg.is_registered("punc")
     assert reg.is_registered("chunk")
     assert reg.is_registered("translate")
+    assert reg.is_registered("summary")
     stage = reg.build(StageDef(name="punc", params={"language": "en"}))
     assert stage.name == "punc"
+
+
+def test_default_registry_summary_builds_lazy_stage() -> None:
+    class _App:
+        def punc_restorer(self, lang):
+            return None
+
+        def chunker(self, lang):
+            return None
+
+        def engine(self, name="default"):
+            raise AssertionError("engine() should not be called at build time")
+
+    reg = make_default_registry(app=_App())  # type: ignore[arg-type]
+    stage = reg.build(StageDef(name="summary", params={"window_words": 1000}))
+    assert stage.name == "summary"
 
 
 def test_default_registry_translate_builds_lazy_stage() -> None:

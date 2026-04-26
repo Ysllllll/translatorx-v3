@@ -126,6 +126,30 @@ class PipelineBuilder:
 
     # ---- enrich tier ---------------------------------------------------
 
+    def summary(
+        self,
+        *,
+        engine: str = "default",
+        window_words: int | None = None,
+        max_input_chars: int | None = None,
+    ) -> PipelineBuilder:
+        """Attach an incremental :class:`SummaryProcessor` before translate.
+
+        Like :meth:`translate`, language pair is resolved lazily from
+        the runtime :class:`TranslationContext`. Place ``.summary()``
+        before ``.translate()`` so summary state hydrates ahead of
+        translation.
+        """
+        params: dict[str, Any] = {"engine": engine}
+        if window_words is not None:
+            params["window_words"] = window_words
+        if max_input_chars is not None:
+            params["max_input_chars"] = max_input_chars
+        return replace(
+            self,
+            _enrich=self._enrich + (StageDef(name="summary", params=params),),
+        )
+
     def translate(
         self,
         *,

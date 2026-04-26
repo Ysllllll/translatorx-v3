@@ -18,7 +18,7 @@ from .build import (
     FromSrtStage,
     FromWhisperxStage,
 )
-from .enrich import TranslateStage
+from .enrich import SummaryStage, TranslateStage
 from .registry import make_default_registry
 from .structure import ChunkStage, MergeStage, PuncStage
 
@@ -29,6 +29,7 @@ __all__ = [
     "FromWhisperxStage",
     "MergeStage",
     "PuncStage",
+    "SummaryStage",
     "TranslateStage",
     "make_default_registry",
 ]

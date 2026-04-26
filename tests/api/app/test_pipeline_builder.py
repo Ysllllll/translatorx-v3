@@ -141,3 +141,22 @@ class TestPipelineBuilderRun:
         b = app.pipeline(course="c1", video="lec").from_srt(srt).translate(tgt="zh")
         with pytest.raises(ValueError, match="src and tgt"):
             await b.run()
+
+
+class TestPipelineBuilderSummary:
+    def test_summary_chains_before_translate(self, app: App, tmp_path: Path) -> None:
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi."])
+        defn = app.pipeline(course="c1", video="v1").from_srt(srt, language="en").summary(window_words=1000).translate(src="en", tgt="zh").build()
+        names = tuple(s.name for s in defn.enrich)
+        assert names == ("summary", "translate")
+        # window_words made it into params
+        summary_stage = next(s for s in defn.enrich if s.name == "summary")
+        assert summary_stage.params["window_words"] == 1000
+
+    def test_summary_default_engine(self, app: App, tmp_path: Path) -> None:
+        srt = tmp_path / "x.srt"
+        _write_srt(srt, ["Hi."])
+        defn = app.pipeline(course="c1", video="v1").from_srt(srt, language="en").summary().translate(src="en", tgt="zh").build()
+        summary_stage = next(s for s in defn.enrich if s.name == "summary")
+        assert summary_stage.params["engine"] == "default"
