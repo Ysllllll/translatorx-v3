@@ -45,7 +45,7 @@ _logger = logging.getLogger(__name__)
 class Subscription:
     """One subscriber's queue + filter. Use as an async iterator."""
 
-    __slots__ = ("_queue", "_bus", "_filter", "dropped", "_closed")
+    __slots__ = ("_queue", "_bus", "_filter", "dropped", "_closed", "_loop")
 
     def __init__(
         self,
@@ -61,6 +61,10 @@ class Subscription:
         self._filter = (type_prefix, course, video)
         self.dropped = 0
         self._closed = False
+        try:
+            self._loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:
+            self._loop = None
 
     @property
     def filter(self) -> tuple[str, str | None, str | None]:
@@ -70,14 +74,34 @@ class Subscription:
         type_prefix, course, video = self._filter
         return event.matches(type_prefix=type_prefix, course=course, video=video)
 
-    def _try_put(self, event: DomainEvent) -> bool:
-        """Non-blocking put; returns ``False`` if queue is full."""
+    def _try_put(self, event: DomainEvent | None) -> bool:
+        """Non-blocking put; returns ``False`` if queue is full.
+
+        If called from a thread other than the one owning the
+        subscription's asyncio loop, the put is scheduled via
+        ``loop.call_soon_threadsafe`` so the awaiting consumer is
+        actually woken. Cross-thread puts always return ``True``
+        (full-queue accounting happens on the owner loop).
+        """
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if self._loop is not None and running is not self._loop:
+            self._loop.call_soon_threadsafe(self._put_threadsafe, event)
+            return True
         try:
             self._queue.put_nowait(event)
             return True
         except asyncio.QueueFull:
             self.dropped += 1
             return False
+
+    def _put_threadsafe(self, event: DomainEvent | None) -> None:
+        try:
+            self._queue.put_nowait(event)
+        except asyncio.QueueFull:
+            self.dropped += 1
 
     async def get(self, *, timeout: float | None = None) -> DomainEvent | None:
         """Pull the next event. Returns ``None`` when the subscription closes."""
@@ -93,11 +117,8 @@ class Subscription:
         if self._closed:
             return
         self._closed = True
-        # sentinel: tell consumer to stop
-        try:
-            self._queue.put_nowait(None)
-        except asyncio.QueueFull:
-            pass
+        # sentinel: tell consumer to stop (thread-safe via _try_put)
+        self._try_put(None)
         self._bus._unsubscribe(self)
 
     def __aiter__(self) -> "Subscription":

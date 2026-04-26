@@ -45,8 +45,6 @@ async def events_stream(
     async def gen() -> AsyncIterator[dict]:
         try:
             while not sub._closed:
-                if await request.is_disconnected():
-                    break
                 item = await sub.get(timeout=30.0)
                 if item is None:
                     if sub._closed:
