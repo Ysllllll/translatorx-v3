@@ -92,6 +92,20 @@ class TestAppConfig:
         cfg = AppConfig.from_dict({"engines": {"default": {"model": "m", "base_url": "b", "api_key": "k"}}})
         assert cfg.engines["default"].base_url == "b"
 
+    def test_store_kind_defaults_to_json(self):
+        cfg = AppConfig.from_dict({"engines": {"default": {"model": "m", "base_url": "b", "api_key": "k"}}})
+        assert cfg.store.kind == "json"
+        assert cfg.store.sqlite_path is None
+
+    def test_store_kind_sqlite(self):
+        cfg = AppConfig.from_dict({"engines": {"default": {"model": "m", "base_url": "b", "api_key": "k"}}, "store": {"kind": "sqlite", "root": "./ws", "sqlite_path": "/tmp/x.sqlite"}})
+        assert cfg.store.kind == "sqlite"
+        assert cfg.store.sqlite_path == "/tmp/x.sqlite"
+
+    def test_store_kind_invalid_rejected(self):
+        with pytest.raises(Exception):
+            AppConfig.from_dict({"engines": {"default": {"model": "m", "base_url": "b", "api_key": "k"}}, "store": {"kind": "redis"}})
+
     def test_from_dict_honors_env_overrides(self, monkeypatch):
         monkeypatch.setenv("TRX_RUNTIME__MAX_CONCURRENT_VIDEOS", "9")
         cfg = AppConfig.from_dict({})

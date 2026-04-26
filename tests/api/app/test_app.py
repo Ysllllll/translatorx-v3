@@ -150,6 +150,27 @@ class TestBuilderEnhancements:
         app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix()}})
         assert app.engine("default").config.model == "m"
 
+    def test_app_store_kind_json_returns_jsonfilestore(self, tmp_path: Path):
+        from adapters.storage.store import JsonFileStore
+
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix(), "kind": "json"}})
+        assert isinstance(app.store("course-x"), JsonFileStore)
+
+    def test_app_store_kind_sqlite_returns_sqlitestore(self, tmp_path: Path):
+        from adapters.storage.sqlite_store import SqliteStore
+
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix(), "kind": "sqlite"}})
+        assert isinstance(app.store("course-x"), SqliteStore)
+
+    def test_app_store_kind_sqlite_with_explicit_path(self, tmp_path: Path):
+        from adapters.storage.sqlite_store import SqliteStore
+
+        db = tmp_path / "custom.sqlite"
+        app = App.from_dict({"engines": {"default": {"model": "m", "base_url": "http://x/v1", "api_key": "k"}}, "store": {"root": (tmp_path / "ws").as_posix(), "kind": "sqlite", "sqlite_path": db.as_posix()}})
+        store = app.store("course-x")
+        assert isinstance(store, SqliteStore)
+        assert str(store.db_path) == db.as_posix()
+
     def test_app_from_yaml_string(self, tmp_path: Path):
         text = f"engines:\n  default:\n    model: m2\n    base_url: http://x/v1\n    api_key: k\nstore:\n  root: {(tmp_path / 'ws').as_posix()}\n"
         app = App.from_yaml(text)

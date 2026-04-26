@@ -84,8 +84,13 @@ class ContextEntry(BaseModel):
 class StoreConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["json"] = "json"
+    kind: Literal["json", "sqlite"] = "json"
     root: str = "./workspace"
+    sqlite_path: str | None = None
+    """Optional SQLite DB path (only used when ``kind='sqlite'``).
+
+    If unset, defaults to ``<root>/translatorx.sqlite``.
+    """
 
 
 class RuntimeConfig(BaseModel):

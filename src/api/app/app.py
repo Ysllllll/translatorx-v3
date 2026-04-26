@@ -17,6 +17,7 @@ from application.terminology import StaticTerms
 from application.translate import TranslationContext
 
 from application.config import AppConfig, EngineEntry
+from adapters.storage.sqlite_store import SqliteStore
 from adapters.storage.store import JsonFileStore, Store
 from adapters.storage.workspace import Workspace
 
@@ -118,8 +119,22 @@ class App:
         return Workspace(root=root, course=course)
 
     def store(self, course: str) -> Store:
-        """Return a :class:`JsonFileStore` bound to *course*."""
-        return JsonFileStore(self.workspace(course))
+        """Return a :class:`Store` bound to *course*.
+
+        Backend is selected from ``config.store.kind``:
+
+        * ``"json"`` → :class:`JsonFileStore` (default; debug-friendly)
+        * ``"sqlite"`` → :class:`SqliteStore` (experimental;
+          horizontal-scale-friendly, JSON blob per video)
+        """
+        ws = self.workspace(course)
+        kind = self._config.store.kind
+        if kind == "json":
+            return JsonFileStore(ws)
+        if kind == "sqlite":
+            db_path = self._config.store.sqlite_path
+            return SqliteStore(ws, db_path=db_path) if db_path else SqliteStore(ws)
+        raise ValueError(f"unsupported store.kind={kind!r}; expected 'json' or 'sqlite'")
 
     # -- preprocess factories --------------------------------------------
 
