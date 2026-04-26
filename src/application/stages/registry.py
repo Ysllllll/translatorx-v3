@@ -30,7 +30,11 @@ if TYPE_CHECKING:
 __all__ = ["make_default_registry"]
 
 
-def make_default_registry(app: "App | None" = None) -> StageRegistry:
+def make_default_registry(
+    app: "App | None" = None,
+    *,
+    discover_plugins: bool = False,
+) -> StageRegistry:
     """Build a registry with build/structure stages wired in.
 
     When ``app`` is supplied, structure stages (``punc``, ``chunk``)
@@ -38,6 +42,11 @@ def make_default_registry(app: "App | None" = None) -> StageRegistry:
     ``app.punc_restorer(language)`` / ``app.chunker(language)``. When
     ``app`` is ``None`` only the build tier and ``merge`` are
     registered (useful for tests that pre-process records manually).
+
+    When ``discover_plugins=True``, third-party stages registered via
+    the ``translatorx.pipeline.stages`` entry-point group are loaded
+    after the built-in stages (so plugins can override built-ins by
+    calling ``reg.unregister(name)`` first).
     """
 
     reg = StageRegistry()
@@ -79,6 +88,11 @@ def make_default_registry(app: "App | None" = None) -> StageRegistry:
             lambda params: _make_translate(app, params),
             params_schema=TranslateParams,
         )
+
+    if discover_plugins:
+        from application.pipeline.plugins import discover_stages
+
+        discover_stages(reg)
 
     return reg
 

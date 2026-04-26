@@ -3,6 +3,7 @@
 from .config import load_pipeline_dict, load_pipeline_yaml, parse_pipeline_yaml
 from .context import PipelineContext
 from .middleware import RetryMiddleware, TimingMiddleware, TracingMiddleware, compose
+from .plugins import PluginGroup, PluginLoadError, discover_stages, load_plugin
 from .noops import (
     AsyncioSemaphoreLimiter,
     ConcurrencyLimiter,
@@ -33,6 +34,8 @@ __all__ = [
     "PipelineCache",
     "PipelineContext",
     "PipelineRuntime",
+    "PluginGroup",
+    "PluginLoadError",
     "RetryMiddleware",
     "StageEntry",
     "StageFactory",
@@ -41,7 +44,9 @@ __all__ = [
     "TimingMiddleware",
     "TracingMiddleware",
     "compose",
+    "discover_stages",
     "load_pipeline_dict",
     "load_pipeline_yaml",
+    "load_plugin",
     "parse_pipeline_yaml",
 ]
