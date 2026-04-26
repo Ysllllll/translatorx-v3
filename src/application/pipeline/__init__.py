@@ -1,5 +1,6 @@
 """application.pipeline — Pipeline DSL runtime (Phase 1, Step 2)."""
 
+from .config import load_pipeline_dict, load_pipeline_yaml, parse_pipeline_yaml
 from .context import PipelineContext
 from .middleware import RetryMiddleware, TimingMiddleware, TracingMiddleware, compose
 from .noops import (
@@ -40,4 +41,7 @@ __all__ = [
     "TimingMiddleware",
     "TracingMiddleware",
     "compose",
+    "load_pipeline_dict",
+    "load_pipeline_yaml",
+    "parse_pipeline_yaml",
 ]
