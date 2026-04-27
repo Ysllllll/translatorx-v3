@@ -6,17 +6,22 @@ Endpoints
     * ``POST /api/pipelines/validate`` — validate a YAML body against the
       registry and return either ``{"ok": true}`` or a list of issues
 
+Tenant scoping (Phase 2 / Step B4):
+    Each principal carries an optional ``tenant``. By default a caller
+    sees their own tenant (plus globally-scoped pipelines). Admin
+    principals (whose tier name contains ``"admin"``) may override the
+    tenant via ``?tenant=`` and also use ``?tenant=*`` to view every
+    tenant's pipelines.
+
 Triggering a pipeline run is **not** included in this MVP — the existing
-``/api/courses/{course}/videos`` endpoint already covers that. A future
-``/api/pipelines/{name}/run`` endpoint will land alongside the tenant
-namespace work.
+``/api/courses/{course}/videos`` endpoint already covers that.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Request, status
+from fastapi import APIRouter, Body, HTTPException, Query, Request, status
 import yaml as _yaml
 
 from api.service.auth import Principal, RequirePrincipal
@@ -36,17 +41,53 @@ def _app(request: Request):
     return app
 
 
+def _is_admin(principal: Principal) -> bool:
+    return "admin" in principal.tier.name.lower()
+
+
+def _resolve_scope(principal: Principal, query_tenant: str | None) -> tuple[str | None, bool]:
+    """Resolve which catalog slice the caller should see.
+
+    Returns ``(tenant, include_all)`` ready to pass to
+    :meth:`api.app.App.pipelines`. Non-admin callers may not override
+    their own tenant — any explicit ``?tenant=`` is rejected.
+    """
+    if query_tenant is None:
+        return principal.tenant, False
+    if not _is_admin(principal):
+        if query_tenant != principal.tenant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="not allowed to inspect another tenant",
+            )
+        return principal.tenant, False
+    if query_tenant == "*":
+        return None, True
+    return query_tenant, False
+
+
 @router.get("")
-async def list_pipelines(request: Request, principal: Principal = RequirePrincipal) -> dict[str, Any]:
-    """List named pipelines configured on the App."""
-    catalog = _app(request).pipelines()
-    return {"pipelines": sorted(catalog.keys())}
+async def list_pipelines(
+    request: Request,
+    tenant: str | None = Query(None, description="Override tenant scope (admin only). Use '*' for all."),
+    principal: Principal = RequirePrincipal,
+) -> dict[str, Any]:
+    """List named pipelines configured on the App, scoped by tenant."""
+    scope_tenant, include_all = _resolve_scope(principal, tenant)
+    catalog = _app(request).pipelines(scope_tenant, include_all=include_all)
+    return {"pipelines": sorted(catalog.keys()), "tenant": scope_tenant if not include_all else "*"}
 
 
 @router.get("/{name}")
-async def get_pipeline(name: str, request: Request, principal: Principal = RequirePrincipal) -> dict[str, Any]:
-    """Return the raw pipeline dict for ``name``."""
-    catalog = _app(request).pipelines()
+async def get_pipeline(
+    name: str,
+    request: Request,
+    tenant: str | None = Query(None, description="Override tenant scope (admin only)."),
+    principal: Principal = RequirePrincipal,
+) -> dict[str, Any]:
+    """Return the raw pipeline dict for ``name`` within the caller's scope."""
+    scope_tenant, include_all = _resolve_scope(principal, tenant)
+    catalog = _app(request).pipelines(scope_tenant, include_all=include_all)
     if name not in catalog:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -61,12 +102,7 @@ async def validate_pipeline_body(
     payload: dict[str, Any] = Body(..., embed=False),
     principal: Principal = RequirePrincipal,
 ) -> dict[str, Any]:
-    """Validate a pipeline body against the App's stage registry.
-
-    The request body is either ``{"yaml": "..."}`` or a literal pipeline
-    dict (same shape accepted by the loader). Returns a structured report
-    instead of raising — easier for editor surfaces to consume.
-    """
+    """Validate a pipeline body against the App's stage registry."""
     if "yaml" in payload and len(payload) == 1:
         try:
             defn = parse_pipeline_yaml(str(payload["yaml"]))

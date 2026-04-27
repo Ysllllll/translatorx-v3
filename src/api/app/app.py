@@ -413,39 +413,87 @@ class App:
             self._registry = make_default_registry(self)
         return self._registry
 
-    def pipelines(self) -> dict[str, dict]:
+    def pipelines(self, tenant: str | None = None, *, include_all: bool = False) -> dict[str, dict]:
         """Return the discovered inline + on-disk named pipelines.
 
         Sources, in order (later wins):
 
         1. ``config.pipelines`` (inline dicts in YAML / dict config)
-        2. ``config.pipelines_dir/*.yaml`` — each file is parsed as a
-           pipeline; the file stem (or its inner ``name:`` field) is
+        2. ``config.pipelines_dir/*.yaml`` — each file at the root of the
+           directory; the file stem (or its inner ``name:`` field) is
            used as the catalog key.
+        3. ``config.pipelines_dir/{tenant}/*.yaml`` — per-tenant
+           sub-directories; the directory name is the tenant.
+
+        Tenant filtering (Phase 2 / Step B4):
+
+        * ``include_all=True`` — return everything regardless of tenant.
+          Used by admin views.
+        * ``tenant=None`` (default) — return only globally-scoped
+          entries (pipelines whose ``tenant`` field is missing/null and
+          which are not under a tenant sub-directory).
+        * ``tenant="acme"`` — return globals **plus** pipelines whose
+          tenant equals ``"acme"`` (either via the YAML top-level
+          ``tenant:`` field or the directory convention).
         """
         if self._pipelines is not None:
-            return self._pipelines
-        cat: dict[str, dict] = dict(self._config.pipelines)
+            cat = self._pipelines
+        else:
+            cat = self._discover_pipelines()
+            self._pipelines = cat
+        if include_all:
+            return {k: v for k, v in cat.items()}
+        out: dict[str, dict] = {}
+        for k, v in cat.items():
+            t = v.get("tenant") if isinstance(v, dict) else None
+            if t is None or t == tenant:
+                out[k] = v
+        return out
+
+    def _discover_pipelines(self) -> dict[str, dict]:
+        """Scan inline catalog + ``pipelines_dir`` (incl. tenant subdirs)."""
+        cat: dict[str, dict] = {}
+        for k, v in self._config.pipelines.items():
+            cat[k] = dict(v) if isinstance(v, dict) else v
         d = self._config.pipelines_dir
-        if d:
-            from pathlib import Path as _P
+        if not d:
+            return cat
+        from pathlib import Path as _P
 
-            import yaml as _yaml
+        import yaml as _yaml
 
-            base = _P(d).expanduser()
-            if not base.is_absolute():
-                base = _P(self._config.store.root).expanduser() / base
-            if base.is_dir():
-                for f in sorted(base.glob("*.yaml")):
-                    try:
-                        data = _yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-                    except _yaml.YAMLError:
-                        continue
-                    if not isinstance(data, dict):
-                        continue
-                    key = data.get("name") or f.stem
-                    cat[str(key)] = data
-        self._pipelines = cat
+        base = _P(d).expanduser()
+        if not base.is_absolute():
+            base = _P(self._config.store.root).expanduser() / base
+        if not base.is_dir():
+            return cat
+
+        # Root-level *.yaml — tenant taken from yaml top-level field (or None).
+        for f in sorted(base.glob("*.yaml")):
+            try:
+                data = _yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+            except _yaml.YAMLError:
+                continue
+            if not isinstance(data, dict):
+                continue
+            key = data.get("name") or f.stem
+            cat[str(key)] = data
+
+        # {tenant}/*.yaml — directory convention pins the tenant.
+        for sub in sorted(p for p in base.iterdir() if p.is_dir()):
+            tenant_name = sub.name
+            for f in sorted(sub.glob("*.yaml")):
+                try:
+                    data = _yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+                except _yaml.YAMLError:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                # Directory wins over yaml field for tenant binding.
+                data = dict(data)
+                data["tenant"] = tenant_name
+                key = data.get("name") or f.stem
+                cat[str(key)] = data
         return cat
 
     # -- hot reload (Phase 2 / Step B3) ----------------------------------

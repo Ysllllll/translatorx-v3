@@ -44,7 +44,9 @@ def from_app_config(app: "App") -> FastAPI:
     have to duplicate wiring.
     """
     svc = app.config.service
-    api_keys: dict[str, tuple[str, str]] = {key: (entry.user_id, entry.tier) for key, entry in svc.api_keys.items()}
+    api_keys: dict[str, tuple[str, str] | tuple[str, str, str | None]] = {
+        key: (entry.user_id, entry.tier, entry.tenant) for key, entry in svc.api_keys.items()
+    }
     rm: "ResourceManager"
     if svc.resource_backend == "redis":
         if not svc.redis_url:
@@ -87,7 +89,7 @@ def create_app(
     app: "App",
     *,
     resource_manager: "ResourceManager | None" = None,
-    api_keys: dict[str, tuple[str, str]] | None = None,
+    api_keys: dict[str, tuple[str, str] | tuple[str, str, str | None]] | None = None,
     tier_map: dict[str, UserTier] | None = None,
     task_manager_factory: Any | None = None,
 ) -> FastAPI:
@@ -108,11 +110,16 @@ def create_app(
     rm = resource_manager or InMemoryResourceManager()
     tier_resolver = dict(tier_map or DEFAULT_TIERS)
     auth_map: dict[str, Principal] = {}
-    for key, (user_id, tier_name) in (api_keys or {}).items():
+    for key, entry in (api_keys or {}).items():
+        if len(entry) == 2:
+            user_id, tier_name = entry
+            tenant = None
+        else:
+            user_id, tier_name, tenant = entry
         tier = tier_resolver.get(tier_name)
         if tier is None:
             raise ValueError(f"unknown tier {tier_name!r} for api_key mapping")
-        auth_map[key] = Principal(user_id=user_id, tier=tier)
+        auth_map[key] = Principal(user_id=user_id, tier=tier, tenant=tenant)
 
     @asynccontextmanager
     async def lifespan(api: FastAPI):

@@ -113,6 +113,11 @@ def pipeline_json_schema() -> dict[str, Any]:
         "properties": {
             "name": {"type": "string", "default": "pipeline"},
             "version": {"type": "integer", "minimum": 1, "default": 1},
+            "tenant": {
+                "type": ["string", "null"],
+                "description": "Optional tenant scope. Pipelines without a tenant are global.",
+                "default": None,
+            },
             "defaults": {
                 "type": "object",
                 "description": "Variable defaults for {{ placeholder }} substitution.",

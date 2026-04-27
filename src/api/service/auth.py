@@ -23,6 +23,7 @@ class Principal:
 
     user_id: str
     tier: UserTier
+    tenant: str | None = None
 
 
 def _unauthorized(detail: str) -> HTTPException:

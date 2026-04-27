@@ -226,6 +226,7 @@ class AuthKeyEntry(BaseModel):
 
     user_id: str
     tier: str = "free"
+    tenant: str | None = None
 
 
 class ServiceConfig(BaseModel):
