@@ -9,14 +9,8 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from domain.model import SentenceRecord
 
-from application.orchestrator.course import CourseOrchestrator, CourseResult, VideoSpec
-from application.processors.align import AlignProcessor
-from application.processors.summary import SummaryProcessor
-from application.processors.translate import TranslateProcessor
-from application.processors.tts import TTSProcessor
-from ports.source import Source, VideoKey
-from adapters.sources.srt import SrtSource
-from adapters.sources.whisperx import WhisperXSource
+from application.orchestrator.course import CourseResult
+from ports.source import VideoKey  # noqa: F401  (kept for potential future use)
 
 if TYPE_CHECKING:
     from api.app.app import App
@@ -242,125 +236,101 @@ class CourseBuilder:
         if self._translate is None:
             raise ValueError("CourseBuilder.run() requires .translate(...) stage")
 
+        import asyncio
+        import time
+
+        from api.app.video import VideoBuilder
+
         t = self._translate
 
         # Resolve source language: explicit src > video-level language > auto-detect from first video
         src_lang = t.src
         if not src_lang:
-            # Try video-level language from the first video
             first = self._videos[0]
             if first.language:
                 src_lang = first.language
             else:
                 src_lang = _detect_language_from_file(first.path, first.kind)
 
-        # Preprocess config (shared across all target languages)
-        pcfg = self.app.config.preprocess
+        # Pre-flight TTS backend availability (matches VideoBuilder.run() behaviour
+        # but raised once, before any worker spins up).
+        if self._tts is not None:
+            backend = self.app.tts_backend(library=self._tts.library)
+            if backend is None:
+                raise ValueError("CourseBuilder.tts() requires config.tts.library or an explicit library= argument")
+
+        max_concurrent = self.app.config.runtime.max_concurrent_videos
+        sem = asyncio.Semaphore(max_concurrent)
 
         result: CourseResult | None = None
 
         for tgt_lang in t.tgt:
-            engine = self._meter(self.app.engine(t.engine_name))
-            ctx = self.app.context(src_lang, tgt_lang)
-            checker = self.app.checker(src_lang, tgt_lang)
-            store = self.app.store(self.course)
 
-            def factory(
-                _engine=engine,
-                _checker=checker,
-                _src=src_lang,
-                _tgt=tgt_lang,
-            ) -> Sequence[Any]:
-                procs: list[Any] = []
-                if self._summary is not None:
-                    sum_engine = self._meter(self.app.engine(self._summary.engine_name))
-                    procs.append(
-                        SummaryProcessor(
-                            sum_engine,
-                            source_lang=_src,
-                            target_lang=_tgt,
+            async def _run_one(
+                v: _CourseVideoEntry,
+                _tgt: str = tgt_lang,
+            ) -> tuple[str, VideoResult | BaseException]:
+                async with sem:
+                    vid_lang = v.language or src_lang
+                    vb: VideoBuilder = (
+                        self.app.video(course=self.course, video=v.video)
+                        .source(
+                            v.path,
+                            language=vid_lang,
+                            kind=v.kind,
+                        )
+                        .translate(src=vid_lang, tgt=_tgt, engine=t.engine_name)
+                    )
+                    if self._summary is not None:
+                        vb = vb.summary(
+                            engine=self._summary.engine_name,
                             window_words=self._summary.window_words,
                         )
-                    )
-                procs.append(
-                    TranslateProcessor(
-                        _engine,
-                        _checker,
-                    )
-                )
-                if self._align is not None:
-                    align_engine = self._meter(self.app.engine(self._align.engine_name))
-                    procs.append(
-                        AlignProcessor(
-                            align_engine,
-                            source_lang=_src,
-                            enable_text_mode=self._align.enable_text_mode,
-                            json_norm_ratio=self._align.json_norm_ratio,
-                            json_accept_ratio=self._align.json_accept_ratio,
-                            text_norm_ratio=self._align.text_norm_ratio,
-                            text_accept_ratio=self._align.text_accept_ratio,
-                            rearrange_chunk_len=self._align.rearrange_chunk_len,
+                    if self._align is not None:
+                        a = self._align
+                        vb = vb.align(
+                            engine=a.engine_name,
+                            enable_text_mode=a.enable_text_mode,
+                            json_norm_ratio=a.json_norm_ratio,
+                            json_accept_ratio=a.json_accept_ratio,
+                            text_norm_ratio=a.text_norm_ratio,
+                            text_accept_ratio=a.text_accept_ratio,
+                            rearrange_chunk_len=a.rearrange_chunk_len,
                         )
-                    )
-                if self._tts is not None:
-                    backend = self.app.tts_backend(library=self._tts.library)
-                    if backend is None:
-                        raise ValueError("CourseBuilder.tts() requires config.tts.library or an explicit library= argument")
-                    voice_picker = self.app.voice_picker(_tgt)
-                    tts_cfg = self.app.config.tts
-                    procs.append(
-                        TTSProcessor(
-                            backend,
-                            voice_picker=voice_picker,
-                            default_voice=self._tts.voice or tts_cfg.default_voice or None,
-                            format=self._tts.format or tts_cfg.format,
-                            rate=self._tts.rate if self._tts.rate is not None else tts_cfg.rate,
+                    if self._tts is not None:
+                        tt = self._tts
+                        vb = vb.tts(
+                            library=tt.library,
+                            voice=tt.voice,
+                            format=tt.format,
+                            rate=tt.rate,
                         )
-                    )
-                return procs
+                    if self._error_reporter is not None:
+                        vb = vb.with_error_reporter(self._error_reporter)
+                    if self._usage_sink is not None:
+                        vb = vb.with_usage_sink(self._usage_sink)
+                    try:
+                        vres = await vb.run()
+                    except asyncio.CancelledError:
+                        raise
+                    except BaseException as e:  # noqa: BLE001
+                        return v.video, e
+                    return v.video, vres
 
-            specs: list[VideoSpec] = []
-            for v in self._videos:
-                vk = VideoKey(course=self.course, video=v.video)
-                vid_lang = v.language or src_lang
-                preprocess_kw = dict(
-                    restore_punc=self.app.punc_restorer(vid_lang),
-                    punc_position=pcfg.punc_position,
-                    chunk_llm=self.app.chunker(vid_lang),
-                    merge_under=pcfg.merge_under,
-                    max_len=pcfg.max_len,
-                )
-                if v.kind == "srt":
-                    src_obj: Source = SrtSource(
-                        v.path,
-                        language=vid_lang,
-                        store=store,
-                        video_key=vk,
-                        **preprocess_kw,
-                    )
-                elif v.kind == "whisperx":
-                    src_obj = WhisperXSource(
-                        v.path,
-                        language=vid_lang,
-                        store=store,
-                        video_key=vk,
-                        **preprocess_kw,
-                    )
-                else:
-                    raise ValueError(f"unknown source kind: {v.kind!r}")
-                specs.append(VideoSpec(video=v.video, source=src_obj))
+            start = time.monotonic()
+            tasks = [asyncio.create_task(_run_one(v)) for v in self._videos]
+            try:
+                gathered = await asyncio.gather(*tasks, return_exceptions=False)
+            except asyncio.CancelledError:
+                for tk in tasks:
+                    tk.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                raise
 
-            orch = CourseOrchestrator(
-                store=store,
-                ctx=ctx,
-                processors_factory=factory,
-                error_reporter=self._error_reporter,
-                max_concurrent_videos=self.app.config.runtime.max_concurrent_videos,
-                event_bus=self.app.event_bus,
-                flush_every=self.app.config.runtime.flush_every,
-                flush_interval_s=self.app.config.runtime.flush_interval_s,
+            result = CourseResult(
+                videos=tuple(gathered),
+                elapsed_s=time.monotonic() - start,
             )
-            result = await orch.run(specs)
 
         assert result is not None  # at least one tgt guaranteed
         return result
