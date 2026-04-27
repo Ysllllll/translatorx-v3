@@ -7,14 +7,50 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Sequence
 
+from application.orchestrator.video import VideoResult
 from domain.model import SentenceRecord
-
-from application.orchestrator.course import CourseResult
+from ports.errors import ErrorInfo
 from ports.source import VideoKey  # noqa: F401  (kept for potential future use)
 
 if TYPE_CHECKING:
     from api.app.app import App
     from ports.errors import ErrorReporter
+
+
+@dataclass(frozen=True)
+class CourseResult:
+    """Aggregated outcome of a :meth:`CourseBuilder.run` batch.
+
+    Attributes
+    ----------
+    videos:
+        Ordered tuple of ``(video_key, outcome)`` where outcome is
+        either a :class:`VideoResult` on success or a
+        :class:`BaseException` on failure (failure isolation).
+    elapsed_s:
+        Wall-clock seconds for the batch.
+    """
+
+    videos: tuple[tuple[str, "VideoResult | BaseException"], ...]
+    elapsed_s: float
+
+    # -- derived views ---------------------------------------------------
+
+    @property
+    def succeeded(self) -> tuple[tuple[str, VideoResult], ...]:
+        return tuple((k, v) for k, v in self.videos if isinstance(v, VideoResult))
+
+    @property
+    def failed_videos(self) -> tuple[tuple[str, BaseException], ...]:
+        return tuple((k, v) for k, v in self.videos if isinstance(v, BaseException))
+
+    @property
+    def all_errors(self) -> tuple[ErrorInfo, ...]:
+        """Every :class:`ErrorInfo` harvested across successful videos."""
+        out: list[ErrorInfo] = []
+        for _, res in self.succeeded:
+            out.extend(res.failed)
+        return tuple(out)
 
 
 @dataclass(frozen=True)

@@ -6,8 +6,9 @@ Design refs
   ``AsyncIterator[In] -> AsyncIterator[Out]``. Its job is to compute an
   output for each input item. It does **not** manage stream state.
 * **D-002**: Stream state (id allocation, stale tracking, reprocess) lives
-  in :class:`runtime.stream.RecordStream` / ``StreamingOrchestrator``
-  (Stage 4), not here.
+  in :class:`api.app.stream.LiveStreamHandle` (live mode) and
+  :class:`application.pipeline.runtime.PipelineRuntime` (batch mode),
+  not here.
 * **D-003**: Processors expose an optional ``output_is_stale(rec)`` hook so
   the stream layer can ask "is this output obsolete?" without knowing the
   processor's internals.
@@ -60,7 +61,7 @@ class VideoKey:
 
 
 class Priority(IntEnum):
-    """Queue priority for :class:`StreamingOrchestrator` (D-060).
+    """Queue priority for :class:`api.app.stream.LiveStreamHandle` (D-060).
 
     Lower numeric value = higher priority (IntEnum ordering). ``HIGH``
     is reserved for user-visible interactions such as *seek* targets in

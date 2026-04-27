@@ -199,8 +199,7 @@ class PipelineRuntime:
         """
         if defn.structure:
             raise ValueError(
-                "PipelineRuntime.stream() does not support structure stages — "
-                "live pipelines must use record-only enrich chains.",
+                "PipelineRuntime.stream() does not support structure stages — live pipelines must use record-only enrich chains.",
             )
         token = cancel or ctx.cancel
 

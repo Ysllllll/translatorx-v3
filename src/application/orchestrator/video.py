@@ -11,17 +11,17 @@ Design refs
 * **D-045**: On cancellation the orchestrator awaits each processor's
   ``aclose`` inside a shielded ``finally`` block so buffered writes are
   never lost.
-* **D-060**: :class:`StreamingOrchestrator` builds on top of
-  :class:`PushQueueSource` + :class:`asyncio.PriorityQueue` to support
-  ``feed(seg, priority)`` and ``seek(t)``.
 
 Result types
 ------------
 :meth:`VideoOrchestrator.run` returns a :class:`VideoResult` aggregating
 translated records, encountered failures, elapsed time, and stale-ids
 reported by downstream processors (so callers can drive
-:meth:`reprocess`). :meth:`StreamingOrchestrator.run` is an async
-generator yielding records as soon as processors emit them.
+:meth:`reprocess`).
+
+Live (push-driven) execution lives in :class:`api.app.stream.LiveStreamHandle`,
+which composes :class:`PipelineRuntime.stream` over a
+:class:`PushQueueSource`.
 """
 
 from __future__ import annotations
@@ -33,13 +33,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, AsyncIterator, Sequence
 
 from application.translate import TranslationContext
-from domain.model import SentenceRecord, Segment
+from domain.model import SentenceRecord
 
 from application.observability.progress import ProgressCallback, ProgressEvent
 from application.orchestrator.session import VideoSession
 from ports.errors import ErrorInfo, ErrorReporter
-from ports.source import Priority, Processor, Source, VideoKey
-from adapters.sources.push import PushQueueSource
+from ports.source import Processor, Source, VideoKey
 from adapters.storage.store import Store
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -296,204 +295,7 @@ class VideoOrchestrator:
         )
 
 
-# ---------------------------------------------------------------------------
-# StreamingOrchestrator (live / browser-plugin mode)
-# ---------------------------------------------------------------------------
-
-
-_PUMP_SENTINEL = object()
-
-
-class StreamingOrchestrator:
-    """Priority-queue driven orchestrator for live streams (D-060).
-
-    Semantics
-    ---------
-    * :meth:`feed` enqueues a raw :class:`Segment` with an optional
-      :class:`Priority`. A background pump task drains the priority
-      queue and forwards segments into an internal
-      :class:`PushQueueSource` that backs the processor chain.
-    * :meth:`seek` takes a playback position and re-orders the pending
-      priority queue by ``abs(segment.start - t)`` within each priority
-      tier, so in-flight work is redirected toward the viewer's focus.
-    * :meth:`close` stops accepting new items and flushes remaining
-      buffers; :meth:`run` is an async generator that completes when
-      the chain drains after close.
-    * On cancellation the pump task is cancelled and every processor's
-      ``aclose`` is shielded (D-045).
-
-    Reprocess / stale-triggered rerun is deferred to the App layer —
-    it is expected to re-:meth:`feed` the underlying segments with
-    :attr:`Priority.HIGH`. Processor fingerprinting (D-043) ensures
-    skip-on-match on the retranslate path.
-    """
-
-    def __init__(
-        self,
-        *,
-        language: str,
-        processors: Sequence[Processor[SentenceRecord, SentenceRecord]],
-        ctx: TranslationContext,
-        store: Store,
-        video_key: VideoKey,
-        split_by_speaker: bool = False,
-        id_start: int = 0,
-        error_reporter: ErrorReporter | None = None,
-        event_bus: "EventBus | None" = None,
-        flush_every: int | float = float("inf"),
-        flush_interval_s: float = float("inf"),
-    ) -> None:
-        if not processors:
-            raise ValueError("processors must not be empty")
-        self._processors = tuple(processors)
-        self._ctx = ctx
-        self._store = store
-        self._video_key = video_key
-        self._error_reporter = error_reporter
-        self._event_bus = event_bus
-        self._flush_every = flush_every
-        self._flush_interval_s = flush_interval_s
-
-        self._source = PushQueueSource(language, split_by_speaker=split_by_speaker, id_start=id_start)
-        self._pq: asyncio.PriorityQueue = asyncio.PriorityQueue()
-        self._seq = 0
-        self._closed = False
-        self._pump_task: asyncio.Task | None = None
-        self._failed: list[ErrorInfo] = []
-        self._started = False
-        self._session: VideoSession | None = None
-
-    # ---- public API --------------------------------------------------
-
-    async def feed(self, segment: Segment, *, priority: Priority = Priority.NORMAL) -> None:
-        """Push a segment onto the priority queue."""
-        if self._closed:
-            raise RuntimeError("StreamingOrchestrator is closed")
-        self._seq += 1
-        await self._pq.put((int(priority), self._seq, segment))
-
-    async def seek(self, t: float) -> None:
-        """Re-sort pending queue by distance to playback position *t*.
-
-        Items in a higher priority class still outrank lower ones.
-        Within the same priority tier, items closer to ``t`` come first.
-        Sentinel (close) items are preserved at the tail.
-        """
-        items: list[tuple[int, int, object]] = []
-        while not self._pq.empty():
-            items.append(self._pq.get_nowait())
-
-        def score(it):
-            prio, seq, seg = it
-            if seg is _PUMP_SENTINEL or not isinstance(seg, Segment):
-                return (prio, float("inf"), seq)
-            return (prio, abs(seg.start - t), seq)
-
-        items.sort(key=score)
-        # Re-enqueue with fresh sequence numbers so the PriorityQueue
-        # preserves the sorted order (it ties-breaks by the tuple's
-        # second element, which is the sequence).
-        for prio, _old_seq, seg in items:
-            self._seq += 1
-            await self._pq.put((prio, self._seq, seg))
-
-    async def close(self) -> None:
-        """Signal end-of-stream; the pump will flush and terminate."""
-        if self._closed:
-            return
-        self._closed = True
-        self._seq += 1
-        # Sentinel has the lowest priority so genuine items drain first.
-        await self._pq.put((Priority.LOW + 1000, self._seq, _PUMP_SENTINEL))
-
-    @property
-    def failed(self) -> tuple[ErrorInfo, ...]:
-        """Errors collected so far during :meth:`run`."""
-        return tuple(self._failed)
-
-    async def run(self) -> AsyncIterator[SentenceRecord]:
-        """Async generator: yield records as processors emit them.
-
-        Caller concurrently awaits :meth:`feed` / :meth:`seek` /
-        :meth:`close`. Terminates after :meth:`close` has been called
-        and the pipeline drains.
-        """
-        if self._started:
-            raise RuntimeError("StreamingOrchestrator.run may only be called once")
-        self._started = True
-
-        self._pump_task = asyncio.create_task(self._pump(), name="streamorch-pump")
-        self._session = await VideoSession.load(
-            self._store,
-            self._video_key,
-            flush_every=self._flush_every,
-            flush_interval_s=self._flush_interval_s,
-            event_bus=self._event_bus,
-        )
-        wrap = _make_wrapper(self._ctx, self._store, self._video_key, self._failed, self._error_reporter, self._session)
-
-        if self._event_bus is not None:
-            from application.events import stage_started
-
-            await self._event_bus.publish(stage_started("stream", self._video_key.course, self._video_key.video))
-        success = False
-        try:
-            stream: AsyncIterator[SentenceRecord] = self._source.read()
-            for proc in self._processors:
-                stream = wrap(stream, proc)
-            async for rec in stream:
-                yield rec
-            success = True
-        finally:
-            if self._pump_task is not None and not self._pump_task.done():
-                self._pump_task.cancel()
-                try:
-                    await asyncio.shield(self._pump_task)
-                except (asyncio.CancelledError, BaseException):
-                    pass
-            if self._session is not None:
-                await asyncio.shield(self._session.flush(self._store))
-            if self._event_bus is not None:
-                from application.events import stage_finished
-
-                await self._event_bus.publish(
-                    stage_finished(
-                        "stream",
-                        self._video_key.course,
-                        self._video_key.video,
-                        status="completed" if success else "failed",
-                    )
-                )
-
-    # ---- internals ---------------------------------------------------
-
-    async def _pump(self) -> None:
-        """Drain the priority queue into the underlying PushQueueSource."""
-        try:
-            while True:
-                _, _, item = await self._pq.get()
-                if item is _PUMP_SENTINEL:
-                    await self._source.close()
-                    return
-                assert isinstance(item, Segment)
-                await self._source.feed(item)
-        except asyncio.CancelledError:
-            # Cancellation path — make sure downstream can terminate.
-            with _suppress():
-                await self._source.close()
-            raise
-
-
-class _suppress:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return True
-
-
 __all__ = [
-    "StreamingOrchestrator",
     "VideoOrchestrator",
     "VideoResult",
 ]
