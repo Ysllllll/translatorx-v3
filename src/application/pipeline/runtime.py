@@ -11,6 +11,13 @@ Responsibilities (Phase 1):
 5. Drain the final iterator into ``records``, package
    :class:`PipelineResult`, run cleanups under :class:`CancelScope`.
 
+Phase 3 streaming addition (:meth:`stream`): insert a
+:class:`MemoryChannel` between every adjacent pair (source/enrich[i]
+and enrich[i]/enrich[i+1]) so a slow downstream stage applies
+back-pressure on the upstream producer task instead of letting an
+unbounded buffer accumulate. Each pump task closes the next channel
+on completion / failure so consumers terminate cleanly.
+
 Each *atomic* stage operation (``Source.open``, ``Subtitle.apply``,
 ``Record.transform`` setup) is onion-wrapped through the configured
 :class:`~ports.middleware.Middleware` chain (Step 3).
@@ -18,10 +25,13 @@ Each *atomic* stage operation (``Source.open``, ``Subtitle.apply``,
 
 from __future__ import annotations
 
+import asyncio
 import time
+from contextlib import suppress
 from typing import Any, AsyncIterator
 
 from domain.model import SentenceRecord
+from ports.backpressure import ChannelConfig
 from ports.cancel import CancelScope, CancelToken
 from ports.errors import ErrorInfo
 from ports.middleware import Middleware
@@ -35,6 +45,7 @@ from ports.pipeline import (
 )
 from ports.stage import RecordStage, SourceStage, StageStatus, SubtitleStage
 
+from .channels import MemoryChannel
 from .context import PipelineContext
 from .middleware import compose
 from .registry import DEFAULT_REGISTRY, StageRegistry
@@ -50,16 +61,18 @@ async def _replay(items: list[SentenceRecord]) -> AsyncIterator[SentenceRecord]:
 class PipelineRuntime:
     """Executes a :class:`PipelineDef` against a :class:`PipelineContext`."""
 
-    __slots__ = ("_registry", "_middlewares")
+    __slots__ = ("_registry", "_middlewares", "_default_channel_config")
 
     def __init__(
         self,
         registry: StageRegistry | None = None,
         *,
         middlewares: list[Middleware] | None = None,
+        default_channel_config: ChannelConfig | None = None,
     ) -> None:
         self._registry = registry or DEFAULT_REGISTRY
         self._middlewares: list[Middleware] = list(middlewares or [])
+        self._default_channel_config = default_channel_config
 
     async def run(
         self,
@@ -189,38 +202,63 @@ class PipelineRuntime:
     ) -> AsyncIterator[SentenceRecord]:
         """Async-generator variant of :meth:`run` for live pipelines.
 
-        Yields each :class:`SentenceRecord` as it falls out of the final
-        enrich stage instead of accumulating into a
-        :class:`PipelineResult`. ``structure`` stages are not supported
-        (live pipelines don't full-collect), and stage failures during
-        the drain raise the original exception. The middleware chain
-        still wraps ``Source.open`` and each ``RecordStage`` setup, so
-        ``stage.started`` / ``stage.finished`` events are emitted.
+        Every adjacent pair of stages communicates through a
+        :class:`MemoryChannel`, so a slow downstream stage applies
+        back-pressure on the upstream producer instead of letting the
+        buffer grow unbounded. ``structure`` stages are not supported
+        (live pipelines don't full-collect); per-stage channel config
+        overrides land in C4.
         """
         if defn.structure:
             raise ValueError(
                 "PipelineRuntime.stream() does not support structure stages — live pipelines must use record-only enrich chains.",
             )
         token = cancel or ctx.cancel
+        default_cfg = self._default_channel_config or ChannelConfig()
+        pump_tasks: list[asyncio.Task[None]] = []
 
         async with CancelScope(token) as scope:
             source: SourceStage = self._registry.build(defn.build)  # type: ignore[assignment]
             await self._call(defn.build, ctx, lambda: source.open(ctx))
-            stream = source.stream(ctx)
+            upstream: AsyncIterator[SentenceRecord] = source.stream(ctx)
             scope.push_cleanup(source.close)
 
             for sdef in defn.enrich:
                 rstage: RecordStage = self._registry.build(sdef)  # type: ignore[assignment]
-                stream = await self._call(
+                ch: MemoryChannel[SentenceRecord] = MemoryChannel(
+                    default_cfg,
+                    name=sdef.id or sdef.name,
+                )
+                pump_tasks.append(asyncio.create_task(_pump(upstream, ch)))
+                scope.push_cleanup(ch.close)
+                upstream = await self._call(
                     sdef,
                     ctx,
-                    lambda s=rstage, up=stream: _transform_async(s, up, ctx),
+                    lambda s=rstage, up=ch: _transform_async(s, up, ctx),
                 )
 
-            async for rec in stream:
-                if token.cancelled:
-                    return
-                yield rec
+            try:
+                async for rec in upstream:
+                    if token.cancelled:
+                        break
+                    yield rec
+            finally:
+                # Cancel any still-running pumps; surface the *first*
+                # non-cancellation error so failures aren't silently
+                # swallowed by the channel-closed-clean-EOF path.
+                for t in pump_tasks:
+                    if not t.done():
+                        t.cancel()
+                first_exc: BaseException | None = None
+                for t in pump_tasks:
+                    with suppress(asyncio.CancelledError):
+                        try:
+                            await t
+                        except BaseException as exc:
+                            if first_exc is None and not isinstance(exc, asyncio.CancelledError):
+                                first_exc = exc
+                if first_exc is not None and not token.cancelled:
+                    raise first_exc
 
     async def _call(
         self,
@@ -252,6 +290,24 @@ async def _transform_async(
     """
 
     return stage.transform(upstream, ctx)
+
+
+async def _pump(
+    src: AsyncIterator[SentenceRecord],
+    ch: MemoryChannel[SentenceRecord],
+) -> None:
+    """Forward every item from ``src`` into ``ch`` and close on exit.
+
+    Closing in ``finally`` covers normal completion, source exception,
+    and pump cancellation — the downstream stage always sees a clean
+    end-of-stream and can shut its own pump in turn.
+    """
+
+    try:
+        async for item in src:
+            await ch.send(item)
+    finally:
+        ch.close()
 
 
 def _to_error_info(stage_name: str, exc: BaseException) -> ErrorInfo:
