@@ -11,6 +11,7 @@ subscribe via :meth:`EventBus.subscribe` for SSE / WebSocket / audit.
 from .bus import EventBus, Subscription
 from .types import (
     DomainEvent,
+    channel_event,
     course_metadata_patched,
     stage_finished,
     stage_started,
@@ -23,6 +24,7 @@ __all__ = [
     "DomainEvent",
     "EventBus",
     "Subscription",
+    "channel_event",
     "course_metadata_patched",
     "stage_finished",
     "stage_started",

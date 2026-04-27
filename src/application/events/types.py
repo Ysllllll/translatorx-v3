@@ -194,6 +194,49 @@ def stage_finished(
     return DomainEvent(type="stage.finished", course=course, video=video, payload=payload)
 
 
+def channel_event(
+    event: str,
+    course: str,
+    video: str | None,
+    *,
+    stage_id: str,
+    stage: str,
+    capacity: int,
+    filled: int,
+    sent: int,
+    received: int,
+    dropped: int,
+    high_watermark_hits: int,
+    closed: bool,
+) -> DomainEvent:
+    """Build a Phase 3 streaming back-pressure event.
+
+    ``event`` is one of ``"high_watermark"`` / ``"low_watermark"`` /
+    ``"dropped"`` / ``"closed"`` and is encoded into the
+    ``channel.<event>`` event type. The payload carries a snapshot of
+    ``ChannelStats`` plus the downstream stage identity so a
+    JSONL reporter or live UI can render back-pressure timelines.
+    """
+
+    return DomainEvent(
+        type=f"channel.{event}",
+        course=course,
+        video=video,
+        payload={
+            "stage_id": stage_id,
+            "stage": stage,
+            "event": event,
+            "capacity": capacity,
+            "filled": filled,
+            "sent": sent,
+            "received": received,
+            "dropped": dropped,
+            "high_watermark_hits": high_watermark_hits,
+            "closed": closed,
+        },
+    )
+
+
 __all__ = [
     "DomainEvent",
     "video_records_patched",
@@ -202,4 +245,5 @@ __all__ = [
     "course_metadata_patched",
     "stage_started",
     "stage_finished",
+    "channel_event",
 ]

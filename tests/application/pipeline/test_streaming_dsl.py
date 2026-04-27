@@ -174,7 +174,7 @@ class TestRuntimeHonorsPerStageChannel:
         captured: list[ChannelConfig] = []
         original_init = MemoryChannel.__init__
 
-        def _spy_init(self, config, *, name=""):
+        def _spy_init(self, config, *, name="", on_watermark=None):
             captured.append(config)
             return original_init(self, config, name=name)
 

@@ -231,9 +231,11 @@ class PipelineRuntime:
                 # enrich stage. Falls back to runtime default.
                 upstream_def = defn.build if i == 0 else defn.enrich[i - 1]
                 ch_cfg = upstream_def.downstream_channel or default_cfg
+                stage_id = sdef.id or sdef.name
                 ch: MemoryChannel[SentenceRecord] = MemoryChannel(
                     ch_cfg,
-                    name=sdef.id or sdef.name,
+                    name=stage_id,
+                    on_watermark=_make_channel_emitter(ctx, stage_id, sdef.name),
                 )
                 pump_tasks.append(asyncio.create_task(_pump(upstream, ch)))
                 scope.push_cleanup(ch.close)
@@ -314,6 +316,58 @@ async def _pump(
             await ch.send(item)
     finally:
         ch.close()
+
+
+def _make_channel_emitter(
+    ctx: PipelineContext,
+    stage_id: str,
+    stage_name: str,
+):
+    """Build the ``on_watermark`` callback that publishes a
+    :class:`DomainEvent` to ``ctx.event_bus`` for every back-pressure
+    transition (high/low/dropped/closed).
+
+    The emitter is a sync function (matches MemoryChannel's contract).
+    Construction errors / publish failures are silently swallowed —
+    observability must never break the data path.
+    """
+
+    bus = ctx.event_bus
+    publish = getattr(bus, "publish_nowait", None)
+    if publish is None:
+        return None
+
+    try:
+        from application.events import channel_event  # local import — avoid hot deps
+    except Exception:  # pragma: no cover — events import is reliable
+        return None
+
+    course_obj = getattr(ctx.session, "video_key", None)
+    course = getattr(course_obj, "course", "") or ""
+    video = getattr(course_obj, "video", None)
+
+    def _emit(event, stats) -> None:  # type: ignore[no-untyped-def]
+        try:
+            publish(
+                channel_event(
+                    event,
+                    course,
+                    video,
+                    stage_id=stage_id,
+                    stage=stage_name,
+                    capacity=stats.capacity,
+                    filled=stats.filled,
+                    sent=stats.sent,
+                    received=stats.received,
+                    dropped=stats.dropped,
+                    high_watermark_hits=stats.high_watermark_hits,
+                    closed=stats.closed,
+                ),
+            )
+        except Exception:
+            pass
+
+    return _emit
 
 
 def _to_error_info(stage_name: str, exc: BaseException) -> ErrorInfo:
