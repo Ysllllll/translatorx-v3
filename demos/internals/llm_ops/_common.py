@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from _print import banner as _banner, step as _step  # noqa: E402
+
 from api import trx
 from application.checker import CheckReport, Severity
 from application.translate import ContextWindow
@@ -28,14 +30,13 @@ def truncate(text: str, limit: int = 120) -> str:
 
 
 def header(title: str) -> None:
-    print("\n" + SEP)
-    print(title)
-    print(SEP)
+    """Major heading — delegates to demos._print for unified styling."""
+    _banner(title)
 
 
 def sub(title: str) -> None:
-    print("\n" + SUB)
-    print(f"  {title}")
+    """Sub-section heading — delegates to demos._print.step()."""
+    _step("·", title)
 
 
 def print_messages(messages: list[Message], *, limit: int = 120) -> None:

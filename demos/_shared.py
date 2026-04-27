@@ -170,9 +170,24 @@ def truncate(s: str, n: int = 80) -> str:
 
 
 def step(label: str, title: str, expected: str) -> None:
-    console.print()
-    console.print(Rule(f"[bold cyan]{label}[/bold cyan] — [bold]{title}[/bold]", style="cyan"))
-    console.print(f"[dim]{expected}[/dim]")
+    """Render a step rule. Delegates to demos._print for unified styling."""
+    from _print import step as _print_step  # noqa: PLC0415
+
+    _print_step(label, title, expected)
+
+
+def section(label: str, title: str) -> None:
+    """Major section heading — delegates to demos._print.section()."""
+    from _print import section as _print_section  # noqa: PLC0415
+
+    _print_section(label, title)
+
+
+def banner(text: str) -> None:
+    """Top-of-demo banner — delegates to demos._print.banner()."""
+    from _print import banner as _print_banner  # noqa: PLC0415
+
+    _print_banner(text)
 
 
 def render_records(label: str, records: list[SentenceRecord], *, language: str | None = None) -> None:
