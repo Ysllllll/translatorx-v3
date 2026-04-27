@@ -66,11 +66,14 @@ class WsSegment(BaseModel):
 
 
 class WsAudioChunk(BaseModel):
-    """Push a raw audio chunk (base64 encoded). The current K-stage
-    does **not** decode audio in the protocol layer — this is a
-    transport-only envelope. Stages that need transcription consume
-    these chunks themselves; stages that don't will reject the frame
-    with :class:`WsError` (``category="unsupported_frame"``).
+    """**Reserved (Phase 7).** Push a raw audio chunk (base64 encoded).
+
+    The current Phase-4/K stage does **not** decode audio in the protocol
+    layer — this is a transport-only envelope. Stages that need
+    transcription consume these chunks themselves. As of HEAD, the
+    reference :class:`WsSession` always replies with
+    :class:`WsError` (``category="unsupported_frame"``) for this frame
+    type; wiring it to a live transcribe stage is part of Phase 7.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -82,9 +85,12 @@ class WsAudioChunk(BaseModel):
 
 
 class WsConfigUpdate(BaseModel):
-    """Mid-stream config patch — e.g. swap target language, change
-    glossary, tweak overflow policy. Server may reject (``WsError``)
-    or apply (no ack frame; the next ``WsFinal`` reflects the change).
+    """**Reserved (Phase 7).** Mid-stream config patch — e.g. swap target
+    language, change glossary, tweak overflow policy.
+
+    The frame schema is locked but :class:`WsSession` currently replies
+    with :class:`WsError` (``category="unsupported_frame"``). Real
+    handling lands in Phase 7 alongside :class:`WsPartial` streaming.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -135,9 +141,13 @@ class WsStarted(BaseModel):
 
 
 class WsPartial(BaseModel):
-    """Intermediate per-stage output — e.g. punctuation-restored
-    source text before translation, or a translation candidate before
-    the checker has approved it.
+    """**Reserved (Phase 7).** Intermediate per-stage output — e.g.
+    punctuation-restored source text before translation, or a translation
+    candidate before the checker has approved it.
+
+    The frame schema is locked, but :class:`WsSession` does not currently
+    emit ``partial`` frames; streaming LLM token output / pre-checker
+    candidates land in Phase 7.
     """
 
     model_config = ConfigDict(extra="forbid")

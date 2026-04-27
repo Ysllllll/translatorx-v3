@@ -141,3 +141,15 @@ class TestStreamBuilderScheduler:
             await b.start_async()
         # Slot must have been released.
         assert app.scheduler.stats().active_by_tenant.get("acme", 0) == 0
+
+    @pytest.mark.asyncio
+    async def test_is_closed_property(self, app: App, monkeypatch):
+        """LiveStreamHandle.is_closed exposes _closed publicly (T1 cleanup)."""
+        _wire(app, monkeypatch)
+        h = await app.stream(course="c1", video="v1", language="en").translate(src="en", tgt="zh").tenant("acme").start_async()
+        assert h.is_closed is False
+        await h.close()
+        assert h.is_closed is True
+        # idempotent
+        await h.close()
+        assert h.is_closed is True

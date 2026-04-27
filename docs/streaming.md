@@ -400,8 +400,8 @@ for test harnesses.
 |---|---|---|
 | `start` | `pipeline`, `course`, `video`, `src`, `tgt` | open a `LiveStreamHandle` for this connection |
 | `segment` | `seq`, `start`, `end`, `text` | push a subtitle segment into the source |
-| `audio_chunk` | `seq`, `data` (b64) | reserved for transcribe stages — current build replies with `unsupported_frame` |
-| `config_update` | `params` | reserved for Phase 5 — current build replies with `unsupported_frame` |
+| `audio_chunk` | `seq`, `data` (b64) | **Reserved (Phase 7)** — server replies `unsupported_frame`. Wiring to a transcribe stage is future work. |
+| `config_update` | `params` | **Reserved (Phase 7)** — server replies `unsupported_frame`. |
 | `abort` | — | drain the handle, send `closed`, end the session |
 | `ping` | — | heartbeat |
 

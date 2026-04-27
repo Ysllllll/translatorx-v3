@@ -241,6 +241,15 @@ class LiveStreamHandle:
 
     # ---- public API --------------------------------------------------
 
+    @property
+    def is_closed(self) -> bool:
+        """Whether :meth:`close` has been called.
+
+        Stable, public read of the internal close flag — prefer this over
+        peeking at ``handle._closed`` from external modules.
+        """
+        return self._closed
+
     async def feed(self, segment: Segment, *, priority: Priority = Priority.NORMAL) -> None:
         if self._closed:
             raise RuntimeError("LiveStreamHandle is closed")

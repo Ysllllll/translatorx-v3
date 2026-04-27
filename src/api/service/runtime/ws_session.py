@@ -128,7 +128,7 @@ class WsSession:
                 if stop:
                     aborted = True
                     reason = "client_abort"
-                    if self._handle is not None and not self._handle._closed:
+                    if self._handle is not None and not self._handle.is_closed:
                         with _suppress():
                             await asyncio.shield(self._handle.close())
                         if self._records_task is not None:
@@ -150,8 +150,16 @@ class WsSession:
         finally:
             try:
                 await asyncio.shield(self._teardown(reason=reason))
-            except (asyncio.CancelledError, BaseException):
+            except asyncio.CancelledError:
+                # Intentional swallow: teardown ran under shield() so no
+                # in-flight work was lost. Re-raising would propagate into
+                # Starlette's TestClient portal and crash unrelated tests
+                # (see module docstring). Tightened from a previous
+                # ``except BaseException`` so KeyboardInterrupt /
+                # SystemExit / GeneratorExit still propagate normally.
                 pass
+            except Exception:
+                _logger.debug("WsSession teardown failed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Frame dispatch.
