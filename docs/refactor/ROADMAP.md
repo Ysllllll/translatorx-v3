@@ -15,15 +15,21 @@
 
 ## 下一步路线（按顺序）
 
-### Step D — TTS 端到端
+### Step D — TTS 端到端（接口已留，细节调研中）
 
-- `ports/tts.py` Protocol + 类型（`Voice` / `TTSRequest` / `TTSResult`）
-- `domain/tts/voice_picker.py`（语言/性别/语速匹配）
-- `adapters/tts/edge_tts.py`、`adapters/tts/openai_tts.py`、`adapters/tts/elevenlabs.py`(可选)
-- `application/processors/tts.py` 已有骨架，按 ports 收口
-- `stages/enrich/tts.py`（注册到 registry，让 pipelines/stages 路由自动暴露）
-- demo `demo_tts.py`
-- 单测：voice picker + 各 adapter（mock）
+**接口面已落地（不需要再动）：**
+- ✅ `ports/tts.py` — `TTS` Protocol + `Voice` + `SynthesizeOptions`
+- ✅ `adapters/tts/` — edge-tts / openai-tts / elevenlabs / local 四个 backend
+- ✅ `application/processors/tts.py` — `TTSProcessor` 骨架
+- ✅ `application/stages/enrich.py` — `TTSStage` + `TTSParams` 已注册到 registry
+- ✅ `api/app/video.py:VideoBuilder.tts(...)` builder
+- ✅ `AppConfig.tts` 配置节
+
+**待用户调研后再细化：**
+- `domain/tts/voice_picker.py`（语言/性别/语速匹配策略）
+- 各 backend 的真实集成测试 + 凭据管理
+- demo `demo_tts.py` 端到端
+- 是否引入新 backend（Azure / 自托管 XTTS 等）
 
 ## 推迟到后期
 
