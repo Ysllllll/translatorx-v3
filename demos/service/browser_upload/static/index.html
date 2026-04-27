@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>TranslatorX · Browser Upload Demo</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header>
+    <h1>TranslatorX · browser_upload</h1>
+    <p class="muted">Drag an SRT file (or paste text), then watch live bilingual subtitles streamed through <code>/api/ws/streams</code>.</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>1 · Source</h2>
+      <div id="drop" class="dropzone">
+        <p>Drag &amp; drop an <strong>.srt</strong> file here</p>
+        <p class="muted">or</p>
+        <input type="file" id="file" accept=".srt,text/plain" />
+      </div>
+      <textarea id="srt" placeholder="Or paste SRT text here…" rows="6"></textarea>
+
+      <label>Reference video URL (optional, informational only)
+        <input type="url" id="videoUrl" placeholder="https://example.com/lecture.mp4" />
+      </label>
+
+      <div class="row">
+        <label>API key
+          <input type="text" id="apiKey" value="demo-key" />
+        </label>
+        <label>Course
+          <input type="text" id="course" value="browser-demo" />
+        </label>
+        <label>Video
+          <input type="text" id="video" value="lec-01" />
+        </label>
+      </div>
+
+      <div class="row">
+        <button id="start" type="button">▶ Start streaming</button>
+        <button id="abort" type="button" disabled>■ Abort</button>
+        <span id="status" class="status">idle</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>2 · Bilingual output</h2>
+      <table id="grid">
+        <thead>
+          <tr><th>#</th><th>start</th><th>source</th><th>translation</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>3 · Frame log</h2>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
