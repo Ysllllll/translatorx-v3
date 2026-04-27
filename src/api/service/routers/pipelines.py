@@ -12,9 +12,6 @@ Tenant scoping (Phase 2 / Step B4):
     principals (whose tier name contains ``"admin"``) may override the
     tenant via ``?tenant=`` and also use ``?tenant=*`` to view every
     tenant's pipelines.
-
-Triggering a pipeline run is **not** included in this MVP — the existing
-``/api/courses/{course}/videos`` endpoint already covers that.
 """
 
 from __future__ import annotations
@@ -22,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request, status
+from pydantic import BaseModel, ConfigDict, Field
 import yaml as _yaml
 
 from api.service.auth import Principal, RequirePrincipal
@@ -32,6 +30,73 @@ from application.pipeline.validator import (
 )
 
 router = APIRouter(prefix="/api/pipelines", tags=["pipelines"])
+
+
+# -- response models ----------------------------------------------------
+
+
+class PipelineListResponse(BaseModel):
+    """Response for ``GET /api/pipelines``."""
+
+    model_config = ConfigDict(json_schema_extra={"example": {"pipelines": ["standard_translate"], "tenant": None}})
+
+    pipelines: list[str] = Field(description="Sorted catalog keys visible to the caller.")
+    tenant: str | None = Field(description='Effective tenant scope for this listing. ``"*"`` when admin lists everything.')
+
+
+class PipelineGetResponse(BaseModel):
+    """Response for ``GET /api/pipelines/{name}``."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "standard_translate",
+                "definition": {
+                    "name": "standard_translate",
+                    "build": {"stage": "from_srt", "params": {"path": "in.srt", "language": "en"}},
+                    "structure": [{"stage": "merge", "params": {"max_len": 80}}],
+                    "enrich": [{"stage": "translate", "params": {"src": "en", "tgt": "zh"}}],
+                },
+            }
+        }
+    )
+
+    name: str
+    definition: dict[str, Any]
+
+
+class ValidationIssue(BaseModel):
+    path: str = Field(description="Dotted JSON path of the offending field.")
+    message: str = Field(description="Human-readable explanation.")
+
+
+class ValidateResponse(BaseModel):
+    """Response for ``POST /api/pipelines/validate``."""
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"ok": False, "issues": [{"path": "build.params", "message": "missing key 'path'"}]}}
+    )
+
+    ok: bool
+    issues: list[ValidationIssue]
+
+
+class _ValidateBody(BaseModel):
+    """Either ``{"yaml": "..."}`` or a literal pipeline dict.
+
+    Documented for the OpenAPI surface; the actual handler accepts a
+    raw ``dict`` for flexibility.
+    """
+
+    model_config = ConfigDict(
+        extra="allow",
+        json_schema_extra={"example": {"yaml": "name: p\nbuild:\n  stage: from_srt\n  params: {path: x.srt, language: en}\n"}},
+    )
+
+    yaml: str | None = Field(default=None, description="Optional raw YAML body. When set, all other keys are ignored.")
+
+
+# -- helpers ------------------------------------------------------------
 
 
 def _app(request: Request):
@@ -66,7 +131,10 @@ def _resolve_scope(principal: Principal, query_tenant: str | None) -> tuple[str 
     return query_tenant, False
 
 
-@router.get("")
+# -- routes -------------------------------------------------------------
+
+
+@router.get("", response_model=PipelineListResponse)
 async def list_pipelines(
     request: Request,
     tenant: str | None = Query(None, description="Override tenant scope (admin only). Use '*' for all."),
@@ -75,10 +143,10 @@ async def list_pipelines(
     """List named pipelines configured on the App, scoped by tenant."""
     scope_tenant, include_all = _resolve_scope(principal, tenant)
     catalog = _app(request).pipelines(scope_tenant, include_all=include_all)
-    return {"pipelines": sorted(catalog.keys()), "tenant": scope_tenant if not include_all else "*"}
+    return {"pipelines": sorted(catalog.keys()), "tenant": "*" if include_all else scope_tenant}
 
 
-@router.get("/{name}")
+@router.get("/{name}", response_model=PipelineGetResponse)
 async def get_pipeline(
     name: str,
     request: Request,
@@ -96,7 +164,7 @@ async def get_pipeline(
     return {"name": name, "definition": catalog[name]}
 
 
-@router.post("/validate")
+@router.post("/validate", response_model=ValidateResponse)
 async def validate_pipeline_body(
     request: Request,
     payload: dict[str, Any] = Body(..., embed=False),
@@ -126,4 +194,4 @@ async def validate_pipeline_body(
     }
 
 
-__all__ = ["router", "PipelineValidationError"]
+__all__ = ["router", "PipelineValidationError", "PipelineListResponse", "PipelineGetResponse", "ValidateResponse"]

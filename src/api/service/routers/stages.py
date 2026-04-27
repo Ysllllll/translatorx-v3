@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.service.auth import Principal, RequirePrincipal
 from application.pipeline.schema import (
@@ -25,6 +26,14 @@ from application.pipeline.schema import (
 router = APIRouter(prefix="/api/stages", tags=["stages"])
 
 
+class StageListResponse(BaseModel):
+    """Response for ``GET /api/stages``."""
+
+    model_config = ConfigDict(json_schema_extra={"example": {"stages": ["from_srt", "merge", "translate"]}})
+
+    stages: list[str] = Field(description="Registered stage names, in registration order.")
+
+
 def _registry(request: Request):
     app = getattr(request.app.state, "app", None)
     if app is None:
@@ -32,7 +41,7 @@ def _registry(request: Request):
     return app.registry()
 
 
-@router.get("")
+@router.get("", response_model=StageListResponse)
 async def list_stages(request: Request, principal: Principal = RequirePrincipal) -> dict[str, Any]:
     """List registered stage names."""
     reg = _registry(request)
@@ -57,4 +66,4 @@ async def stage_schema(name: str, request: Request, principal: Principal = Requi
     return stage_params_schema(reg, name)
 
 
-__all__ = ["router"]
+__all__ = ["router", "StageListResponse"]
