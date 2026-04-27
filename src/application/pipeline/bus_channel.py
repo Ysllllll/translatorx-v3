@@ -87,6 +87,7 @@ class BusChannel(Generic[T]):
         "_sent",
         "_received",
         "_dropped",
+        "_degraded",
         "_high_hits",
         "_above_high",
         "_closed",
@@ -121,6 +122,7 @@ class BusChannel(Generic[T]):
         self._sent = 0
         self._received = 0
         self._dropped = 0
+        self._degraded = 0
         self._high_hits = 0
         self._above_high = False
         self._closed = False
@@ -191,13 +193,25 @@ class BusChannel(Generic[T]):
             if not self._permits.locked() and self._permits._value > 0:
                 await self._permits.acquire()
             else:
-                # cannot revoke remote messages — log once + drop new
+                # cannot revoke remote messages — log first occurrence,
+                # emit a recurring ``bus.degraded`` event + bump counter
+                # so observers can track DROP_OLD→DROP_NEW divergence.
                 if not self._drop_old_warned:
                     self._drop_old_warned = True
                     log.warning(
                         "BusChannel %s: DROP_OLD downgraded to DROP_NEW (cross-process bus cannot revoke)",
                         self._name,
                     )
+                self._degraded += 1
+                self._emit_bus(
+                    "degraded",
+                    {
+                        "from_policy": "DROP_OLD",
+                        "to_policy": "DROP_NEW",
+                        "topic": self._topic,
+                        "total": self._degraded,
+                    },
+                )
                 self._dropped += 1
                 self._emit("dropped")
                 return
@@ -287,6 +301,17 @@ class BusChannel(Generic[T]):
 
     def is_closed(self) -> bool:
         return self._closed
+
+    @property
+    def degraded_count(self) -> int:
+        """Number of times DROP_OLD was downgraded to DROP_NEW.
+
+        Cross-process buses cannot revoke already-published messages, so
+        ``DROP_OLD`` policy effectively becomes ``DROP_NEW`` once
+        capacity is reached. This counter records the divergence so
+        operators can detect and tune around it.
+        """
+        return self._degraded
 
     # ------------------------------------------------------------------ observability
 

@@ -129,6 +129,29 @@ async def test_drop_old_downgrades_to_drop_new(caplog) -> None:
         await bus.close()
 
 
+async def test_drop_old_emits_degraded_event_and_counter() -> None:
+    """T2 — DROP_OLD downgrade emits recurring bus.degraded event + counts."""
+    bus = InMemoryMessageBus()
+    cfg = ChannelConfig(capacity=2, overflow=OverflowPolicy.DROP_OLD)
+    events: list[tuple[str, dict]] = []
+    ch = BusChannel(bus, "t", cfg, on_bus_event=lambda e, x: events.append((e, x)))
+    try:
+        await ch.send("a")
+        await ch.send("b")
+        await ch.send("c")  # degraded #1
+        await ch.send("d")  # degraded #2
+        assert ch.degraded_count == 2
+        degraded = [x for e, x in events if e == "degraded"]
+        assert len(degraded) == 2
+        assert degraded[0]["from_policy"] == "DROP_OLD"
+        assert degraded[0]["to_policy"] == "DROP_NEW"
+        assert degraded[0]["topic"] == "t"
+        assert degraded[1]["total"] == 2
+    finally:
+        ch.close()
+        await bus.close()
+
+
 async def test_reject_raises_backpressure_error() -> None:
     ch, bus = _make(capacity=1, overflow=OverflowPolicy.REJECT)
     try:
