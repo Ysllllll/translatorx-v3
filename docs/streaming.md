@@ -2,7 +2,7 @@
 
 > Phase 3 of the runtime refactor (commit range `c524d88..e5c6208` on
 > `feature/runtime-refactor`). Implements 方案 I from
-> `docs/refactor/refactor-streaming.md §2`.
+> `docs/refactor/design/streaming.md §2`.
 
 This document is the user-facing guide for the live-streaming side of
 `PipelineRuntime`. The batch path (`PipelineRuntime.run`) is unchanged.
@@ -240,7 +240,7 @@ Phase 3 deliberately scopes itself to a single-process MVP:
   on the source side is preserved as-is.
 
 These are explicit Phase 4+ work and tracked in `ROADMAP.md` and
-`docs/refactor/refactor-streaming.md §8`.
+`docs/refactor/design/streaming.md §8`.
 
 ---
 

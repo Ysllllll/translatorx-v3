@@ -12,7 +12,7 @@ Design notes
   the consumer side, plus exposes an ``await send`` write port and a
   ``stats`` snapshot for observability.
 * :class:`OverflowPolicy` covers the four behaviours from
-  ``refactor-streaming.md §2.2``. ``SHED`` (a fifth, callback-based
+  ``design/streaming.md §2.2``. ``SHED`` (a fifth, callback-based
   policy from the doc) is intentionally deferred — the demo MVP has
   no use for a runtime-injected shed callback.
 * :class:`ChannelStats` is a snapshot, not a live counter. Channels
