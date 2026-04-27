@@ -143,6 +143,10 @@ class PipelineRuntime:
                             errors=tuple(errors),
                         )
                     state = PipelineState.PARTIAL
+                    # B2 fix: re-replay the records collected before the failed
+                    # stage so the next structure stage still sees the upstream
+                    # data (without the failing stage's transformation).
+                    stream = _replay(collected)
                     continue
                 stage_results.append(
                     StageResult(
@@ -441,13 +445,6 @@ def _make_bus_emitter(
             pass
 
     return _emit
-    return ErrorInfo(
-        processor=stage_name,
-        category="permanent",
-        code=type(exc).__name__,
-        message=f"{stage_name}: {exc}",
-        cause=type(exc).__name__,
-    )
 
 
 def _failed_result(sdef: StageDef, duration: float, exc: BaseException) -> StageResult:

@@ -13,3 +13,6 @@ demo_workspace/
 # stray runtime artifacts
 error.log
 demos/demo_stream_preprocess/test.srt
+
+# Pipeline test outputs
+translate_test/demo/zzz_translation/

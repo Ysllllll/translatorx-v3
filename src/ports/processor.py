@@ -43,11 +43,11 @@ from domain.model import SentenceRecord
 from .errors import ErrorCategory, ErrorInfo
 
 if TYPE_CHECKING:
+    from adapters.storage.store import Store
     from application.orchestrator.session import VideoSession
     from application.translate import TranslationContext
 
-    from .protocol import VideoKey
-    from .store import Store
+    from .source import VideoKey
 
 
 In = TypeVar("In")

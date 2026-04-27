@@ -147,7 +147,19 @@ class TextPipeline:
         return self._split(_split_fn)
 
     def merge(self, max_len: int) -> TextPipeline:
-        """Greedily merge all adjacent groups whose combined length <= *max_len*."""
+        """Greedily merge all adjacent groups whose combined length <= *max_len*.
+
+        .. warning::
+            Merge is **global** — it has no knowledge of which groups
+            originated from which sentence. To keep per-sentence
+            isolation (the standard usage pattern), call ``merge`` via
+            :class:`~domain.subtitle.core.Subtitle`, which allocates one
+            :class:`TextPipeline` per sentence after ``sentences()`` and
+            therefore prevents cross-sentence merging by construction.
+            Direct callers of :class:`TextPipeline` who need
+            sentence-aware merging should call ``sentences()`` and then
+            run a per-sentence merge themselves.
+        """
         if len(self._groups) <= 1:
             return self
         merged = merge_token_groups(self._groups, self._ops, max_len)

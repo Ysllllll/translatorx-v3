@@ -155,8 +155,16 @@ class MemoryChannel(Generic[T]):
                 return_when=asyncio.FIRST_COMPLETED,
             )
         except BaseException:
-            get_task.cancel()
+            # Cancel pending tasks. If get_task already pulled an item from
+            # the queue before cancellation, push it back so it's not lost
+            # (B3 fix: recv-on-cancel item-loss race).
             close_task.cancel()
+            if get_task.done() and not get_task.cancelled():
+                exc = get_task.exception()
+                if exc is None:
+                    self._queue.put_nowait(get_task.result())
+            else:
+                get_task.cancel()
             raise
 
         if get_task in done:
@@ -171,7 +179,9 @@ class MemoryChannel(Generic[T]):
         get_task.cancel()
         try:
             await get_task
-        except (asyncio.CancelledError, BaseException):
+        except asyncio.CancelledError:
+            # B4 fix: only swallow CancelledError. Other BaseException
+            # subclasses (KeyboardInterrupt, SystemExit) must propagate.
             pass
         if not self._queue.empty():
             item = self._queue.get_nowait()

@@ -36,7 +36,6 @@ __all__ = [
 
 
 T = TypeVar("T")
-T_co = TypeVar("T_co", covariant=True)
 
 
 class BackpressureError(RuntimeError):
@@ -95,7 +94,7 @@ class ChannelStats:
 
 
 @runtime_checkable
-class BoundedChannel(Protocol[T_co]):
+class BoundedChannel(Protocol[T]):
     """Producer/consumer channel contract.
 
     Producers call :meth:`send` (cooperative — may suspend under BLOCK
@@ -103,11 +102,17 @@ class BoundedChannel(Protocol[T_co]):
     :meth:`recv` directly **or** iterate via ``async for`` — once
     :meth:`close` is observed and the buffer is drained, iteration
     cleanly terminates.
+
+    The type parameter ``T`` is invariant: ``send`` is an input
+    position (write port) and ``recv`` is an output position (read
+    port), so neither covariant nor contravariant variance is sound
+    in general. Concrete channels can still be wrapped if a covariant
+    consumer-only view is needed.
     """
 
-    async def send(self, item: T_co) -> None: ...  # type: ignore[misc]
-    async def recv(self) -> T_co: ...
+    async def send(self, item: T) -> None: ...
+    async def recv(self) -> T: ...
     def close(self) -> None: ...
     def is_closed(self) -> bool: ...
     def stats(self) -> ChannelStats: ...
-    def __aiter__(self) -> AsyncIterator[T_co]: ...
+    def __aiter__(self) -> AsyncIterator[T]: ...
