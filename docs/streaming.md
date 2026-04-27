@@ -255,3 +255,124 @@ These are explicit Phase 4+ work and tracked in `ROADMAP.md` and
 | Subscribe to events | `app.event_bus.subscribe(type_prefix="channel.")` |
 | Live demo | `python demos/demo_streaming.py` |
 | Integration test | `tests/demos/test_demo_streaming.py` |
+
+---
+
+## 10. Cross-process bus (Phase 4 / J)
+
+For deployments that need to fan stage I/O across processes — running
+a `transcribe` worker on a GPU box, a `translate` worker on a CPU box,
+and a `tts` worker on yet another — the runtime can swap the in-process
+`MemoryChannel` for a `BusChannel` backed by a `MessageBus`
+implementation.
+
+The `BoundedChannel` Protocol from `ports/backpressure.py` is preserved
+end-to-end: stages, runtime, and observability events look identical
+in both modes. Only the **transport** changes.
+
+### 10.1 Components
+
+| Layer | File | Role |
+|---|---|---|
+| Port | `ports/message_bus.py` | `MessageBus` Protocol + `BusMessage` + `BusConfig` dataclasses |
+| Adapter | `adapters/streaming/memory.py` | `InMemoryMessageBus` — broadcast pub/sub for tests + single-process fallback |
+| Adapter | `adapters/streaming/redis_streams.py` | `RedisStreamsMessageBus` — `XADD` / `XREADGROUP` / `XACK` over a consumer group |
+| Adapter | `application/pipeline/bus_channel.py` | `BusChannel[T]` adapts a `MessageBus` to `BoundedChannel[T]` |
+| Runtime | `application/pipeline/runtime.py` | `PipelineRuntime(bus=…)` switches `MemoryChannel` → `BusChannel` automatically |
+
+### 10.2 Wire it up
+
+YAML:
+
+```yaml
+streaming:
+  default_channel: { capacity: 64, overflow: block }
+  bus:
+    type: redis_streams                # or "memory" (default null = MemoryChannel)
+    url: redis://localhost:6379
+    consumer_group: trx-runners
+    block_ms: 5000
+
+pipelines:
+  - name: live_translate_zh
+    build: { stage: whisperx_source }
+    enrich:
+      - stage: translate
+        bus_topic: live.translate.zh   # optional; default = trx.<run_id>.<stage_id>
+        downstream_channel: { capacity: 128, overflow: drop_old }
+      - stage: tts
+```
+
+The `bus_topic` field is **interpolated** with the same `{{ var }}`
+syntax as `when` / `params`, so it can reference vars passed to
+`load_pipeline_dict(..., vars=…)` — handy for tenant scoping
+(`bus_topic: trx.{{ tenant }}.translate`).
+
+### 10.3 Back-pressure semantics
+
+`BusChannel.capacity` is a **per-process semaphore** of in-flight
+messages. The four `OverflowPolicy` modes still apply, with one
+caveat:
+
+- `BLOCK` — sender awaits a permit; identical to `MemoryChannel`
+- `DROP_NEW` — drop without publishing; identical
+- `REJECT` — raise `BackpressureError` without publishing; identical
+- `DROP_OLD` — **downgraded to DROP_NEW** with a one-shot `WARNING`.
+  Cross-process buses cannot revoke an already-published message.
+
+A future Phase 5 may add a per-stream cap that rewrites at-most-once
+semantics, but for now the contract is "DROP_OLD on a remote bus is
+DROP_NEW".
+
+### 10.4 Codec
+
+Default codec is `pickle` (Python-only, fast). Pass an explicit codec
+for cross-language wire shapes:
+
+```python
+from application.pipeline.bus_channel import BusChannel, Codec
+
+class JsonCodec(Codec):
+    def encode(self, item): return json.dumps(item.to_dict()).encode()
+    def decode(self, raw): return SentenceRecord.from_dict(json.loads(raw))
+
+ch = BusChannel(bus, "trx.translate", config, codec=JsonCodec())
+```
+
+### 10.5 Observability
+
+In addition to `channel.high_watermark` / `channel.low_watermark` /
+`channel.dropped` / `channel.closed`, the runtime emits three
+**bus.* DomainEvents** to the same `EventBus` consumers:
+
+| Event type | Trigger | Payload |
+|---|---|---|
+| `bus.connected` | `BusChannel` subscriber registered for the topic | `topic`, `stage_id`, `stage` |
+| `bus.disconnected` | `BusChannel.close()` called | `topic`, `stage_id`, `stage` |
+| `bus.publish_failed` | `bus.publish` raised — permit rolled back, exception propagates | `topic`, `stage_id`, `stage`, `error` |
+
+```python
+sub = app.event_bus.subscribe(type_prefix="bus.")
+async for evt in sub:
+    log.info("bus event %s on %s", evt.type, evt.payload["topic"])
+```
+
+`fakeredis` covers the Redis Streams path in tests
+(`tests/adapters/streaming/test_redis_streams.py`); production uses
+the real `redis-py` async client.
+
+### 10.6 Demo
+
+`demos/demo_redis_bus.py` exercises a 2-stage pipeline through
+`InMemoryMessageBus` (no Redis required) — same code path as Redis
+Streams, just a different `MessageBus` adapter. See
+`tests/demos/test_demo_redis_bus.py` for the integration test.
+
+### 10.7 Not in scope (Phase 5)
+
+- `partitioning.by: stream_id` — sticky routing of one stream's
+  messages to one consumer
+- Dead-letter topic + redrive on poison messages
+- `XRANGE`-based replay / cross-restart recovery
+- Kafka / NATS / SQS adapters (Protocol is ready; adapters are not)
+- Cross-replica `LiveStreamHandle` migration
