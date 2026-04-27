@@ -47,6 +47,63 @@ class TestSendRecvBasic:
         with pytest.raises(RuntimeError, match="closed"):
             await ch.send(1)
 
+    async def test_recv_cancel_does_not_lose_item(self):
+        """B3 — when a parked ``recv`` is cancelled but the queue.get
+        task already pulled an item, the item must be re-queued so the
+        next consumer sees it.
+        """
+        ch = MemoryChannel[int](ChannelConfig(capacity=4))
+
+        async def reader():
+            await ch.recv()  # parks; will be cancelled below
+
+        task = asyncio.create_task(reader())
+        await asyncio.sleep(0)  # let reader park on queue.get
+
+        # Land an item AND cancel the reader on the same loop tick so the
+        # internal get_task may already hold the value when CancelledError
+        # propagates.
+        await ch.send(99)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        # Item must survive the cancel — a fresh recv yields it.
+        assert await asyncio.wait_for(ch.recv(), timeout=1.0) == 99
+
+    async def test_recv_propagates_base_exception_during_close(self):
+        """B4 — if the inner ``await get_task`` after a close-wins race
+        raises a non-Cancelled BaseException, ``recv`` must propagate
+        it (the buggy code paired ``CancelledError`` with bare
+        ``BaseException`` and swallowed both).
+        """
+
+        class Boom(BaseException):
+            pass
+
+        ch = MemoryChannel[int](ChannelConfig(capacity=2))
+
+        # Patch the queue.get coro so the cancel cleanup path raises
+        # a non-Cancelled BaseException.
+        original_get = ch._queue.get
+
+        async def angry_get():
+            try:
+                await original_get()
+            except asyncio.CancelledError:
+                raise Boom("propagate me")
+
+        ch._queue.get = angry_get  # type: ignore[assignment]
+
+        async def reader():
+            with pytest.raises(Boom):
+                await ch.recv()
+
+        task = asyncio.create_task(reader())
+        await asyncio.sleep(0)
+        ch.close()
+        await asyncio.wait_for(task, timeout=1.0)
+
     async def test_close_idempotent(self):
         ch = MemoryChannel[int](ChannelConfig(capacity=2))
         ch.close()

@@ -142,6 +142,27 @@ class TestCourseBuilder:
         with pytest.raises(ValueError, match="add_video"):
             await b.run()
 
+    @pytest.mark.asyncio
+    async def test_course_rejects_multi_target(self, app: App, tmp_path: Path, monkeypatch):
+        """B1 — CourseBuilder must refuse multi-target translate.
+
+        The per-video Store writes ``<course>/zzz_translation/<video>.json``
+        which only carries one set of translations. Allowing two ``tgt``
+        languages in parallel races the same record set; until the storage
+        layout supports multi-target outputs the builder rejects the call
+        up front so callers don't lose results silently.
+        """
+        fake = _FakeEngine()
+        monkeypatch.setattr(app, "engine", lambda name="default": fake)
+        monkeypatch.setattr(app, "checker", lambda s, t: _PassChecker())
+
+        a = tmp_path / "a.srt"
+        _write_srt(a, ["Alpha."])
+
+        b = app.course(course="c1").add_video("a", a, language="en").translate(src="en", tgt=["zh", "ja"])
+        with pytest.raises(ValueError, match="exactly one target"):
+            await b.run()
+
 
 class TestBuilderEnhancements:
     """Polish items: from_dict/from_yaml + kind auto-detect."""

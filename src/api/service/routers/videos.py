@@ -145,10 +145,21 @@ async def create_video_task(
 async def list_video_tasks(
     course: str,
     request: Request,
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ) -> VideoList:
+    """List tasks for the course.
+
+    R1 — when authentication is enabled the listing is filtered to the
+    calling principal's own tasks. Anonymous dev mode (empty
+    ``auth_map``) preserves the legacy "everyone sees everything"
+    behaviour so existing tooling keeps working.
+    """
     manager = _manager(request)
-    items = [_as_state(t) for t in manager.list_for_course(course)]
+    auth_enabled = bool(getattr(request.app.state, "auth_map", {}) or {})
+    tasks = list(manager.list_for_course(course))
+    if auth_enabled:
+        tasks = [t for t in tasks if t.principal_user_id is None or t.principal_user_id == principal.user_id]
+    items = [_as_state(t) for t in tasks]
     return VideoList(items=items)
 
 
