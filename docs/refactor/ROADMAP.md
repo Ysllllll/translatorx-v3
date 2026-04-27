@@ -4,8 +4,8 @@
 
 ## 当前快照
 
-- **HEAD**：`214d24b` — `feat(scheduler): L5 — WS/SSE quota enforcement + Phase 4 #8 disconnect fix`
-- **测试套**：2275 passed / 3 skipped
+- **HEAD**：`9fef2d4` — `feat(redis-bus): T4 — XGROUP DELCONSUMER on close()`
+- **测试套**：2282 passed / 3 skipped
 
 ---
 
@@ -110,21 +110,18 @@
 
 ### Phase 4 技术债清理（剩余）
 
-🟡 **中等**
-- `BusChannel.capacity` 是本地信号量，不是远端 stream MAXLEN，多 publisher 同 topic 会爆远端
-- `DROP_OLD → DROP_NEW` 降级只发一次性 warning，没 metric 计数
-- `WsSession` `asyncio.shield(...) + except BaseException` 写法太宽，应改 `CancelledError`
-- 访问 `LiveStreamHandle._closed` 私有属性，应在类上加 `is_closed` property
+> 已完成的清扫见提交 `8e78eba`（T0 Phase 6 归位）/ `a03281b`（T1 WS robustness）/ `8c22fa6`（T2 bus.degraded）/ `e33719d`（T3 JsonRecordCodec）/ `9fef2d4`（T4 XGROUP DELCONSUMER）。
 
-🟢 **低优先**
-- 内置 JSON `Codec` for `SentenceRecord`（默认 pickle 跨语言不通）
-- `RedisStreamsMessageBus` 没 `XGROUP DELCONSUMER`，consumer crash 时 pending 列表膨胀
-- `audio_chunk` / `config_update` 协议帧定义了但服务端永远 `unsupported_frame`，文档需更明显地标注 reserved
-- `WsPartial` 帧定义了但流式 LLM token 未接入
-- WS 鉴权一次性，无 token 刷新
-- `PipelineRuntime` 的 `bus=` / `default_channel_config` 不能 hot reload
-- `bus.publish_failed` 没单元测试覆盖
-- demo `demo_redis_bus.py` 的 `BUS=redis` 路径无人测过
+🟡 **中等（剩余）**
+- `BusChannel.capacity` 是本地信号量，不是远端 stream MAXLEN，多 publisher 同 topic 会爆远端 —— **需新增 `XADD MAXLEN ~` 集成 + 配置项，属设计工作非清扫**
+
+🟢 **低优先（剩余 / 已 defer）**
+- ~~`audio_chunk` / `config_update` 协议帧定义了但服务端永远 `unsupported_frame`，文档需更明显地标注 reserved~~ —— **T1 已落地（标 Reserved Phase 7）**
+- ~~`WsPartial` 帧定义了但流式 LLM token 未接入~~ —— 文档已标 Reserved Phase 7；真实接入归 Phase 7
+- WS 鉴权一次性，无 token 刷新 —— **真功能，非清扫**，归 Phase 7
+- `PipelineRuntime` 的 `bus=` / `default_channel_config` 不能 hot reload —— **需重构 runtime 生命周期，非清扫**
+- ~~`bus.publish_failed` 没单元测试覆盖~~ —— **已有：`tests/application/pipeline/test_streaming_dsl.py:363`**
+- demo `demo_redis_bus.py` 的 `BUS=redis` 路径无人测过 —— 当前只能用 fakeredis 验证，本地无 redis；保留待集成环境
 
 ### Step D — TTS 端到端（接口已留，细节调研中）
 
