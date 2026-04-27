@@ -1,5 +1,19 @@
 # 架构重构 — 完整方案对比 v2
 
+> ## 实施进度（2026-04-27）
+>
+> 本文档原为方案选型 brainstorm。**最终路线 C → C+D → C+D+F 已全部落地**：
+>
+> | 方案 | 状态 | 实现指针 |
+> |---|---|---|
+> | C — Pipeline DSL | ✅ Phase 1 | `application/pipeline/runtime.py` + `stages/` |
+> | D — YAML 配置驱动 | ✅ Step B | `application/config.py` + `api/service/routers/pipelines.py` |
+> | F — Plugin entry-points | ✅ 随 Step B | `application/pipeline/plugins.py` + `docs/plugin_sdk.md` |
+> | A / B / E / G / H | ⏸ 暂未采纳 | 设计审计保留 |
+>
+> 流式增强 I/J/K/L/M 见 [`streaming.md`](streaming.md)。
+> 本文保留作为决策审计 + 多维度打分参考。
+
 目标：让"3 阶段自然流程"在代码组织里显形 + 横切关注点模块化 + 第三方应用 / 横向扩展 / 跨语言可达。
 
 新增维度（用户要求）：

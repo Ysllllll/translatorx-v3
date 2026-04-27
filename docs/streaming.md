@@ -1,11 +1,19 @@
-# Streaming MVP — Bounded Channel + Back-pressure
+# Streaming Guide — Bounded Channel · Bus · WebSocket · Tenants
 
-> Phase 3 of the runtime refactor (commit range `c524d88..e5c6208` on
-> `feature/runtime-refactor`). Implements 方案 I from
-> `docs/refactor/design/streaming.md §2`.
-
-This document is the user-facing guide for the live-streaming side of
-`PipelineRuntime`. The batch path (`PipelineRuntime.run`) is unchanged.
+> User-facing guide for the live-streaming side of `PipelineRuntime`.
+> The batch path (`PipelineRuntime.run`) is unchanged.
+>
+> Implements 方案 I/J/K/L from `docs/refactor/design/streaming.md`:
+>
+> | Section | Phase | 方案 | What it covers |
+> |---|---|---|---|
+> | §1–§10 | Phase 3 | I | Bounded channels + back-pressure |
+> | §11 | Phase 4 | K | WebSocket protocol (`/api/ws/streams`) |
+> | §11 + bus | Phase 4 | J | Redis Streams cross-process bus |
+> | §12 | Phase 5 | L | Tenant scheduler + QoS quotas |
+>
+> See `docs/refactor/ROADMAP.md` for delivery status and outstanding
+> Phase 7 items (resume token, streaming partials, hot-reload bus).
 
 ---
 

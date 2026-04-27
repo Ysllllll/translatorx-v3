@@ -1,6 +1,9 @@
 # 重构启动 Brief
 
-> 把这文件 + `refactor-options-v2.md` + `refactor-streaming.md` 一起读完，就能启动。
+> ⏸ **已冻结，仅供回溯。** 本文档为 Phase 1 启动期写就的 kickoff brief，
+> 列出的"现状"和"问题清单"反映的是重构开始前的状态，不再代表当前代码。
+> 当前实现进度请看 [`../ROADMAP.md`](../ROADMAP.md)，
+> 当前文档入口请看 [`../README.md`](../README.md)。
 
 ---
 

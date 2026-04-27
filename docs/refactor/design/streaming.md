@@ -1,5 +1,18 @@
 # 流式场景深化设计 — 服务多客户级
 
+> ## 实施进度（2026-04-27）
+>
+> | 方案 | 状态 | Phase | 实现指针 |
+> |---|---|---|---|
+> | I — Bounded Channel + 背压 | ✅ 已落地 | Phase 3 | `application/pipeline/channels.py` + `ports/backpressure.py` |
+> | J — Redis Streams 总线 | ✅ 已落地 | Phase 4 | `adapters/streaming/` + `application/pipeline/bus_channel.py` |
+> | K — WebSocket 双向协议 | ✅ 已落地 | Phase 4 | `api/service/runtime/ws_*.py` |
+> | L — Tenant Scheduler | ✅ 已落地 | Phase 5 | `application/scheduler/` |
+> | M — 分级流式架构 | 🕰 远期 | Phase 7 | 部署形态文档化即可，不需要新代码 |
+>
+> 本文保留为决策审计 + 远期 M 参考。
+> Phase 6（方案 F entry-points）随 Step B 落地，详见 [`options.md`](options.md) §4。
+
 依托 C+D+F 路线。重点：**生产级流式翻译/配音 SaaS，同时服务 1000+ 客户**。
 
 ---
@@ -31,11 +44,17 @@
 | 9 | **过载保护**：达饱和时 shed / queue / reject | 系统不雪崩 |
 | 10 | **观测**：每流独立 metrics + 慢 stage 告警 | 运维 |
 
-C+D+F 当前覆盖：
-- ✅ Stage 抽象、AsyncStream Protocol
-- ✅ Cancel / Error 注入
-- ❌ 1 / 2 / 7 / 9 / 10 全部未做
-- ⚠ 3 / 4 / 5 / 8 部分做
+C+D+F 当前覆盖（**截至 Phase 5 + 技术债 T0–T4**）：
+- ✅ 1 背压（Phase 3 BoundedChannel + 4 种 OverflowPolicy）
+- ✅ 2 多租户隔离（Phase 5 FairScheduler + per-tenant Semaphore）
+- ✅ 7 流生命周期（Phase 4 WS open/abort/closed + Phase 5 ticket release）
+- ✅ 9 过载保护（Phase 5 `QoS quota_exceeded` → HTTP 429 / WsError）
+- ✅ 10 观测（Phase 3+ `channel.*` / `bus.*` / `tenant.*` DomainEvent）
+- ⚠ 3 断线重连（Phase 4 K WS 协议有 `start.resume_token` 字段；服务端续传逻辑归 Phase 7）
+- ⚠ 4 延迟预算（每 stage 暂未做硬超时，依赖 cancel token 协作）
+- ⚠ 5 扇出 fan-out（同一 topic 多 subscriber 已可，多目标语言同源 1→N 待 Phase 7）
+- ⚠ 6 乱序容忍（流式 `Subtitle.stream` 已有 segment-internal 处理，跨 segment 暂未）
+- ⚠ 8 质量 vs 延迟（`translate_with_verify` 有 prompt 降级；动态 LLM→dict 切换待 Phase 7）
 
 下面 5 个增强方案（I/J/K/L/M），全部叠加在 C+D+F 之上。
 
@@ -310,27 +329,26 @@ class PipelineScheduler(Protocol):
 ## 8. 推荐：分阶段引入
 
 ```
-Phase 1 (C 落地)              ports/stage + Runtime + 9 步迁移
-Phase 2 (D 落地)              YAML / schema / hot reload
-Phase 3 (流式 MVP = +I)       Bounded Channel + 背压
-Phase 4 (流式 SaaS = +I+J+K)  Redis Streams + WebSocket 协议
-Phase 5 (千级流 = +L+M)       Tenant Scheduler + 分级架构
-Phase 6 (按需 F)              Plugin entry-points
-Phase 7 (远期 E/G/H)          可选
+Phase 1 (C 落地)              ✅ ports/stage + Runtime + 9 步迁移
+Phase 2 (D 落地)              ✅ YAML / schema / hot reload
+Phase 3 (流式 MVP = +I)       ✅ Bounded Channel + 背压
+Phase 4 (流式 SaaS = +I+J+K)  ✅ Redis Streams + WebSocket 协议
+Phase 5 (千级流 = +L+M)       ✅ Tenant Scheduler（M 部署形态归 Phase 7）
+Phase 6 (按需 F)              ✅ Plugin entry-points（随 Step B 一起落地）
+Phase 7 (远期 E/G/H + M 部署)  🕰 token 刷新 / WsPartial 流式 / hot reload bus / TLS / TLS termination
 ```
 
 每阶段都能独立交付可演示的产品形态：
-- Phase 3 完成 → 单机直播 demo（1 客户）
-- Phase 4 完成 → 多客户 SaaS 雏形（百级并发流）
-- Phase 5 完成 → 生产级 SaaS（千级并发流）
+- Phase 3 完成 → 单机直播 demo（1 客户）✅ `demos/demo_streaming.py`
+- Phase 4 完成 → 多客户 SaaS 雏形（百级并发流）✅ `demos/demo_redis_bus.py` + WS demo
+- Phase 5 完成 → 生产级 SaaS（千级并发流）✅ `demos/demo_tenant_scheduler.py`
 
 ---
 
-## 9. 关键决策
+## 9. 关键决策（已确认）
 
-请确认：
-1. 流式 MVP 是否在 Phase 3 完成（C+D 之后立即接 I）？
-2. Phase 4 流式总线选型：**Redis Streams**（轻，推荐起步）还是 **Kafka**（重，未来再切）？
-3. WS 协议（方案 K）是否在 Phase 4 必做？或者先 SSE 单向？
-4. 多租户 Scheduler（L）的 QoS tier 是否需要预设？
-5. 是否需要在 Phase 3 就做 OpenTelemetry 接入（per-stream metrics）？
+1. ✅ 流式 MVP 在 Phase 3 完成（C+D 之后立即接 I）
+2. ✅ Phase 4 流式总线选 **Redis Streams**（轻、起步简单；Kafka 留 Phase 7 选项）
+3. ✅ WS 协议（方案 K）在 Phase 4 必做；SSE 同时保留作为单向兼容路径
+4. ✅ 多租户 Scheduler（L）在 Phase 5 落地，预设 `free / standard / premium` 三档
+5. ⏳ OpenTelemetry 接入仍待用户确认（候选 Phase 7 或随 Step D 一起做）

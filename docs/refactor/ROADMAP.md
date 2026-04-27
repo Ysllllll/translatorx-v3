@@ -98,30 +98,54 @@
 - `tests/application/pipeline/test_plugins.py`：fake EP 注册 / 验证错误 / 注入失败回滚
 - `docs/plugin_sdk.md`：第三方 stage 包契约（pyproject 入口、`register(reg)` 钩子、版本兼容承诺）
 
+### Phase 4 技术债清理（T0–T4 sweep）
+
+> 提交链：`8e78eba` (T0 Phase 6 归位) → `a03281b` (T1 WS robustness) →
+> `8c22fa6` (T2 bus.degraded) → `e33719d` (T3 JsonRecordCodec) →
+> `9fef2d4` (T4 XGROUP DELCONSUMER) → `69ea4ff` (docs sync)。
+
+- **T1 — WS robustness**：`WsSession` 异常窗口从 `except BaseException` 收紧为
+  显式 `CancelledError` 吞 + `Exception` debug log（KeyboardInterrupt /
+  SystemExit / GeneratorExit 正常传播），新增 `LiveStreamHandle.is_closed`
+  property 替代私有属性访问，`WsAudioChunk` / `WsConfigUpdate` / `WsPartial`
+  + `docs/streaming.md §11.1` 标注 Reserved (Phase 7)
+- **T2 — Bus degraded metric**：DROP_OLD → DROP_NEW 降级从一次性 warning 改为
+  循环 `bus.degraded` DomainEvent + `BusChannel.degraded_count` 计数器
+- **T3 — JsonRecordCodec**：`SentenceRecord` 跨语言 JSON wire 格式（pickle 仍是
+  默认），构造时按需注入 `codec=` 参数
+- **T4 — XGROUP DELCONSUMER**：`RedisStreamsMessageBus.close()` 对每个加入过
+  的 `(topic, group)` 走 best-effort `xgroup_delconsumer`，避免 PEL 膨胀
+
 ---
 
 ## 🚧 进行中
 
-无（Phase 4 刚收尾，等用户决策下一切片）。
+无（待用户决策下一切片）。
 
 ---
 
 ## 📋 下一步候选（按优先级）
 
-### Phase 4 技术债清理（剩余）
+### 整体框架 review
 
-> 已完成的清扫见提交 `8e78eba`（T0 Phase 6 归位）/ `a03281b`（T1 WS robustness）/ `8c22fa6`（T2 bus.degraded）/ `e33719d`（T3 JsonRecordCodec）/ `9fef2d4`（T4 XGROUP DELCONSUMER）。
+T0–T4 后五层架构 + 流式 SaaS 的全部主路径都已就位（2282 测试），下一步是
+走一遍整体 review：检查 ports/application/adapters/api 的边界、stage
+契约、scheduler 与 bus 的耦合面、关键 corner case 是否都有测试覆盖。
 
-🟡 **中等（剩余）**
-- `BusChannel.capacity` 是本地信号量，不是远端 stream MAXLEN，多 publisher 同 topic 会爆远端 —— **需新增 `XADD MAXLEN ~` 集成 + 配置项，属设计工作非清扫**
+### Phase 4 技术债剩余项（已 defer，原因附录）
 
-🟢 **低优先（剩余 / 已 defer）**
-- ~~`audio_chunk` / `config_update` 协议帧定义了但服务端永远 `unsupported_frame`，文档需更明显地标注 reserved~~ —— **T1 已落地（标 Reserved Phase 7）**
-- ~~`WsPartial` 帧定义了但流式 LLM token 未接入~~ —— 文档已标 Reserved Phase 7；真实接入归 Phase 7
-- WS 鉴权一次性，无 token 刷新 —— **真功能，非清扫**，归 Phase 7
-- `PipelineRuntime` 的 `bus=` / `default_channel_config` 不能 hot reload —— **需重构 runtime 生命周期，非清扫**
-- ~~`bus.publish_failed` 没单元测试覆盖~~ —— **已有：`tests/application/pipeline/test_streaming_dsl.py:363`**
-- demo `demo_redis_bus.py` 的 `BUS=redis` 路径无人测过 —— 当前只能用 fakeredis 验证，本地无 redis；保留待集成环境
+🟡 **中等**
+- `BusChannel.capacity` 是本地信号量，远端 stream 没 `XADD MAXLEN ~`
+  集成 —— 需新增配置项 + 跨进程容量协调，**属设计工作非清扫**
+
+🟢 **低优先 / 留待真功能**
+- WS 鉴权一次性，无 token 刷新 —— **真功能**，归 Phase 7
+- `WsPartial` 帧定义了但流式 LLM token 未接入 —— 文档已标 Reserved
+  Phase 7；真实接入归 Phase 7
+- `PipelineRuntime` 的 `bus=` / `default_channel_config` 不能 hot reload
+  —— **需重构 runtime 生命周期**，非清扫
+- demo `demo_redis_bus.py` 的 `BUS=redis` 路径无人测过 —— 当前只能用
+  fakeredis 验证；待集成环境
 
 ### Step D — TTS 端到端（接口已留，细节调研中）
 
@@ -149,12 +173,19 @@
 
 ---
 
-## 决策记录（用户已确认）
+## 决策记录
 
-- ✅ 采用 C → C+D → C+D+F 渐进路线
-- ✅ 流式按 7 阶段（[`design/streaming.md §8`](design/streaming.md)）推进
-- ✅ 流式总线选 Redis Streams（不上 Kafka）
-- ✅ 同时支持 SSE 和 WS（POST `/api/streams` + `/api/ws/streams`）
-- ⏳ 待确认：
-  - OpenTelemetry 接入时机
-  - 多租户 QoS tier 预设（free / pro / enterprise 各档具体限额）
+### ✅ 已确认 + 已落地
+
+- 采用 C → C+D → C+D+F 渐进路线 → **C/D/F 全部落地**
+  （Phase 1 / Step B / 随 Step B 一起落 Phase 6）
+- 流式按 7 阶段（[`design/streaming.md`](design/streaming.md)）推进 →
+  **Phase 1–6 全部落地**，Phase 7 远期 (E/G/H + token 刷新 + WsPartial + hot reload bus)
+- 流式总线选 Redis Streams（不上 Kafka） → ✅ Phase 4
+- 同时支持 SSE 和 WS（POST `/api/streams` + `/api/ws/streams`） → ✅ Phase 4
+- 多租户 QoS tier 预设（free / standard / premium）→ ✅ Phase 5
+  `application/scheduler/tenant.py:DEFAULT_QUOTAS`
+
+### ⏳ 待确认
+
+- OpenTelemetry 接入时机（是否 Phase 7 / 是否随 Step D TTS 一起做）
