@@ -254,3 +254,48 @@ async def test_publish_failure_releases_permit() -> None:
     finally:
         ch.close()
         await bus.close()
+
+
+# ---------------------------------------------------------------- json codec
+
+
+async def test_json_record_codec_roundtrip() -> None:
+    """T3 — JsonRecordCodec encodes SentenceRecord through the bus."""
+    from application.pipeline.bus_channel import JsonRecordCodec
+    from domain.model import SentenceRecord
+
+    bus = InMemoryMessageBus()
+    cfg = ChannelConfig(capacity=4, overflow=OverflowPolicy.BLOCK)
+    ch: BusChannel[SentenceRecord] = BusChannel(bus, "t", cfg, codec=JsonRecordCodec())
+    try:
+        rec = SentenceRecord(src_text="hello world", start=0.0, end=1.5)
+        await ch.send(rec)
+        got = await ch.recv()
+        assert isinstance(got, SentenceRecord)
+        assert got.src_text == "hello world"
+        assert got.start == 0.0 and got.end == 1.5
+    finally:
+        ch.close()
+        await bus.close()
+
+
+async def test_json_record_codec_rejects_non_record() -> None:
+    from application.pipeline.bus_channel import JsonRecordCodec
+
+    codec = JsonRecordCodec()
+    with pytest.raises(TypeError, match="SentenceRecord"):
+        codec.encode("not a record")
+
+
+async def test_json_record_codec_wire_is_utf8_json() -> None:
+    """Wire format must be valid JSON (cross-language readable)."""
+    import json as _json
+
+    from application.pipeline.bus_channel import JsonRecordCodec
+    from domain.model import SentenceRecord
+
+    codec = JsonRecordCodec()
+    rec = SentenceRecord(src_text="你好 world", start=0.0, end=1.0)
+    raw = codec.encode(rec)
+    payload = _json.loads(raw.decode("utf-8"))
+    assert payload["src_text"] == "你好 world"

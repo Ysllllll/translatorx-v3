@@ -26,6 +26,7 @@ codec for JSON / msgpack / protobuf cross-language wire shapes.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import pickle
 from typing import Any, AsyncIterator, Callable, Generic, TypeVar
@@ -42,7 +43,7 @@ from .channels import WatermarkEvent
 
 log = logging.getLogger(__name__)
 
-__all__ = ["BusChannel", "Codec", "PickleCodec"]
+__all__ = ["BusChannel", "Codec", "PickleCodec", "JsonRecordCodec"]
 
 
 T = TypeVar("T")
@@ -69,6 +70,34 @@ class PickleCodec(Codec):
 
     def decode(self, raw: bytes) -> Any:
         return pickle.loads(raw)
+
+
+class JsonRecordCodec(Codec):
+    """Cross-language JSON codec for ``SentenceRecord``.
+
+    Use this when the downstream consumer is not Python (e.g. a Go /
+    Node service) or when wire-format auditability matters more than
+    raw speed. ``SentenceRecord.to_dict`` / ``from_dict`` define the
+    canonical shape; this codec just adds the JSON envelope.
+
+    Pickle remains the default for in-process Python pipelines because
+    it preserves arbitrary objects without a schema.
+    """
+
+    def __init__(self) -> None:
+        # Lazy import — avoids pulling domain types into the module
+        # graph when only PickleCodec is in use.
+        from domain.model import SentenceRecord  # noqa: PLC0415
+
+        self._record_cls = SentenceRecord
+
+    def encode(self, item: Any) -> bytes:
+        if not isinstance(item, self._record_cls):
+            raise TypeError(f"JsonRecordCodec only encodes SentenceRecord, got {type(item).__name__}")
+        return json.dumps(item.to_dict(), ensure_ascii=False).encode("utf-8")
+
+    def decode(self, raw: bytes) -> Any:
+        return self._record_cls.from_dict(json.loads(raw.decode("utf-8")))
 
 
 class BusChannel(Generic[T]):
