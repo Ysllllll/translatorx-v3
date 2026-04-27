@@ -4,8 +4,8 @@
 
 ## 当前快照
 
-- **HEAD**：`9fef2d4` — `feat(redis-bus): T4 — XGROUP DELCONSUMER on close()`
-- **测试套**：2282 passed / 3 skipped
+- **HEAD**：`0f9e1e2` — `fix(R4-3+4): wave 3+4 — data correctness and runtime polish`
+- **测试套**：2308 passed / 3 skipped
 
 ---
 

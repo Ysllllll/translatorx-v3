@@ -107,7 +107,11 @@ def factory(
 
     async def _restore_batch_async(texts: list[str]) -> list[str]:
         sem = asyncio.Semaphore(max_concurrent)
-        return await asyncio.gather(*(_restore_one(t, sem) for t in texts))
+        results = await asyncio.gather(*(_restore_one(t, sem) for t in texts), return_exceptions=True)
+        for r in results:
+            if isinstance(r, BaseException):
+                raise r
+        return list(results)  # type: ignore[return-value]
 
     def _call(texts: list[str]) -> list[str]:
         return run_async_in_sync(lambda: _restore_batch_async(texts))

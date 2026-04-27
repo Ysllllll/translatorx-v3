@@ -234,7 +234,11 @@ def llm_backend(
                 parts = _handle_failure(text)
             return parts
 
-        return list(await asyncio.gather(*(_chunk_one(t) for t in texts)))
+        results = await asyncio.gather(*(_chunk_one(t) for t in texts), return_exceptions=True)
+        for r in results:
+            if isinstance(r, BaseException):
+                raise r
+        return list(results)  # type: ignore[arg-type]
 
     def _backend(texts: list[str]) -> list[list[str]]:
         return run_async_in_sync(lambda: _process_batch(texts))
