@@ -147,6 +147,11 @@ class WsSession:
             reason = "error"
             with _suppress():
                 await self._send(WsError(category="internal", message=str(exc)))
+            # C28 — always emit a terminal WsClosed frame so clients see
+            # a deterministic end-of-stream marker rather than relying
+            # on transport drop. _send is no-op once the socket is gone.
+            with _suppress():
+                await self._send(WsClosed(reason=reason))
         finally:
             try:
                 await asyncio.shield(self._teardown(reason=reason))

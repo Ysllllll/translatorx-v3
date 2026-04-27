@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import math
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -33,6 +34,43 @@ def whisperx_is_available() -> bool:
         return True
     except Exception:
         return False
+
+
+# C30 — process-wide cache so multiple WhisperXTranscriber instances
+# created with identical (model, device, compute_type, language) tuples
+# share a single GPU-resident model rather than each loading their own
+# copy. ``_LOAD_LOCK`` serialises load_model() calls themselves so two
+# concurrent first-callers don't both trigger the heavy load.
+_LOAD_LOCK = threading.Lock()
+_MODEL_CACHE: dict[tuple, Any] = {}
+
+
+def _shared_load_model(
+    whisperx: Any,
+    *,
+    model: str,
+    device: str,
+    compute_type: str,
+    language: str | None,
+    extra: dict[str, Any],
+) -> Any:
+    key = (model, device, compute_type, language, tuple(sorted(extra.items())))
+    cached = _MODEL_CACHE.get(key)
+    if cached is not None:
+        return cached
+    with _LOAD_LOCK:
+        cached = _MODEL_CACHE.get(key)
+        if cached is not None:
+            return cached
+        loaded = whisperx.load_model(
+            model,
+            device=device,
+            compute_type=compute_type,
+            language=language,
+            **extra,
+        )
+        _MODEL_CACHE[key] = loaded
+        return loaded
 
 
 @dataclass
@@ -107,12 +145,13 @@ class WhisperXTranscriber:
 
         with self._lock:
             if self._model is None:
-                self._model = whisperx.load_model(
-                    cfg.model,
+                self._model = _shared_load_model(
+                    whisperx,
+                    model=cfg.model,
                     device=cfg.device,
                     compute_type=cfg.compute_type,
                     language=opts.language or cfg.language,
-                    **cfg.extra,
+                    extra=cfg.extra,
                 )
 
             audio_data = whisperx.load_audio(audio)
@@ -188,10 +227,17 @@ def _to_domain_segments(raw_segments: list[dict[str, Any]]) -> list[Segment]:
     out: list[Segment] = []
     for seg in raw_segments:
         words = _to_domain_words(seg.get("words") or [])
+        start = float(seg.get("start") or 0.0)
+        end = float(seg.get("end") or 0.0)
+        # C9 — drop pathological segments produced by alignment failures
+        # (NaN / negative duration / collapsed). They corrupt downstream
+        # word-timing alignment and Subtitle.from_words.
+        if not (math.isfinite(start) and math.isfinite(end)) or end <= start:
+            continue
         out.append(
             Segment(
-                start=float(seg.get("start") or 0.0),
-                end=float(seg.get("end") or 0.0),
+                start=start,
+                end=end,
                 text=(seg.get("text") or "").strip(),
                 speaker=seg.get("speaker"),
                 words=words,
@@ -206,11 +252,18 @@ def _to_domain_words(raw_words: list[dict[str, Any]]) -> list[Word]:
         text = w.get("word") or w.get("text") or ""
         if not text:
             continue
+        start = float(w.get("start") or 0.0)
+        end = float(w.get("end") or 0.0)
+        # C9 — same guard as segments. WhisperX occasionally emits
+        # zero-duration or NaN word frames when the alignment model
+        # cannot lock onto a span.
+        if not (math.isfinite(start) and math.isfinite(end)) or end <= start:
+            continue
         out.append(
             Word(
                 word=text,
-                start=float(w.get("start") or 0.0),
-                end=float(w.get("end") or 0.0),
+                start=start,
+                end=end,
                 speaker=w.get("speaker"),
             )
         )

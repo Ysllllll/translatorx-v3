@@ -141,9 +141,31 @@ def parse_srt(content: str) -> list[Segment]:
     return [Segment(start=c.start_ms / 1000, end=c.end_ms / 1000, text=c.text) for c in result.cues]
 
 
+def _read_srt_bytes(path: Path) -> str:
+    """C10 — read an SRT file with encoding sniffing.
+
+    SRTs in the wild come with BOM-marked UTF-8/16, GBK (cp936),
+    Shift-JIS, or Windows-1252 payloads. ``utf-8`` strict decoding
+    explodes on the first non-ASCII byte. We try the most common
+    encodings in order and fall back to ``utf-8`` with replacement so
+    the caller still sees the file rather than a hard error.
+    """
+    raw = path.read_bytes()
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw.decode("utf-8-sig")
+    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+        return raw.decode("utf-16")
+    for enc in ("utf-8", "utf-8-sig", "gb18030", "shift_jis", "cp1252"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 def read_srt(path: str | Path) -> list[Segment]:
     """Read an SRT file and return cleaned domain :class:`Segment` objects."""
-    return parse_srt(Path(path).read_text(encoding="utf-8"))
+    return parse_srt(_read_srt_bytes(Path(path)))
 
 
 __all__ = [

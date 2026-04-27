@@ -73,6 +73,22 @@ def test_to_domain_words_skips_empty_text():
     assert words[0].speaker == "S0"
 
 
+def test_to_domain_words_drops_zero_or_negative_duration():
+    """C9 — zero / negative / NaN duration words are filtered."""
+    import math
+
+    raw = [{"word": "ok", "start": 0.0, "end": 0.5}, {"word": "zero", "start": 1.0, "end": 1.0}, {"word": "neg", "start": 2.0, "end": 1.5}, {"word": "nan", "start": float("nan"), "end": 0.5}, {"word": "inf", "start": 0.0, "end": math.inf}]
+    words = whisperx_mod._to_domain_words(raw)
+    assert [w.word for w in words] == ["ok"]
+
+
+def test_to_domain_segments_drops_pathological_spans():
+    """C9 — segments with end<=start or non-finite times are dropped."""
+    raw = [{"start": 0.0, "end": 1.0, "text": "good", "words": []}, {"start": 1.0, "end": 0.5, "text": "reversed", "words": []}, {"start": 0.0, "end": float("nan"), "text": "nan", "words": []}]
+    segs = whisperx_mod._to_domain_segments(raw)
+    assert [s.text for s in segs] == ["good"]
+
+
 # ---------------------------------------------------------------------------
 # whisperx_is_available — pure environment check
 # ---------------------------------------------------------------------------

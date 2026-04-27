@@ -86,6 +86,17 @@ def composite_backend(
                 break
 
             unique_oversized = list(dict.fromkeys(oversized))
+            # C26 — log when dedup actually compresses the input. This
+            # is a useful signal that earlier stages are emitting many
+            # duplicate oversized chunks (often a sign of a buggy
+            # boundary detector).
+            if len(unique_oversized) < len(oversized):
+                logger.info(
+                    "composite stage %d deduplicated %d oversized chunks down to %d unique inputs",
+                    stage_idx,
+                    len(oversized),
+                    len(unique_oversized),
+                )
             refined = list(resolved[stage_idx](unique_oversized))
             if len(refined) != len(unique_oversized):
                 raise RuntimeError(f"Composite stage {stage_idx} returned {len(refined)} lists, expected {len(unique_oversized)}")

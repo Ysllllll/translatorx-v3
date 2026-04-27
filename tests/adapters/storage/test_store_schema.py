@@ -81,3 +81,35 @@ async def test_word_roundtrip_via_raw_segment(store: JsonFileStore) -> None:
     assert ref["n"] == 2
     loaded = await store.load_raw_segment("v1", "whisperx")
     assert len(loaded) == 2 and loaded[0].word == "hello"
+
+
+@pytest.mark.asyncio
+async def test_v1_document_migrates_to_v2_on_load(store: JsonFileStore) -> None:
+    """C12 — a v1 file on disk is migrated transparently when loaded."""
+    import json
+
+    legacy = {"schema_version": 1, "meta": {"video_id": "old"}, "records": []}
+    p = store.workspace.translation.path_for("oldvid", suffix=".json")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(legacy), encoding="utf-8")
+
+    data = await store.load_video("oldvid")
+    assert data["schema_version"] == 2
+    assert data["variants"] == {}
+    assert data["prompts"] == {}
+    assert data["meta"] == {"video_id": "old"}
+
+
+@pytest.mark.asyncio
+async def test_unmarked_document_treated_as_v1(store: JsonFileStore) -> None:
+    """C12 — externally authored files without schema_version still load."""
+    import json
+
+    legacy = {"meta": {}, "records": []}
+    p = store.workspace.translation.path_for("nover", suffix=".json")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(legacy), encoding="utf-8")
+
+    data = await store.load_video("nover")
+    assert data["schema_version"] == 2
+    assert "variants" in data
