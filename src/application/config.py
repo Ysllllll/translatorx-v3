@@ -319,17 +319,53 @@ class ChannelConfigEntry(BaseModel):
         )
 
 
+class BusConfigEntry(BaseModel):
+    """Pydantic mirror of :class:`ports.message_bus.BusConfig`.
+
+    Only ``redis_streams`` requires a non-empty ``url``. ``memory``
+    means: do not build a remote bus — :class:`PipelineRuntime` falls
+    back to in-process :class:`MemoryChannel` for every stage pair.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["memory", "redis_streams"] = "memory"
+    url: str | None = None
+    consumer_group: str = "trx-runners"
+    consumer_name: str | None = None
+    block_ms: int = Field(default=5000, ge=0)
+    max_in_flight: int = Field(default=64, ge=1)
+
+    def build(self) -> "BusConfig":
+        from ports.message_bus import BusConfig
+
+        return BusConfig(
+            type=self.type,
+            url=self.url,
+            consumer_group=self.consumer_group,
+            consumer_name=self.consumer_name,
+            block_ms=self.block_ms,
+            max_in_flight=self.max_in_flight,
+        )
+
+
 class StreamingConfig(BaseModel):
     """Streaming-runtime defaults (Phase 3).
 
     ``default_channel`` is applied to every stage pair in
     :meth:`PipelineRuntime.stream` unless a stage carries its own
     ``downstream_channel`` override in the YAML DSL.
+
+    ``bus`` (Phase 4 J5) is optional. When set with ``type=redis_streams``,
+    stages flagged with ``bus_topic`` route through a cross-process
+    :class:`BusChannel` instead of in-process :class:`MemoryChannel`.
+    Default ``type=memory`` keeps the runtime fully local.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     default_channel: ChannelConfigEntry = Field(default_factory=ChannelConfigEntry)
+    bus: BusConfigEntry = Field(default_factory=BusConfigEntry)
 
 
 class HotReloadConfig(BaseModel):

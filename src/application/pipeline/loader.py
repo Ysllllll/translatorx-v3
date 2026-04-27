@@ -162,12 +162,19 @@ def _parse_stage(raw: Any, *, where: str, context: Mapping[str, Any]) -> StageDe
 
     downstream_channel = _parse_channel_config(raw.get("downstream_channel"), where=f"{where}.downstream_channel")
 
+    bus_topic = raw.get("bus_topic")
+    if bus_topic is not None:
+        if not isinstance(bus_topic, str):
+            raise ValueError(f"{where}.bus_topic: expected a string, got {type(bus_topic).__name__}")
+        bus_topic = _interpolate_str(bus_topic, context=context, where=f"{where}.bus_topic")
+
     return StageDef(
         name=stage_name,
         params=params,
         when=when,
         id=stage_id,
         downstream_channel=downstream_channel,
+        bus_topic=bus_topic,
     )
 
 

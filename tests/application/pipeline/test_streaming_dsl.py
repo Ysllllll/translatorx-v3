@@ -194,3 +194,119 @@ class TestRuntimeHonorsPerStageChannel:
         # The single channel between source→enrich[0] should use the
         # build-stage override, not the runtime default.
         assert captured == [custom]
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 (J5) — bus_topic + StreamingConfig.bus
+# ---------------------------------------------------------------------------
+
+
+class TestLoaderBusTopic:
+    def test_string_parses(self):
+        cfg = load_pipeline_dict({"build": {"stage": "src"}, "enrich": [{"stage": "e1", "bus_topic": "live.translate.zh"}]})
+        assert cfg.enrich[0].bus_topic == "live.translate.zh"
+
+    def test_omitted_yields_none(self):
+        cfg = load_pipeline_dict({"build": {"stage": "src"}, "enrich": [{"stage": "e1"}]})
+        assert cfg.enrich[0].bus_topic is None
+
+    def test_non_string_rejected(self):
+        with pytest.raises(ValueError, match="bus_topic"):
+            load_pipeline_dict({"build": {"stage": "src"}, "enrich": [{"stage": "e1", "bus_topic": 42}]})
+
+    def test_interpolation(self):
+        cfg = load_pipeline_dict({"build": {"stage": "src"}, "enrich": [{"stage": "e1", "bus_topic": "trx.{{ stage_env }}.translate"}]}, vars={"stage_env": "prod"})
+        assert cfg.enrich[0].bus_topic == "trx.prod.translate"
+
+
+class TestSchemaBusTopic:
+    def test_advertised_in_default_schema(self):
+        from application.pipeline.schema import pipeline_json_schema as schema_fn
+
+        s = schema_fn()
+        # default schema (no registry-bound variants) — find stage def
+        stage_props = s["properties"]["build"]["properties"]
+        assert "bus_topic" in stage_props
+
+
+class TestStreamingConfigBus:
+    def test_default_is_memory_type(self):
+        cfg = StreamingConfig()
+        assert cfg.bus.type == "memory"
+        assert cfg.bus.url is None
+
+    def test_redis_streams_round_trip(self):
+        from application.config import BusConfigEntry
+
+        entry = BusConfigEntry(type="redis_streams", url="redis://x:6379", consumer_group="g")
+        bus_cfg = entry.build()
+        assert bus_cfg.type == "redis_streams"
+        assert bus_cfg.url == "redis://x:6379"
+        assert bus_cfg.consumer_group == "g"
+
+    def test_app_config_yaml_with_bus(self):
+        yaml = """
+streaming:
+  default_channel: {capacity: 32}
+  bus:
+    type: redis_streams
+    url: redis://localhost:6379
+    consumer_group: tx
+"""
+        ac = AppConfig.from_yaml(yaml)
+        assert ac.streaming.bus.type == "redis_streams"
+        assert ac.streaming.bus.url == "redis://localhost:6379"
+
+
+class TestRuntimeBusBranch:
+    @pytest.mark.asyncio
+    async def test_bus_topic_with_bus_uses_bus_channel(self):
+        from adapters.streaming import InMemoryMessageBus
+        from application.pipeline.bus_channel import BusChannel
+
+        captured: list[type] = []
+        original_init = BusChannel.__init__
+
+        def _spy(self, *a, **kw):
+            captured.append(BusChannel)
+            return original_init(self, *a, **kw)
+
+        BusChannel.__init__ = _spy  # type: ignore[method-assign]
+        try:
+            reg = StageRegistry()
+            reg.register("src", lambda _p: _Source())
+            reg.register("id", lambda _p: _Identity())
+            ctx = await _make_ctx()
+            bus = InMemoryMessageBus()
+            rt = PipelineRuntime(reg, bus=bus)
+            defn = PipelineDef(name="p", build=StageDef(name="src", bus_topic="t.test"), enrich=(StageDef(name="id"),))
+            out = [r async for r in rt.stream(defn, ctx)]
+            assert len(out) == 3
+            assert captured  # BusChannel was used
+            await bus.close()
+        finally:
+            BusChannel.__init__ = original_init  # type: ignore[method-assign]
+
+    @pytest.mark.asyncio
+    async def test_bus_none_falls_back_to_memory_channel(self):
+        # bus_topic set but no bus → MemoryChannel
+        captured: list[type] = []
+        original_init = MemoryChannel.__init__
+
+        def _spy(self, *a, **kw):
+            captured.append(MemoryChannel)
+            return original_init(self, *a, **kw)
+
+        MemoryChannel.__init__ = _spy  # type: ignore[method-assign]
+        try:
+            reg = StageRegistry()
+            reg.register("src", lambda _p: _Source())
+            reg.register("id", lambda _p: _Identity())
+            ctx = await _make_ctx()
+            rt = PipelineRuntime(reg, bus=None)
+            defn = PipelineDef(name="p", build=StageDef(name="src", bus_topic="t.test"), enrich=(StageDef(name="id"),))
+            out = [r async for r in rt.stream(defn, ctx)]
+            assert len(out) == 3
+            assert captured
+        finally:
+            MemoryChannel.__init__ = original_init  # type: ignore[method-assign]

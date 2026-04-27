@@ -80,6 +80,10 @@ _STAGE_REF_SCHEMA: dict[str, Any] = {
             "additionalProperties": True,
         },
         "downstream_channel": _CHANNEL_CONFIG_SCHEMA,
+        "bus_topic": {
+            "type": ["string", "null"],
+            "description": "Optional cross-process bus topic. Phase 4 (J5).",
+        },
     },
     "anyOf": [
         {"required": ["stage"]},
@@ -212,6 +216,7 @@ def registry_json_schema(registry: "StageRegistry") -> dict[str, Any]:
                     "when": {"type": ["string", "null"]},
                     "params": stage_params_schema(registry, name),
                     "downstream_channel": _CHANNEL_CONFIG_SCHEMA,
+                    "bus_topic": {"type": ["string", "null"]},
                 },
                 "anyOf": [
                     {"required": ["stage"]},

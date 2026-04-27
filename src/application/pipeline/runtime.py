@@ -45,10 +45,14 @@ from ports.pipeline import (
 )
 from ports.stage import RecordStage, SourceStage, StageStatus, SubtitleStage
 
+from .bus_channel import BusChannel
 from .channels import MemoryChannel
 from .context import PipelineContext
 from .middleware import compose
 from .registry import DEFAULT_REGISTRY, StageRegistry
+
+if False:  # TYPE_CHECKING — keep import light
+    from ports.message_bus import MessageBus
 
 __all__ = ["PipelineRuntime"]
 
@@ -61,7 +65,7 @@ async def _replay(items: list[SentenceRecord]) -> AsyncIterator[SentenceRecord]:
 class PipelineRuntime:
     """Executes a :class:`PipelineDef` against a :class:`PipelineContext`."""
 
-    __slots__ = ("_registry", "_middlewares", "_default_channel_config")
+    __slots__ = ("_registry", "_middlewares", "_default_channel_config", "_bus")
 
     def __init__(
         self,
@@ -69,10 +73,12 @@ class PipelineRuntime:
         *,
         middlewares: list[Middleware] | None = None,
         default_channel_config: ChannelConfig | None = None,
+        bus: "MessageBus | None" = None,
     ) -> None:
         self._registry = registry or DEFAULT_REGISTRY
         self._middlewares: list[Middleware] = list(middlewares or [])
         self._default_channel_config = default_channel_config
+        self._bus = bus
 
     async def run(
         self,
@@ -232,11 +238,23 @@ class PipelineRuntime:
                 upstream_def = defn.build if i == 0 else defn.enrich[i - 1]
                 ch_cfg = upstream_def.downstream_channel or default_cfg
                 stage_id = sdef.id or sdef.name
-                ch: MemoryChannel[SentenceRecord] = MemoryChannel(
-                    ch_cfg,
-                    name=stage_id,
-                    on_watermark=_make_channel_emitter(ctx, stage_id, sdef.name),
-                )
+                emitter = _make_channel_emitter(ctx, stage_id, sdef.name)
+                ch: Any
+                if self._bus is not None and (upstream_def.bus_topic or sdef.bus_topic):
+                    topic = upstream_def.bus_topic or f"trx.{ctx.run_id}.{stage_id}"
+                    ch = BusChannel(
+                        self._bus,
+                        topic,
+                        ch_cfg,
+                        name=stage_id,
+                        on_watermark=emitter,
+                    )
+                else:
+                    ch = MemoryChannel(
+                        ch_cfg,
+                        name=stage_id,
+                        on_watermark=emitter,
+                    )
                 pump_tasks.append(asyncio.create_task(_pump(upstream, ch)))
                 scope.push_cleanup(ch.close)
                 upstream = await self._call(

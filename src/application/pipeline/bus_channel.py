@@ -141,7 +141,9 @@ class BusChannel(Generic[T]):
             pending = asyncio.ensure_future(ait.__anext__())
             await asyncio.sleep(0)
             self._subscribed.set()
-            while not self._closed:
+            # Drain runs forever; _finalize() cancels us once close()
+            # is called and sent==received (or grace timeout fires).
+            while True:
                 try:
                     msg = await pending
                 except StopAsyncIteration:
@@ -221,39 +223,11 @@ class BusChannel(Generic[T]):
     # ------------------------------------------------------------------ consumer
 
     async def recv(self) -> T:
-        # Fast path: already buffered.
-        if not self._inbox.empty():
-            item = self._inbox.get_nowait()
-            return self._consume(item)
-
-        if self._closed and self._inbox.empty():
+        # Quick-return when fully drained.
+        if self._closed and self._inbox.empty() and self._sent == self._received:
             raise StopAsyncIteration
-
-        get_task = asyncio.ensure_future(self._inbox.get())
-        close_task = asyncio.ensure_future(self._close_event.wait())
-        try:
-            done, _ = await asyncio.wait(
-                {get_task, close_task},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-        except BaseException:
-            get_task.cancel()
-            close_task.cancel()
-            raise
-
-        if get_task in done:
-            close_task.cancel()
-            return self._consume(get_task.result())
-
-        # Closed wins. Drain anything buffered before signalling EOS.
-        get_task.cancel()
-        try:
-            await get_task
-        except BaseException:
-            pass
-        if not self._inbox.empty():
-            return self._consume(self._inbox.get_nowait())
-        raise StopAsyncIteration
+        item = await self._inbox.get()
+        return self._consume(item)
 
     def _consume(self, item: BusMessage | object) -> T:
         if item is self._eos:
@@ -290,9 +264,20 @@ class BusChannel(Generic[T]):
             return
         self._closed = True
         self._close_event.set()
+        self._emit("closed")
+        # Schedule graceful shutdown: wait for in-flight messages to
+        # settle, then cancel the drain task. recv() side will see
+        # _eos via drain's finally block.
+        asyncio.create_task(self._finalize())
+
+    async def _finalize(self) -> None:
+        # Cap at ~2s; remote bus stalls beyond that get force-cancelled.
+        for _ in range(200):
+            if self._sent == self._received:
+                break
+            await asyncio.sleep(0.01)
         if self._drain_task is not None and not self._drain_task.done():
             self._drain_task.cancel()
-        self._emit("closed")
 
     def is_closed(self) -> bool:
         return self._closed

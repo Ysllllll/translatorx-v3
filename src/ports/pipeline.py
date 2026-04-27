@@ -83,6 +83,13 @@ class StageDef:
     *next* stage. ``None`` falls back to ``PipelineRuntime``'s default
     config. Phase 3 (C4) — only honored by :meth:`PipelineRuntime.stream`,
     ignored by batch :meth:`PipelineRuntime.run`."""
+    bus_topic: str | None = None
+    """Optional cross-process bus topic feeding the *next* stage. When
+    set and the runtime has a configured :class:`MessageBus`, the
+    downstream channel is materialized as a :class:`BusChannel` instead
+    of an in-process :class:`MemoryChannel`. Defaults to
+    ``trx.<run_id>.<stage_id>`` if the runtime has a bus but the field
+    is empty. Phase 4 (J5)."""
 
 
 @dataclass(frozen=True, slots=True)
