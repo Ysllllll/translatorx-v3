@@ -98,6 +98,9 @@ class HttpRemoteTranscriber:
 
         return _parse_http_response(payload, fallback_language=opts.language or "")
 
+    async def aclose(self) -> None:
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Response parsing

@@ -44,6 +44,9 @@ class ElevenLabsTTS:
     async def list_voices(self, language: str | None = None) -> list[Voice]:
         raise NotImplementedError("ElevenLabs list_voices() is not implemented yet.")
 
+    async def aclose(self) -> None:
+        return None
+
 
 def _factory(params: Mapping[str, Any]) -> ElevenLabsTTS:
     return ElevenLabsTTS(

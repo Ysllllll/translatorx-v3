@@ -86,6 +86,13 @@ class TTS(Protocol):
         """Return voices available for ``language`` (all voices if None)."""
         ...
 
+    async def aclose(self) -> None:
+        """Release backend resources (HTTP clients, model handles, ...).
+
+        Idempotent. Default no-op for stateless backends.
+        """
+        ...
+
 
 # ---------------------------------------------------------------------------
 # VoicePicker

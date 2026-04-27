@@ -101,6 +101,13 @@ class MediaSource(Protocol):
         """Download video file to *output_dir*."""
         ...
 
+    async def aclose(self) -> None:
+        """Release adapter resources (yt-dlp instance, HTTP session, ...).
+
+        Idempotent. Default no-op for stateless adapters.
+        """
+        ...
+
 
 @runtime_checkable
 class MediaProbe(Protocol):

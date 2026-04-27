@@ -75,6 +75,9 @@ class EdgeTTS:
             return [v for v in self._voices_cache if v.language.lower().startswith(language.lower())]
         return list(self._voices_cache)
 
+    async def aclose(self) -> None:
+        self._voices_cache = None
+
 
 # ---------------------------------------------------------------------------
 # Helpers

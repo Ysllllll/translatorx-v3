@@ -93,6 +93,9 @@ class OpenAiTranscriber:
 
         return _parse_openai_response(payload, fallback_language=opts.language or "")
 
+    async def aclose(self) -> None:
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Response parsing

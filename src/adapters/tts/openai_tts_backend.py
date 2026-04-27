@@ -91,6 +91,9 @@ class OpenAITTS:
             for name, gender in _DEFAULT_VOICES
         ]
 
+    async def aclose(self) -> None:
+        return None
+
 
 def _voice_id(voice: Voice | str) -> str:
     if isinstance(voice, Voice):

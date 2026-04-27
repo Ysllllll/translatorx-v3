@@ -21,6 +21,9 @@ class _StubTTS:
             return list(self._voices)
         return [v for v in self._voices if v.language.lower().startswith(language.lower())]
 
+    async def aclose(self) -> None:
+        return None
+
 
 class TestVoice:
     def test_defaults(self):

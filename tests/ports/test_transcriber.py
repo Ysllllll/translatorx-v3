@@ -12,6 +12,9 @@ class _StubTranscriber:
     async def transcribe(self, audio, opts=None):
         return TranscriptionResult(segments=[], language="en", duration=0.0)
 
+    async def aclose(self) -> None:
+        return None
+
 
 def test_options_defaults():
     opts = TranscribeOptions()

@@ -82,6 +82,13 @@ class Transcriber(Protocol):
         """Transcribe ``audio`` into a :class:`TranscriptionResult`."""
         ...
 
+    async def aclose(self) -> None:
+        """Release backend resources (HTTP clients, GPU models, ...).
+
+        Idempotent. Default no-op for stateless backends.
+        """
+        ...
+
 
 __all__ = [
     "TranscribeOptions",

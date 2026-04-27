@@ -56,6 +56,9 @@ class LocalTTS:
     async def list_voices(self, language: str | None = None) -> list[Voice]:
         raise NotImplementedError("Local TTS list_voices() is not implemented yet.")
 
+    async def aclose(self) -> None:
+        return None
+
 
 def _factory(params: Mapping[str, Any]) -> LocalTTS:
     voice_dir = params.get("voice_dir")

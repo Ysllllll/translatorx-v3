@@ -135,6 +135,30 @@ class WhisperXTranscriber:
         opts = opts or TranscribeOptions()
         return await asyncio.to_thread(self._transcribe_sync, str(audio), opts)
 
+    async def aclose(self) -> None:
+        """Release per-instance model references and align cache.
+
+        The process-wide ``_MODEL_CACHE`` is intentionally preserved so
+        peer transcribers and subsequent App lifecycles can re-use loaded
+        weights; per-instance state (alignment LRU, diarize pipeline) is
+        dropped here.
+        """
+
+        def _release() -> None:
+            with self._lock:
+                for _, (model, _meta) in list(self._align_cache.items()):
+                    rel = getattr(model, "release", None)
+                    if callable(rel):
+                        try:
+                            rel()
+                        except Exception:
+                            pass
+                self._align_cache.clear()
+                self._diarize_pipeline = None
+                self._model = None
+
+        await asyncio.to_thread(_release)
+
     # ------------------------------------------------------------------
     # Sync worker
     # ------------------------------------------------------------------

@@ -206,6 +206,9 @@ class YtdlpSource:
             return result
         raise RuntimeError(f"Cannot resolve single media from {url}")
 
+    async def aclose(self) -> None:
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Parsing helpers

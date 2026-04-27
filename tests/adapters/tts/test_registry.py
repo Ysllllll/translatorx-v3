@@ -15,6 +15,9 @@ class _FakeTTS:
     async def list_voices(self, language=None):
         return [Voice(id="fake", language=language or "")]
 
+    async def aclose(self) -> None:
+        return None
+
 
 def test_default_backends_registered():
     names = set(DEFAULT_REGISTRY.names())
