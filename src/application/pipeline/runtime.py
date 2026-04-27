@@ -223,10 +223,16 @@ class PipelineRuntime:
             upstream: AsyncIterator[SentenceRecord] = source.stream(ctx)
             scope.push_cleanup(source.close)
 
-            for sdef in defn.enrich:
+            for i, sdef in enumerate(defn.enrich):
                 rstage: RecordStage = self._registry.build(sdef)  # type: ignore[assignment]
+                # The channel feeding this stage is configured by the
+                # *upstream* stage's ``downstream_channel``. For
+                # ``enrich[0]`` that's ``build``; otherwise the previous
+                # enrich stage. Falls back to runtime default.
+                upstream_def = defn.build if i == 0 else defn.enrich[i - 1]
+                ch_cfg = upstream_def.downstream_channel or default_cfg
                 ch: MemoryChannel[SentenceRecord] = MemoryChannel(
-                    default_cfg,
+                    ch_cfg,
                     name=sdef.id or sdef.name,
                 )
                 pump_tasks.append(asyncio.create_task(_pump(upstream, ch)))

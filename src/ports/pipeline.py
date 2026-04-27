@@ -30,6 +30,7 @@ from typing import (
 if TYPE_CHECKING:
     from domain.model import SentenceRecord
 
+    from .backpressure import ChannelConfig
     from .errors import ErrorInfo
     from .stage import StageStatus
 
@@ -77,6 +78,11 @@ class StageDef:
     """Optional Jinja-style condition; evaluated by the runtime. Phase 2."""
     id: str | None = None
     """Optional unique id within a pipeline; defaults to ``name``."""
+    downstream_channel: "ChannelConfig | None" = None
+    """Optional per-stage override of the bounded channel feeding the
+    *next* stage. ``None`` falls back to ``PipelineRuntime``'s default
+    config. Phase 3 (C4) — only honored by :meth:`PipelineRuntime.stream`,
+    ignored by batch :meth:`PipelineRuntime.run`."""
 
 
 @dataclass(frozen=True, slots=True)

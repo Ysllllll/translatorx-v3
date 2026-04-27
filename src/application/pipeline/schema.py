@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ports.backpressure import OverflowPolicy
 from ports.pipeline import ErrorPolicy
 
 if TYPE_CHECKING:
@@ -32,6 +33,25 @@ __all__ = [
     "stage_params_schema",
     "registry_json_schema",
 ]
+
+
+_CHANNEL_CONFIG_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Bounded channel feeding the downstream stage. Phase 3 streaming. Honored only by PipelineRuntime.stream(); ignored by run()."
+    ),
+    "properties": {
+        "capacity": {"type": "integer", "minimum": 1, "default": 64},
+        "high_watermark": {"type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.8},
+        "low_watermark": {"type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.3},
+        "overflow": {
+            "type": "string",
+            "enum": [p.value for p in OverflowPolicy],
+            "default": "block",
+        },
+    },
+    "additionalProperties": False,
+}
 
 
 _STAGE_REF_SCHEMA: dict[str, Any] = {
@@ -59,6 +79,7 @@ _STAGE_REF_SCHEMA: dict[str, Any] = {
             "description": "Stage-specific parameters. Validated against the stage's Params model.",
             "additionalProperties": True,
         },
+        "downstream_channel": _CHANNEL_CONFIG_SCHEMA,
     },
     "anyOf": [
         {"required": ["stage"]},
@@ -190,6 +211,7 @@ def registry_json_schema(registry: "StageRegistry") -> dict[str, Any]:
                     "id": {"type": "string"},
                     "when": {"type": ["string", "null"]},
                     "params": stage_params_schema(registry, name),
+                    "downstream_channel": _CHANNEL_CONFIG_SCHEMA,
                 },
                 "anyOf": [
                     {"required": ["stage"]},

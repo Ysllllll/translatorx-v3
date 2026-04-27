@@ -39,6 +39,8 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
+from ports.backpressure import ChannelConfig, OverflowPolicy
+
 
 # ---------------------------------------------------------------------------
 # Config models
@@ -294,6 +296,42 @@ class ServiceConfig(BaseModel):
     )
 
 
+class ChannelConfigEntry(BaseModel):
+    """Pydantic mirror of :class:`ports.backpressure.ChannelConfig`.
+
+    Pydantic models give us YAML/env validation; the entry materializes
+    into the frozen ``ChannelConfig`` dataclass via :meth:`build`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    capacity: int = Field(default=64, ge=1)
+    high_watermark: float = Field(default=0.8, ge=0.0, le=1.0)
+    low_watermark: float = Field(default=0.3, ge=0.0, le=1.0)
+    overflow: Literal["block", "drop_new", "drop_old", "reject"] = "block"
+
+    def build(self) -> ChannelConfig:
+        return ChannelConfig(
+            capacity=self.capacity,
+            high_watermark=self.high_watermark,
+            low_watermark=self.low_watermark,
+            overflow=OverflowPolicy(self.overflow),
+        )
+
+
+class StreamingConfig(BaseModel):
+    """Streaming-runtime defaults (Phase 3).
+
+    ``default_channel`` is applied to every stage pair in
+    :meth:`PipelineRuntime.stream` unless a stage carries its own
+    ``downstream_channel`` override in the YAML DSL.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    default_channel: ChannelConfigEntry = Field(default_factory=ChannelConfigEntry)
+
+
 class HotReloadConfig(BaseModel):
     """Hot-reload watcher for :attr:`AppConfig.pipelines_dir`.
 
@@ -337,6 +375,12 @@ class AppConfig(BaseModel):
     hot_reload: "HotReloadConfig" = Field(default_factory=lambda: HotReloadConfig())
     """Optional file-system watcher for ``pipelines_dir``. Default OFF for
     production safety. Phase 2 (D) — see :mod:`application.pipeline.hot_reload`."""
+
+    streaming: "StreamingConfig" = Field(default_factory=lambda: StreamingConfig())
+    """Streaming-runtime defaults (Phase 3). The ``default_channel`` is
+    applied to every adjacent stage pair in
+    :meth:`PipelineRuntime.stream` unless a stage carries its own
+    ``downstream_channel`` override in the YAML DSL."""
 
     # -- loaders ---------------------------------------------------------
 
@@ -395,12 +439,15 @@ def _apply_env_overrides(data: dict[str, Any], *, prefix: str) -> dict[str, Any]
 __all__ = [
     "AppConfig",
     "AuthKeyEntry",
+    "ChannelConfigEntry",
     "ContextEntry",
     "EngineEntry",
+    "HotReloadConfig",
     "PreprocessConfig",
     "RuntimeConfig",
     "ServiceConfig",
     "StoreConfig",
+    "StreamingConfig",
     "TranscriberConfig",
     "TTSConfig",
 ]

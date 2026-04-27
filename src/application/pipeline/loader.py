@@ -37,6 +37,7 @@ from typing import Any, Mapping
 
 import yaml
 
+from ports.backpressure import ChannelConfig, OverflowPolicy
 from ports.pipeline import ErrorPolicy, PipelineDef, StageDef
 
 __all__ = [
@@ -159,7 +160,62 @@ def _parse_stage(raw: Any, *, where: str, context: Mapping[str, Any]) -> StageDe
     if stage_id is not None and not isinstance(stage_id, str):
         raise ValueError(f"{where}.id: expected a string, got {type(stage_id).__name__}")
 
-    return StageDef(name=stage_name, params=params, when=when, id=stage_id)
+    downstream_channel = _parse_channel_config(raw.get("downstream_channel"), where=f"{where}.downstream_channel")
+
+    return StageDef(
+        name=stage_name,
+        params=params,
+        when=when,
+        id=stage_id,
+        downstream_channel=downstream_channel,
+    )
+
+
+def _parse_channel_config(raw: Any, *, where: str) -> ChannelConfig | None:
+    """Convert a ``downstream_channel:`` mapping into a :class:`ChannelConfig`.
+
+    ``None`` (key omitted) is the common case — runtime falls back to
+    its default. Empty mapping ``{}`` is treated the same as ``None``.
+    """
+
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ValueError(f"{where}: expected a mapping, got {type(raw).__name__}")
+    if not raw:
+        return None
+
+    allowed = {"capacity", "high_watermark", "low_watermark", "overflow"}
+    extra = set(raw.keys()) - allowed
+    if extra:
+        raise ValueError(f"{where}: unknown keys {sorted(extra)!r}; allowed: {sorted(allowed)!r}")
+
+    kwargs: dict[str, Any] = {}
+    if "capacity" in raw:
+        cap = raw["capacity"]
+        if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
+            raise ValueError(f"{where}.capacity must be a positive int, got {cap!r}")
+        kwargs["capacity"] = cap
+    for key in ("high_watermark", "low_watermark"):
+        if key in raw:
+            v = raw[key]
+            if not isinstance(v, (int, float)) or isinstance(v, bool):
+                raise ValueError(f"{where}.{key} must be a number, got {v!r}")
+            kwargs[key] = float(v)
+    if "overflow" in raw:
+        ov = raw["overflow"]
+        if not isinstance(ov, str):
+            raise ValueError(f"{where}.overflow must be a string, got {type(ov).__name__}")
+        try:
+            kwargs["overflow"] = OverflowPolicy(ov)
+        except ValueError as exc:
+            valid = ", ".join(p.value for p in OverflowPolicy)
+            raise ValueError(f"{where}.overflow={ov!r} not in [{valid}]") from exc
+
+    try:
+        return ChannelConfig(**kwargs)
+    except ValueError as exc:
+        raise ValueError(f"{where}: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------

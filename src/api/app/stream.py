@@ -251,7 +251,11 @@ class LiveStreamHandle:
             ctx_kwargs["reporter"] = self._error_reporter
         ctx = PipelineContext(**ctx_kwargs)
 
-        runtime = PipelineRuntime(self._registry, middlewares=[TracingMiddleware()])
+        runtime = PipelineRuntime(
+            self._registry,
+            middlewares=[TracingMiddleware()],
+            default_channel_config=self._app.config.streaming.default_channel.build(),
+        )
 
         if self._app.event_bus is not None:
             await self._app.event_bus.publish(
