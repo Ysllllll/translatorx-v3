@@ -20,6 +20,8 @@ python -m demos.<package>            # for package-style demos
 | **`demo_batch_preprocess.py`** | 485 | Preprocess path in isolation: NER/LLM punc + composite chunk + per-pipeline state rendering. STEP 7 record table is the canonical record renderer. | ✅ |
 | `demo_advanced_features.py` | 524 | Four advanced topics behind `--only`: dynamic terms, prompt degradation (FlakyEngine), chunked sliding-window translate, summary integration. | ✅ |
 | `demo_app.py` | 286 | `App` / `VideoBuilder` / `CourseBuilder` / `AppConfig` end-to-end. | ✅ |
+| `demo_pipeline.py` | 182 | Stage-based pipeline runtime: builder + YAML + tracing middleware. | — |
+| `demo_phase2_d.py` | 150 | Phase 2 (D): tenant namespacing, hot_reload watcher, registry-bound DSL validation. | — |
 | `demo_llm_ops.py` | 895 | Six-chapter llm_ops walk-through (engine → context → translate → checker → degradation → summary). | ✅ |
 | `demo_checker.py` | 89 | Translation quality checker rules + profiles. | — |
 | `demo_lang_ops.py` | 85 | LangOps factory, tokenization, sentence/clause splitting across languages. | — |
