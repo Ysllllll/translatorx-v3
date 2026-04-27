@@ -12,6 +12,13 @@ Phase 5 will incrementally add :class:`PipelineScheduler` (Protocol) +
 
 from __future__ import annotations
 
+from application.scheduler.base import (
+    PipelineScheduler,
+    QuotaExceeded,
+    SchedulerStats,
+    SchedulerTicket,
+)
+from application.scheduler.fair import FairScheduler
 from application.scheduler.tenant import (
     DEFAULT_QUOTAS,
     DEFAULT_TENANT_ID,
@@ -23,7 +30,12 @@ from application.scheduler.tenant import (
 __all__ = [
     "DEFAULT_QUOTAS",
     "DEFAULT_TENANT_ID",
+    "FairScheduler",
+    "PipelineScheduler",
     "QoSTier",
+    "QuotaExceeded",
+    "SchedulerStats",
+    "SchedulerTicket",
     "TenantContext",
     "TenantQuota",
 ]
