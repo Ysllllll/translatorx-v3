@@ -240,13 +240,23 @@ def create_app(
     if svc_cfg.cors_origins:
         from fastapi.middleware.cors import CORSMiddleware
 
+        # C15 — the CORS spec forbids ``Access-Control-Allow-Origin: *``
+        # together with ``Access-Control-Allow-Credentials: true``;
+        # browsers reject the response. Surface the misconfiguration
+        # at startup rather than letting it fail silently per request.
+        if svc_cfg.cors_allow_credentials and any(o.strip() == "*" for o in svc_cfg.cors_origins):
+            raise ValueError(
+                "service.cors_origins=['*'] is incompatible with "
+                "service.cors_allow_credentials=True. Either disable "
+                "credentials or pin cors_origins to explicit hosts."
+            )
+
         api.add_middleware(
             CORSMiddleware,
             allow_origins=svc_cfg.cors_origins,
             allow_credentials=svc_cfg.cors_allow_credentials,
             allow_methods=["*"],
             allow_headers=["*"],
-            expose_headers=["X-API-Key"],
         )
     if svc_cfg.rps_limit > 0:
         from api.service.middleware.rate_limit import RateLimitMiddleware

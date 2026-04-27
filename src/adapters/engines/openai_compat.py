@@ -145,3 +145,7 @@ class OpenAICompatEngine:
         async for chunk in response:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
+
+    async def aclose(self) -> None:
+        """Close the underlying httpx client. Idempotent."""
+        await self._client.close()

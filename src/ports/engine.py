@@ -64,3 +64,12 @@ class LLMEngine(Protocol):
             Successive string chunks of the assistant's reply.
         """
         ...
+
+    async def aclose(self) -> None:
+        """Release engine resources (HTTP sessions, model handles).
+
+        C1 — declared on the protocol so callers can rely on it without
+        ``hasattr`` probes. Implementations may default to a no-op; the
+        canonical OpenAI-compatible engine closes its httpx client.
+        """
+        ...

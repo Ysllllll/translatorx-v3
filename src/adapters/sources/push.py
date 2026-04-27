@@ -88,5 +88,9 @@ class PushQueueSource:
         self._next_id += 1
         return replace(rec, extra=extra)
 
+    async def aclose(self) -> None:
+        """Idempotent close; equivalent to :meth:`close`."""
+        await self.close()
+
 
 __all__ = ["PushQueueSource"]

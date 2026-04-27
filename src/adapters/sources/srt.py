@@ -162,5 +162,9 @@ class SrtSource:
         for rec in assign_ids(sub.records(), start=self._id_start):
             yield rec
 
+    async def aclose(self) -> None:
+        """No-op — SrtSource holds no live resources."""
+        return None
+
 
 __all__ = ["SrtSource"]

@@ -25,6 +25,9 @@ class _GoodEngine:
         yield "o"
         yield "k"
 
+    async def aclose(self) -> None:
+        return None
+
 
 class _BadEngine:
     """Missing stream method — should NOT satisfy the Protocol."""

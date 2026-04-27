@@ -24,6 +24,7 @@ from .rules import (
     _entity_sub,
     _ms_to_ts,
 )
+from domain.lang import DEFAULT_FENCES, mask_fences, unmask_fences
 
 
 def _ts_to_ms(h: str, m: str, s: str, ms: str) -> int:
@@ -105,8 +106,15 @@ def text_content(cues_or_text: list[Cue] | str) -> str:
 
 
 def sanitize_srt(content: str) -> str:
-    """Text-level SRT sanitizer. Normalizes text artifacts in-place; no timestamp repair."""
+    """Text-level SRT sanitizer. Normalizes text artifacts in-place; no timestamp repair.
+
+    C8 — fence markers (``[? ... ?]`` / ``[! ... !]`` and friends from
+    :data:`DEFAULT_FENCES`) are masked before transformations such as
+    HTML-tag stripping or whitespace collapsing can damage their inner
+    payload. The original text is restored after sanitisation.
+    """
     content = content.replace("\r\n", "\n").replace("\r", "\n").lstrip("\ufeff")  # 去除字节顺序标记 BOM
+    content, fence_map = mask_fences(content, DEFAULT_FENCES)
     content = _HTML_ENTITY_RE.sub(_entity_sub, content)
     content = _INVISIBLE_RE.sub("", content)
     content = content.translate(_WHITESPACE_MAP)
@@ -117,6 +125,8 @@ def sanitize_srt(content: str) -> str:
     content = "".join(ch for ch in content if ch in "\n " or unicodedata.category(ch)[0] != "C")
     content = _MULTI_SPACE_RE.sub(" ", content)
     content = re.sub(r"(?<!\.)\.\.(?!\.)", ".", content)
+    if fence_map:
+        content = unmask_fences(content, fence_map)
     return content
 
 

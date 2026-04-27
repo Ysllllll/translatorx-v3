@@ -90,10 +90,18 @@ class Source(Protocol[Out_co]):
     subtitle feeder. For resume scenarios, the source is responsible
     for emitting the full record list (including already-translated
     ones) — downstream processors' hit-checks will skip them cheaply.
+
+    C1 — :meth:`aclose` mirrors the Processor contract; orchestrators
+    call it in ``finally`` so file handles / HTTP sessions / temp dirs
+    can be released. Must be idempotent.
     """
 
     async def read(self) -> AsyncIterator[Out_co]:
         """Yield items in order. One-shot; not re-iterable."""
+        ...
+
+    async def aclose(self) -> None:
+        """Release source-side resources. Idempotent."""
         ...
 
 
