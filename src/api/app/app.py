@@ -31,6 +31,8 @@ class App:
         self._config = config
         self._engines: dict[str, OpenAICompatEngine] = {}
         self._event_bus = None  # type: ignore[var-annotated]
+        self._registry = None  # type: ignore[var-annotated]
+        self._pipelines: dict[str, dict] | None = None
 
     @classmethod
     def from_config(cls, path: str | Path) -> App:
@@ -395,6 +397,55 @@ class App:
         from api.app.pipeline_builder import PipelineBuilder
 
         return PipelineBuilder(app=self, course=course, video=video)
+
+    # -- pipeline catalog (Phase 2 / Step B5) ----------------------------
+
+    def registry(self):
+        """Return (cached) :class:`StageRegistry` wired to this App.
+
+        Phase 2 (D). Used by the pipelines/stages routers and external
+        tools that need to validate or schema-introspect pipelines.
+        """
+        if self._registry is None:
+            from application.stages import make_default_registry
+
+            self._registry = make_default_registry(self)
+        return self._registry
+
+    def pipelines(self) -> dict[str, dict]:
+        """Return the discovered inline + on-disk named pipelines.
+
+        Sources, in order (later wins):
+
+        1. ``config.pipelines`` (inline dicts in YAML / dict config)
+        2. ``config.pipelines_dir/*.yaml`` — each file is parsed as a
+           pipeline; the file stem (or its inner ``name:`` field) is
+           used as the catalog key.
+        """
+        if self._pipelines is not None:
+            return self._pipelines
+        cat: dict[str, dict] = dict(self._config.pipelines)
+        d = self._config.pipelines_dir
+        if d:
+            from pathlib import Path as _P
+
+            import yaml as _yaml
+
+            base = _P(d).expanduser()
+            if not base.is_absolute():
+                base = _P(self._config.store.root).expanduser() / base
+            if base.is_dir():
+                for f in sorted(base.glob("*.yaml")):
+                    try:
+                        data = _yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+                    except _yaml.YAMLError:
+                        continue
+                    if not isinstance(data, dict):
+                        continue
+                    key = data.get("name") or f.stem
+                    cat[str(key)] = data
+        self._pipelines = cat
+        return cat
 
 
 # ---------------------------------------------------------------------------

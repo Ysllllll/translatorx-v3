@@ -1,0 +1,35 @@
+# Sample pipeline — SRT → punctuation → chunk → translate.
+# Loaded by App.pipelines() when AppConfig.pipelines_dir points at this
+# directory. Use {{ var | default(...) }} for caller-supplied overrides.
+
+name: standard_translate
+version: 1
+defaults:
+  source_lang: en
+  target_lang: zh
+  max_len: 80
+build:
+  stage: from_srt
+  params:
+    path: "{{ input_path }}"
+    language: "{{ source_lang }}"
+structure:
+  - stage: punc
+    params:
+      language: "{{ source_lang }}"
+  - stage: chunk
+    params:
+      language: "{{ source_lang }}"
+      max_len: "{{ max_len }}"
+  - stage: merge
+    params:
+      max_len: "{{ max_len }}"
+enrich:
+  - stage: translate
+    params:
+      src: "{{ source_lang }}"
+      tgt: "{{ target_lang }}"
+on_error:
+  policy: continue
+on_cancel:
+  flush_store: true

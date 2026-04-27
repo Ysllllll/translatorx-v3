@@ -308,6 +308,16 @@ class AppConfig(BaseModel):
     tts: TTSConfig = Field(default_factory=TTSConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
 
+    pipelines_dir: str | None = None
+    """Optional directory of named pipeline YAML files (one pipeline per
+    file). Discovered files are loaded into :attr:`pipelines` lazily by
+    :meth:`App.pipelines`. Phase 2 (D) MVP."""
+
+    pipelines: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    """Inline named pipelines as raw dicts. Each value is the same shape
+    accepted by :func:`application.pipeline.loader.load_pipeline_dict`.
+    Materialized into :class:`PipelineDef` on demand by callers."""
+
     # -- loaders ---------------------------------------------------------
 
     @classmethod

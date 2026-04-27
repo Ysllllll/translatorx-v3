@@ -26,7 +26,7 @@ from fastapi import FastAPI
 
 from api.service.auth import Principal
 from api.service.observability import install_opentelemetry, install_prometheus
-from api.service.routers import admin, events, health, streams, usage, videos
+from api.service.routers import admin, events, health, pipelines, stages, streams, usage, videos
 from api.service.runtime.stream_registry import InMemoryStreamRegistry
 from api.service.runtime.tasks import TaskManager, TaskStore
 from application.resources import DEFAULT_TIERS, InMemoryResourceManager, UserTier
@@ -209,6 +209,8 @@ def create_app(
     api.include_router(events.router)
     api.include_router(usage.router)
     api.include_router(admin.router)
+    api.include_router(pipelines.router)
+    api.include_router(stages.router)
 
     svc_cfg = app.config.service
     if svc_cfg.cors_origins:
