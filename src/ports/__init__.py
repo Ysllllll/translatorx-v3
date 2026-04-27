@@ -1,6 +1,13 @@
 """Ports — abstract protocols for external dependencies."""
 
 from .audit import AuditSink, NoOpAuditSink
+from .backpressure import (
+    BackpressureError,
+    BoundedChannel,
+    ChannelConfig,
+    ChannelStats,
+    OverflowPolicy,
+)
 from .budget import ResourceBudget
 from .cancel import CancelScope, CancelToken
 from .deadline import Deadline
@@ -44,9 +51,13 @@ from .tts import TTS, Gender, SynthesizeOptions, Voice, VoicePicker
 __all__ = [
     "AsyncStream",
     "AuditSink",
+    "BackpressureError",
     "BoundLogger",
+    "BoundedChannel",
     "CancelScope",
     "CancelToken",
+    "ChannelConfig",
+    "ChannelStats",
     "Clock",
     "Deadline",
     "DownloadResult",
@@ -66,6 +77,7 @@ __all__ = [
     "NoOpMetrics",
     "NoOpTracer",
     "NullLogger",
+    "OverflowPolicy",
     "PipelineDef",
     "PipelineResult",
     "PipelineState",
