@@ -33,6 +33,7 @@ class App:
         self._event_bus = None  # type: ignore[var-annotated]
         self._registry = None  # type: ignore[var-annotated]
         self._pipelines: dict[str, dict] | None = None
+        self._hot_reload_watcher = None  # type: ignore[var-annotated]
 
     @classmethod
     def from_config(cls, path: str | Path) -> App:
@@ -446,6 +447,40 @@ class App:
                     cat[str(key)] = data
         self._pipelines = cat
         return cat
+
+    # -- hot reload (Phase 2 / Step B3) ----------------------------------
+
+    def _invalidate_pipelines(self) -> None:
+        """Drop the :meth:`pipelines` cache so the next call re-scans disk."""
+        self._pipelines = None
+
+    async def start_hot_reload(self) -> None:
+        """Start the pipelines hot-reload watcher per :attr:`AppConfig.hot_reload`.
+
+        No-op if disabled or no ``pipelines_dir`` is configured. Idempotent.
+        """
+        if self._hot_reload_watcher is not None:
+            return
+        cfg = self._config.hot_reload
+        if not cfg.enabled or not self._config.pipelines_dir:
+            return
+        from application.pipeline.hot_reload import make_watcher
+        from pathlib import Path as _P
+
+        d = _P(self._config.pipelines_dir).expanduser()
+        if not d.is_absolute():
+            d = _P(self._config.store.root).expanduser() / d
+        watcher = make_watcher(d, self._invalidate_pipelines, cfg)
+        await watcher.start()
+        self._hot_reload_watcher = watcher
+
+    async def stop_hot_reload(self) -> None:
+        """Stop the pipelines hot-reload watcher (if running)."""
+        w = self._hot_reload_watcher
+        if w is None:
+            return
+        self._hot_reload_watcher = None
+        await w.stop()
 
 
 # ---------------------------------------------------------------------------

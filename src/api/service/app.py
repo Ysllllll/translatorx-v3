@@ -159,9 +159,12 @@ def create_app(
         api.state.streams = InMemoryStreamRegistry()
         api.state.auth_map = auth_map
         api.state.tier_map = tier_resolver
+        # Pipelines hot-reload watcher (Step B3) — opt-in via AppConfig.hot_reload.
+        await app.start_hot_reload()
         try:
             yield
         finally:
+            await app.stop_hot_reload()
             # Drain live streams first so their pump tasks stop emitting
             # into SSE queues we're about to tear down.
             streams_reg = getattr(api.state, "streams", None)

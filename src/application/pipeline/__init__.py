@@ -2,6 +2,7 @@
 
 from .loader import load_pipeline_dict, load_pipeline_yaml, parse_pipeline_yaml
 from .context import PipelineContext
+from .hot_reload import PollWatcher, Watcher, WatchdogWatcher, make_watcher
 from .middleware import RetryMiddleware, TimingMiddleware, TracingMiddleware, compose
 from .plugins import PluginGroup, PluginLoadError, discover_stages, load_plugin
 from .noops import (
@@ -44,6 +45,7 @@ __all__ = [
     "PipelineValidationError",
     "PluginGroup",
     "PluginLoadError",
+    "PollWatcher",
     "RetryMiddleware",
     "StageEntry",
     "StageFactory",
@@ -53,11 +55,14 @@ __all__ = [
     "TracingMiddleware",
     "ValidationIssue",
     "ValidationReport",
+    "Watcher",
+    "WatchdogWatcher",
     "compose",
     "discover_stages",
     "load_pipeline_dict",
     "load_pipeline_yaml",
     "load_plugin",
+    "make_watcher",
     "parse_pipeline_yaml",
     "pipeline_json_schema",
     "registry_json_schema",

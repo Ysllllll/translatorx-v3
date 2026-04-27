@@ -293,6 +293,21 @@ class ServiceConfig(BaseModel):
     )
 
 
+class HotReloadConfig(BaseModel):
+    """Hot-reload watcher for :attr:`AppConfig.pipelines_dir`.
+
+    Default is OFF. When ``enabled=True``, the App spawns a watcher that
+    invalidates :meth:`App.pipelines` cache whenever a YAML file in the
+    directory changes (added/modified/removed).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    backend: Literal["poll", "watchdog"] = "poll"
+    interval_s: float = Field(default=2.0, gt=0.0)
+
+
 class AppConfig(BaseModel):
     """Root configuration model."""
 
@@ -317,6 +332,10 @@ class AppConfig(BaseModel):
     """Inline named pipelines as raw dicts. Each value is the same shape
     accepted by :func:`application.pipeline.loader.load_pipeline_dict`.
     Materialized into :class:`PipelineDef` on demand by callers."""
+
+    hot_reload: "HotReloadConfig" = Field(default_factory=lambda: HotReloadConfig())
+    """Optional file-system watcher for ``pipelines_dir``. Default OFF for
+    production safety. Phase 2 (D) — see :mod:`application.pipeline.hot_reload`."""
 
     # -- loaders ---------------------------------------------------------
 
