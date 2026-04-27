@@ -21,6 +21,7 @@ from .media import (
     MediaSource,
     PlaylistInfo,
 )
+from .message_bus import BusConfig, BusMessage, MessageBus
 from .middleware import Middleware, StageCall
 from .observability import (
     BoundLogger,
@@ -54,6 +55,8 @@ __all__ = [
     "BackpressureError",
     "BoundLogger",
     "BoundedChannel",
+    "BusConfig",
+    "BusMessage",
     "CancelScope",
     "CancelToken",
     "ChannelConfig",
@@ -71,6 +74,7 @@ __all__ = [
     "MediaProbe",
     "MediaSource",
     "Message",
+    "MessageBus",
     "MetricsRegistry",
     "Middleware",
     "NoOpAuditSink",
