@@ -4,7 +4,7 @@ Phase 5 (方案 L) reference implementation of :class:`PipelineScheduler`.
 
 Semantics:
 
-* Per-tenant ``asyncio.Semaphore`` with capacity equal to the tenant's
+* Per-tenant counting semaphore with capacity equal to the tenant's
   :attr:`TenantQuota.max_concurrent_streams`. Tenants not listed in the
   ``quotas`` map fall back to ``default_quota`` (typically
   ``DEFAULT_QUOTAS["free"]``).
@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Mapping
 
 from application.scheduler.base import (
@@ -42,6 +42,76 @@ from application.scheduler.observability import TenantMetrics
 from application.scheduler.tenant import DEFAULT_QUOTAS, TenantQuota
 
 _logger = logging.getLogger(__name__)
+
+
+class _CountingSemaphore:
+    """Public-API counting semaphore with non-blocking ``try_acquire``.
+
+    R8 — replaces the previous ``asyncio.Semaphore`` + ``_value``
+    poking. Single-event-loop semantics (no thread safety needed).
+
+    Permits are transferred directly to waiters on release: the count
+    is incremented only when no waiter is queued.
+    """
+
+    __slots__ = ("_capacity", "_available", "_waiters")
+
+    def __init__(self, capacity: int) -> None:
+        if capacity < 0:
+            raise ValueError("capacity must be >= 0")
+        self._capacity = capacity
+        self._available = capacity
+        self._waiters: deque[asyncio.Future[None]] = deque()
+
+    @property
+    def capacity(self) -> int:
+        return self._capacity
+
+    @property
+    def available(self) -> int:
+        return self._available
+
+    def try_acquire(self) -> bool:
+        """Atomically take a permit if one is free; return success."""
+        if self._available > 0:
+            self._available -= 1
+            return True
+        return False
+
+    async def acquire(self) -> None:
+        """Block until a permit is granted."""
+        if self.try_acquire():
+            return
+        loop = asyncio.get_running_loop()
+        fut: asyncio.Future[None] = loop.create_future()
+        self._waiters.append(fut)
+        try:
+            await fut
+        except BaseException:
+            # If we were granted before our cancel landed, hand the
+            # permit to the next waiter so it isn't lost.
+            if fut.done() and not fut.cancelled() and fut.exception() is None:
+                self._wake_or_credit()
+            else:
+                try:
+                    self._waiters.remove(fut)
+                except ValueError:
+                    pass
+            raise
+        # We were granted directly; available was NOT incremented on
+        # release, so we must not decrement here either.
+
+    def release(self) -> None:
+        """Release one permit, transferring directly to the next waiter."""
+        self._wake_or_credit()
+
+    def _wake_or_credit(self) -> None:
+        while self._waiters:
+            fut = self._waiters.popleft()
+            if not fut.done():
+                fut.set_result(None)
+                return
+        self._available += 1
 
 
 class FairScheduler(PipelineScheduler):
@@ -81,8 +151,8 @@ class FairScheduler(PipelineScheduler):
         self._quotas: dict[str, TenantQuota] = dict(quotas or {})
         self._default_quota: TenantQuota = default_quota or DEFAULT_QUOTAS["free"]
         self._global_max = global_max
-        self._global_sem = asyncio.Semaphore(global_max) if global_max else None
-        self._tenant_sems: dict[str, asyncio.Semaphore] = {}
+        self._global_sem: _CountingSemaphore | None = _CountingSemaphore(global_max) if global_max else None
+        self._tenant_sems: dict[str, _CountingSemaphore] = {}
         self._active_by_tenant: dict[str, int] = defaultdict(int)
         self._submitted_total = 0
         self._rejected_total = 0
@@ -112,14 +182,35 @@ class FairScheduler(PipelineScheduler):
         if self._metrics is not None:
             self._metrics.record_submitted(tenant_id)
 
-        # Per-tenant gate.
+        # R7 — acquire global FIRST then tenant. The previous order
+        # (tenant → global) caused head-of-line blocking: a tenant
+        # that won its slot but was queued on global held the tenant
+        # slot, starving other streams of the same tenant.
+        # New order: tenant slot is only acquired once we know we can
+        # also enter the global cap.
+        acquired_global = False
         acquired_tenant = False
         try:
+            if self._global_sem is not None:
+                if wait:
+                    await self._global_sem.acquire()
+                    acquired_global = True
+                else:
+                    if not self._global_sem.try_acquire():
+                        self._rejected_total += 1
+                        if self._metrics is not None:
+                            self._metrics.record_rejected(tenant_id)
+                        raise QuotaExceeded(
+                            tenant_id=tenant_id,
+                            reason=f"global cap {self._global_max} reached",
+                        )
+                    acquired_global = True
+
             if wait:
                 await sem.acquire()
                 acquired_tenant = True
             else:
-                if not self._try_acquire(sem):
+                if not sem.try_acquire():
                     self._rejected_total += 1
                     if self._metrics is not None:
                         self._metrics.record_rejected(tenant_id)
@@ -128,21 +219,9 @@ class FairScheduler(PipelineScheduler):
                         reason=f"per-tenant cap {quota.max_concurrent_streams} reached",
                     )
                 acquired_tenant = True
-
-            # Optional global gate.
-            if self._global_sem is not None:
-                if wait:
-                    await self._global_sem.acquire()
-                else:
-                    if not self._try_acquire(self._global_sem):
-                        self._rejected_total += 1
-                        if self._metrics is not None:
-                            self._metrics.record_rejected(tenant_id)
-                        raise QuotaExceeded(
-                            tenant_id=tenant_id,
-                            reason=f"global cap {self._global_max} reached",
-                        )
         except BaseException:
+            if acquired_global and self._global_sem is not None:
+                self._global_sem.release()
             if acquired_tenant:
                 sem.release()
             raise
@@ -175,25 +254,14 @@ class FairScheduler(PipelineScheduler):
     # Internals
     # ------------------------------------------------------------------
 
-    def _tenant_sem(self, tenant_id: str, quota: TenantQuota) -> asyncio.Semaphore:
+    def _tenant_sem(self, tenant_id: str, quota: TenantQuota) -> _CountingSemaphore:
         sem = self._tenant_sems.get(tenant_id)
         if sem is None:
-            sem = asyncio.Semaphore(quota.max_concurrent_streams)
+            sem = _CountingSemaphore(quota.max_concurrent_streams)
             self._tenant_sems[tenant_id] = sem
         return sem
 
-    @staticmethod
-    def _try_acquire(sem: asyncio.Semaphore) -> bool:
-        # asyncio.Semaphore exposes ``locked()`` (no permits) but no
-        # native non-blocking acquire — we rely on the private counter.
-        if sem.locked():
-            return False
-        # ``acquire`` returns immediately when a permit is free; create
-        # a future-less fast path by checking ``_value``.
-        sem._value -= 1  # type: ignore[attr-defined]
-        return True
-
-    def _release(self, tenant_id: str, qos_tier: str, sem: asyncio.Semaphore) -> None:
+    def _release(self, tenant_id: str, qos_tier: str, sem: _CountingSemaphore) -> None:
         sem.release()
         if self._global_sem is not None:
             self._global_sem.release()

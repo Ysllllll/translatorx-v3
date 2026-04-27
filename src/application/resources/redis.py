@@ -57,6 +57,20 @@ return 1
 """
 
 
+# R5 — clamped release: only DECR when the counter is positive so that
+# best-effort cleanup on cancellation can't drive the counter negative
+# (which would hand out free slots forever).
+_RELEASE_LUA = """
+local key = KEYS[1]
+local cur = tonumber(redis.call('GET', key) or '0')
+if cur > 0 then
+    redis.call('DECR', key)
+    return 1
+end
+return 0
+"""
+
+
 @dataclass(frozen=True, slots=True)
 class RedisResourceConfig:
     """Config knobs for :class:`RedisResourceManager`.
@@ -95,6 +109,7 @@ class RedisResourceManager:
         self._client = client
         self._cfg = config or RedisResourceConfig()
         self._acquire_script = client.register_script(_ACQUIRE_LUA)
+        self._release_script = client.register_script(_RELEASE_LUA)
 
     # ------------------------------------------------------------------
     # Slots
@@ -110,35 +125,48 @@ class RedisResourceManager:
         )
         return int(result or 0) == 1
 
-    async def _acquire_loop(self, key: str, limit: int) -> None:
-        while True:
-            if await self._try_acquire(key, limit):
-                return
-            await asyncio.sleep(self._cfg.acquire_poll_interval)
-
     async def _release(self, key: str) -> None:
         try:
-            await self._client.decr(key)
+            await self._release_script(keys=[key])
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("RedisResourceManager: release(%s) failed: %r", key, exc)
+
+    async def _acquire_with_cancel_safety(self, key: str, limit: int) -> None:
+        """Run the acquire poll loop, releasing on cancel.
+
+        R5 — if a CancelledError fires while ``_try_acquire`` is in
+        flight, the Lua INCR may already have committed on the broker
+        even though we never observed the success return. Issue a
+        clamped DECR on the way out so we don't leak the slot for
+        ``slot_ttl`` seconds.
+        """
+        while True:
+            try:
+                acquired = await self._try_acquire(key, limit)
+            except BaseException:
+                await asyncio.shield(self._release(key))
+                raise
+            if acquired:
+                return
+            await asyncio.sleep(self._cfg.acquire_poll_interval)
 
     @asynccontextmanager
     async def acquire_video_slot(self, user_id: str, tier: UserTier) -> AsyncIterator[None]:
         key = self._slot_key("video", user_id)
-        await self._acquire_loop(key, tier.concurrent_videos)
+        await self._acquire_with_cancel_safety(key, tier.concurrent_videos)
         try:
             yield
         finally:
-            await self._release(key)
+            await asyncio.shield(self._release(key))
 
     @asynccontextmanager
     async def acquire_request_slot(self, user_id: str, tier: UserTier) -> AsyncIterator[None]:
         key = self._slot_key("req", user_id)
-        await self._acquire_loop(key, tier.concurrent_requests_per_video)
+        await self._acquire_with_cancel_safety(key, tier.concurrent_requests_per_video)
         try:
             yield
         finally:
-            await self._release(key)
+            await asyncio.shield(self._release(key))
 
     # ------------------------------------------------------------------
     # Ledger / budget

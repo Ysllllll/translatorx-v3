@@ -146,3 +146,45 @@ async def test_protocol_check_passes() -> None:
 
     sched = FairScheduler()
     assert isinstance(sched, PipelineScheduler)
+
+
+@pytest.mark.asyncio
+async def test_global_first_no_head_of_line_blocking() -> None:
+    """R7 — when global cap is full, the tenant's other slots must
+    remain free so concurrent submits from the same tenant can still
+    progress as soon as global frees up. (Old order acquired tenant
+    first then queued on global, holding the tenant slot hostage.)
+    """
+    from application.scheduler.tenant import TenantQuota
+
+    quota = TenantQuota(max_concurrent_streams=4, qos_tier="standard")
+    sched = FairScheduler(quotas={"acme": quota}, global_max=1)
+
+    first = await sched.submit(tenant_id="acme")  # holds global + tenant
+    queued = asyncio.create_task(sched.submit(tenant_id="acme"))
+    await asyncio.sleep(0.01)
+    # The queued submit should be waiting on global — it must NOT yet
+    # have taken a tenant slot. Tenant semaphore has 4 capacity, only
+    # 1 is held by ``first``; ``available`` should still be 3.
+    sem = sched._tenant_sems["acme"]
+    assert sem.available == 3, f"queued submit should be blocked on global, not holding tenant slot (available={sem.available})"
+
+    first.release()
+    second = await asyncio.wait_for(queued, timeout=1.0)
+    second.release()
+
+
+@pytest.mark.asyncio
+async def test_counting_semaphore_no_private_value_access() -> None:
+    """R8 — FairScheduler's tenant semaphores are the in-house
+    ``_CountingSemaphore``, not :class:`asyncio.Semaphore` (whose
+    ``_value`` is a private API that breaks on stdlib upgrades).
+    """
+    from application.scheduler.fair import _CountingSemaphore
+
+    sched = FairScheduler()
+    t = await sched.submit(tenant_id="x")
+    sem = sched._tenant_sems["x"]
+    assert isinstance(sem, _CountingSemaphore)
+    assert hasattr(sem, "try_acquire")
+    t.release()

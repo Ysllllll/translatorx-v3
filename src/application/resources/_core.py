@@ -174,43 +174,64 @@ class InMemoryResourceManager:
     * no cross-user fairness guarantees
     """
 
+    @dataclass
+    class _SemSlot:
+        capacity: int
+        holders: int
+        sem: asyncio.Semaphore
+
     def __init__(self) -> None:
-        self._video_sems: dict[str, asyncio.Semaphore] = {}
-        self._request_sems: dict[str, asyncio.Semaphore] = {}
+        self._video_sems: dict[str, InMemoryResourceManager._SemSlot] = {}
+        self._request_sems: dict[str, InMemoryResourceManager._SemSlot] = {}
         self._ledger: dict[tuple[str, date], _LedgerEntry] = defaultdict(_LedgerEntry)
         self._ledger_lock = asyncio.Lock()
 
-    def _video_sem(self, user_id: str, tier: UserTier) -> asyncio.Semaphore:
-        sem = self._video_sems.get(user_id)
-        if sem is None or sem._value > tier.concurrent_videos:  # type: ignore[attr-defined]
-            sem = asyncio.Semaphore(tier.concurrent_videos)
-            self._video_sems[user_id] = sem
-        return sem
+    def _resolve_slot(
+        self,
+        registry: dict[str, "InMemoryResourceManager._SemSlot"],
+        user_id: str,
+        capacity: int,
+    ) -> "InMemoryResourceManager._SemSlot":
+        """R6 — return a slot whose semaphore matches ``capacity``.
 
-    def _request_sem(self, user_id: str, tier: UserTier) -> asyncio.Semaphore:
-        sem = self._request_sems.get(user_id)
-        if sem is None or sem._value > tier.concurrent_requests_per_video:  # type: ignore[attr-defined]
-            sem = asyncio.Semaphore(tier.concurrent_requests_per_video)
-            self._request_sems[user_id] = sem
-        return sem
+        Resizing on the fly while permits are held is unsafe because
+        ``Semaphore.release`` from existing holders would credit the
+        new instance with permits it never granted. We therefore only
+        rebuild when ``holders == 0`` (no in-flight callers); otherwise
+        the existing capacity is preserved until the last holder
+        leaves.
+        """
+        slot = registry.get(user_id)
+        if slot is None:
+            slot = self._SemSlot(capacity=capacity, holders=0, sem=asyncio.Semaphore(capacity))
+            registry[user_id] = slot
+            return slot
+        if slot.capacity != capacity and slot.holders == 0:
+            slot = self._SemSlot(capacity=capacity, holders=0, sem=asyncio.Semaphore(capacity))
+            registry[user_id] = slot
+        return slot
 
     @asynccontextmanager
     async def acquire_video_slot(self, user_id: str, tier: UserTier) -> AsyncIterator[None]:
-        sem = self._video_sem(user_id, tier)
-        await sem.acquire()
+        slot = self._resolve_slot(self._video_sems, user_id, tier.concurrent_videos)
+        await slot.sem.acquire()
+        slot.holders += 1
         try:
             yield
         finally:
-            sem.release()
+            slot.holders -= 1
+            slot.sem.release()
 
     @asynccontextmanager
     async def acquire_request_slot(self, user_id: str, tier: UserTier) -> AsyncIterator[None]:
-        sem = self._request_sem(user_id, tier)
-        await sem.acquire()
+        slot = self._resolve_slot(self._request_sems, user_id, tier.concurrent_requests_per_video)
+        await slot.sem.acquire()
+        slot.holders += 1
         try:
             yield
         finally:
-            sem.release()
+            slot.holders -= 1
+            slot.sem.release()
 
     async def check_budget(
         self,

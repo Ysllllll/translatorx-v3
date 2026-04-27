@@ -85,3 +85,52 @@ async def test_check_budget_deny_when_over_cap(rm) -> None:
 async def test_check_budget_byok_always_ok(rm) -> None:
     tier = UserTier(name="ent", daily_budget_usd=0.0, monthly_budget_usd=0.0, concurrent_videos=1, concurrent_requests_per_video=1, byok=True)
     assert await rm.check_budget("u1", tier, 9999.0) == "ok"
+
+
+@pytest.mark.asyncio
+async def test_release_clamped_does_not_go_negative(rm, client) -> None:
+    """R5 — a stray release on an already-zero counter must be a
+    no-op (Lua clamp) so cancel-paths can't drive the counter
+    negative and hand out free slots forever.
+    """
+    key = rm._slot_key("video", "u-clamp")
+    # Start at zero — no slot has been acquired.
+    await rm._release(key)
+    val = await client.get(key)
+    assert int(val or 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_acquire_cancel_releases_slot(rm) -> None:
+    """R5 — if a caller is cancelled while waiting in the acquire
+    poll loop after the limit was reached, no slot remains held.
+    """
+    tier = UserTier(name="t", daily_budget_usd=100, monthly_budget_usd=1000, concurrent_videos=1, concurrent_requests_per_video=4)
+
+    holder_evt = asyncio.Event()
+    holder_done = asyncio.Event()
+
+    async def holder() -> None:
+        async with rm.acquire_video_slot("u-cancel", tier):
+            holder_evt.set()
+            await holder_done.wait()
+
+    async def waiter() -> None:
+        async with rm.acquire_video_slot("u-cancel", tier):
+            pass
+
+    h = asyncio.create_task(holder())
+    await holder_evt.wait()
+
+    w = asyncio.create_task(waiter())
+    await asyncio.sleep(0.05)
+    w.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await w
+
+    # Releasing the holder must let a fresh acquire succeed promptly,
+    # i.e. the cancelled waiter did not leak the slot counter.
+    holder_done.set()
+    await h
+    async with rm.acquire_video_slot("u-cancel", tier):
+        pass
