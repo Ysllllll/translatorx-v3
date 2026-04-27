@@ -1,15 +1,15 @@
-"""Runner for all course_batch demos.
+"""Runner for all batch/comparisons demos.
 
 Usage:
     # Run all demos sequentially
-    python -m demos.course_batch
+    python -m demos.batch.comparisons
 
     # Or from demos/ directory:
     python course_batch
 
     # Run individual demo:
-    python demos/course_batch/demo_standalone.py
-    python demos/course_batch/demo_sentence.py
+    python demos/batch/comparisons/demo_standalone.py
+    python demos/batch/comparisons/demo_sentence.py
 
 Note: demo_translate / demo_preprocess have been removed — covered by
 demos/demo_batch_translate.py and demos/demo_batch_preprocess.py respectively.
@@ -49,7 +49,7 @@ async def main() -> None:
     else:
         demos = ["standalone", "sentence"]
 
-    header(f"course_batch — 运行 {len(demos)} 个 demo: {', '.join(demos)}")
+    header(f"comparisons — 运行 {len(demos)} 个 demo: {', '.join(demos)}")
     t0 = time.perf_counter()
 
     if "standalone" in demos:

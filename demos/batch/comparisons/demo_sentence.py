@@ -15,9 +15,9 @@ Segment 设计:
   - 有标点和无标点部分均包含跨 segment 的句子流
 
 运行:
-    python demos/course_batch/demo_sentence.py             # 默认 LLM 标点恢复
-    python demos/course_batch/demo_sentence.py --punc ner  # NER 模型标点恢复
-    python demos/course_batch/demo_sentence.py --punc llm  # LLM 标点恢复 (同默认)
+    python demos/batch/comparisons/demo_sentence.py             # 默认 LLM 标点恢复
+    python demos/batch/comparisons/demo_sentence.py --punc ner  # NER 模型标点恢复
+    python demos/batch/comparisons/demo_sentence.py --punc llm  # LLM 标点恢复 (同默认)
 """
 
 from __future__ import annotations

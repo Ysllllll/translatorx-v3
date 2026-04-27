@@ -1,4 +1,4 @@
-"""Shared constants + helpers for the remaining course_batch demos.
+"""Shared constants + helpers for the remaining batch/comparisons demos.
 
 After demo_translate/demo_preprocess were removed (covered by
 demos/demo_batch_translate.py and demos/demo_batch_preprocess.py), only the two
@@ -17,7 +17,7 @@ import sys as _sys
 from pathlib import Path as _Path
 
 # Add demos/ to sys.path so _bootstrap can be found
-_DEMOS_DIR = str(_Path(__file__).resolve().parent.parent)
+_DEMOS_DIR = str(_Path(__file__).resolve().parents[2])
 if _DEMOS_DIR not in _sys.path:
     _sys.path.insert(0, _DEMOS_DIR)
 
@@ -43,7 +43,7 @@ console = Console(highlight=False)
 LLM_BASE_URL = os.environ.get("DEMO_LLM_BASE_URL", "http://localhost:26592/v1")
 LLM_MODEL = os.environ.get("DEMO_LLM_MODEL", "Qwen/Qwen3-32B")
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = REPO_ROOT / "demo_data" / "lmt831_part2"
 WS_ROOT = REPO_ROOT / "demo_workspace"
 

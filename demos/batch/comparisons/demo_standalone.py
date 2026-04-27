@@ -4,7 +4,7 @@ Sections 8a-8f: NER/LLM/Remote punc, spaCy splitter, LLM chunker,
 完整 pipeline step-by-step 可视化.
 
 运行:
-    python demos/course_batch/demo_standalone.py
+    python demos/batch/comparisons/demo_standalone.py
 """
 
 from __future__ import annotations
