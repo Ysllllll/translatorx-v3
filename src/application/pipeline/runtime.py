@@ -181,6 +181,48 @@ class PipelineRuntime:
             errors=tuple(errors),
         )
 
+    async def stream(
+        self,
+        defn: PipelineDef,
+        ctx: PipelineContext,
+        cancel: CancelToken | None = None,
+    ) -> AsyncIterator[SentenceRecord]:
+        """Async-generator variant of :meth:`run` for live pipelines.
+
+        Yields each :class:`SentenceRecord` as it falls out of the final
+        enrich stage instead of accumulating into a
+        :class:`PipelineResult`. ``structure`` stages are not supported
+        (live pipelines don't full-collect), and stage failures during
+        the drain raise the original exception. The middleware chain
+        still wraps ``Source.open`` and each ``RecordStage`` setup, so
+        ``stage.started`` / ``stage.finished`` events are emitted.
+        """
+        if defn.structure:
+            raise ValueError(
+                "PipelineRuntime.stream() does not support structure stages — "
+                "live pipelines must use record-only enrich chains.",
+            )
+        token = cancel or ctx.cancel
+
+        async with CancelScope(token) as scope:
+            source: SourceStage = self._registry.build(defn.build)  # type: ignore[assignment]
+            await self._call(defn.build, ctx, lambda: source.open(ctx))
+            stream = source.stream(ctx)
+            scope.push_cleanup(source.close)
+
+            for sdef in defn.enrich:
+                rstage: RecordStage = self._registry.build(sdef)  # type: ignore[assignment]
+                stream = await self._call(
+                    sdef,
+                    ctx,
+                    lambda s=rstage, up=stream: _transform_async(s, up, ctx),
+                )
+
+            async for rec in stream:
+                if token.cancelled:
+                    return
+                yield rec
+
     async def _call(
         self,
         sdef: StageDef,
