@@ -43,13 +43,20 @@ def default_pipeline() -> Pipeline[dict]:
 
 
 def _dict_to_word(w: dict) -> Word | None:
-    stripped = w["word"].strip()
+    raw = w.get("word")
+    if raw is None:
+        return None
+    stripped = raw.strip()
     if not stripped:
+        return None
+    start = w.get("start")
+    end = w.get("end")
+    if start is None or end is None:
         return None
     return Word(
         word=stripped,
-        start=w["start"],
-        end=w["end"],
+        start=start,
+        end=end,
         speaker=w.get("speaker"),
     )
 

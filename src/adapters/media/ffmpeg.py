@@ -76,7 +76,7 @@ def extract_audio(
     output_path = Path(output_path)
 
     codec_map = {
-        "m4a": "copy",
+        "m4a": "aac",
         "mp3": "libmp3lame",
         "wav": "pcm_s16le",
     }

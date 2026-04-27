@@ -108,10 +108,17 @@ def _parse_openai_response(payload: dict[str, Any], *, fallback_language: str) -
 
     raw_segments = payload.get("segments") or []
     segments: list[Segment] = []
+    assigned: set[int] = set()
     for seg in raw_segments:
         seg_start = float(seg.get("start") or 0.0)
         seg_end = float(seg.get("end") or 0.0)
-        seg_words = [w for w in word_objs if w.start >= seg_start and w.end <= seg_end + 1e-6]
+        seg_words: list[Word] = []
+        for i, w in enumerate(word_objs):
+            if i in assigned:
+                continue
+            if w.start >= seg_start - 1e-6 and w.end <= seg_end + 1e-6:
+                seg_words.append(w)
+                assigned.add(i)
         segments.append(
             Segment(
                 start=seg_start,

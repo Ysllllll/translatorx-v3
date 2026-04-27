@@ -63,7 +63,7 @@ class OpenAITTS:
             "model": cfg.model,
             "voice": voice_id,
             "input": text,
-            "format": opts.format or cfg.format,
+            "response_format": opts.format or cfg.format,
             "speed": max(0.25, min(4.0, opts.rate or 1.0)),
         }
         body.update(cfg.extra)

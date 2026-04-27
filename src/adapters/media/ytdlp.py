@@ -139,7 +139,7 @@ class YtdlpSource:
                 {
                     "key": "FFmpegSubtitlesConvertor",
                     "format": "srt",
-                    "when": "before_dl",
+                    "when": "after_dl",
                 }
             ],
         }
