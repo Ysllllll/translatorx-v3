@@ -76,6 +76,8 @@ class StreamBuilder:
     _translate: _TranslateStage | None = None
     _error_reporter: ErrorReporter | None = None
     _split_by_speaker: bool = False
+    _tenant_id: str | None = None
+    _admission_wait: bool = True
 
     def translate(
         self,
@@ -96,6 +98,23 @@ class StreamBuilder:
 
     def split_by_speaker(self, enabled: bool = True) -> StreamBuilder:
         return replace(self, _split_by_speaker=enabled)
+
+    def tenant(self, tenant_id: str, *, wait: bool = True) -> StreamBuilder:
+        """Bind this stream to a tenant for scheduler admission control.
+
+        Phase 5 (方案 L). When set, :meth:`start` consults
+        :attr:`App.scheduler` to acquire a slot keyed by ``tenant_id``
+        before constructing the :class:`PipelineRuntime`. When omitted,
+        :meth:`start` runs unscheduled (back-compat — batch tests, demos).
+
+        Args:
+            tenant_id: Tenant id (typically from
+                :class:`api.service.auth.Principal.tenant`).
+            wait: If ``True`` (default), block on the scheduler queue
+                when the tenant cap is saturated. If ``False``, raise
+                :class:`application.scheduler.QuotaExceeded` immediately.
+        """
+        return replace(self, _tenant_id=tenant_id, _admission_wait=wait)
 
     def start(self) -> LiveStreamHandle:
         """Wire up :class:`PipelineRuntime` over a :class:`PushQueueSource`."""
@@ -147,6 +166,35 @@ class StreamBuilder:
             flush_interval_s=runtime_cfg.flush_interval_s,
         )
 
+    async def start_async(self) -> LiveStreamHandle:
+        """Async start that performs scheduler admission control first.
+
+        Phase 5 (方案 L). When a ``tenant`` was bound via :meth:`tenant`,
+        this acquires a slot from :attr:`App.scheduler` BEFORE the
+        :class:`PipelineRuntime` is wired up. The returned handle holds
+        the :class:`SchedulerTicket` and releases it on :meth:`close`.
+
+        When no tenant is bound this is exactly equivalent to :meth:`start`.
+
+        Raises:
+            application.scheduler.QuotaExceeded: When ``wait=False`` was
+                set via :meth:`tenant` and no slot is available.
+        """
+        ticket = None
+        if self._tenant_id is not None:
+            ticket = await self.app.scheduler.submit(
+                tenant_id=self._tenant_id,
+                wait=self._admission_wait,
+            )
+        try:
+            handle = self.start()
+        except BaseException:
+            if ticket is not None:
+                ticket.release()
+            raise
+        handle._ticket = ticket
+        return handle
+
 
 class LiveStreamHandle:
     """Active handle around a live :class:`PipelineRuntime` execution.
@@ -189,6 +237,7 @@ class LiveStreamHandle:
         self._failed: list[ErrorInfo] = []
         self._started = False
         self._session: VideoSession | None = None
+        self._ticket = None  # SchedulerTicket | None — set by StreamBuilder.start_async
 
     # ---- public API --------------------------------------------------
 
@@ -220,6 +269,8 @@ class LiveStreamHandle:
         self._closed = True
         self._seq += 1
         await self._pq.put((Priority.LOW + 1000, self._seq, _PUMP_SENTINEL))
+        if self._ticket is not None:
+            self._ticket.release()
 
     @property
     def failed(self) -> tuple[ErrorInfo, ...]:

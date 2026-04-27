@@ -34,6 +34,7 @@ class App:
         self._registry = None  # type: ignore[var-annotated]
         self._pipelines: dict[str, dict] | None = None
         self._hot_reload_watcher = None  # type: ignore[var-annotated]
+        self._scheduler = None  # type: ignore[var-annotated]
 
     @classmethod
     def from_config(cls, path: str | Path) -> App:
@@ -132,6 +133,31 @@ class App:
     def set_event_bus(self, bus) -> None:
         """Override the cached :class:`EventBus` (testing / wiring)."""
         self._event_bus = bus
+
+    @property
+    def scheduler(self):
+        """Return the lazy :class:`PipelineScheduler` for this App.
+
+        Built on first access from :attr:`AppConfig.tenants`. The default
+        implementation is :class:`application.scheduler.FairScheduler`.
+        Live :class:`StreamBuilder` runs route ``start()`` through this
+        scheduler to enforce per-tenant concurrency caps.
+
+        Override with :meth:`set_scheduler` for custom Protocol
+        implementations (e.g. Redis-backed sharded scheduler).
+        """
+        if self._scheduler is None:
+            from application.scheduler import DEFAULT_QUOTAS, FairScheduler
+
+            self._scheduler = FairScheduler(
+                quotas=self._config.build_tenant_quotas(),
+                default_quota=DEFAULT_QUOTAS["free"],
+            )
+        return self._scheduler
+
+    def set_scheduler(self, scheduler) -> None:
+        """Override the cached :class:`PipelineScheduler` (testing / wiring)."""
+        self._scheduler = scheduler
 
     def workspace(self, course: str) -> Workspace:
         """Materialize a :class:`Workspace` under the configured store root."""
