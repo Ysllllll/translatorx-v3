@@ -7,11 +7,13 @@
 - ✅ 旧 Orchestrator 三件套（VideoOrchestrator / CourseOrchestrator / StreamingOrchestrator）全删
 - ✅ CLAUDE.md + ARCHITECTURE_LAYERS.md 同步
 - ✅ Step A — Transcriber 补齐（whisperx / openai / http_remote + from_audio stage + demo）
-- ✅ Step B — Phase 2 (D) MVP：YAML loader + validator + JSON Schema + pipelines/stages routers
-  （B3 hot_reload / B4 tenant 暂不做）
+- ✅ Step B — Phase 2 (D) 完整套：YAML loader + validator + JSON Schema +
+  pipelines/stages routers + B3 hot_reload + B4 tenant namespace +
+  B5 OpenAPI response models
+- ✅ Plugin SDK 文档（`docs/plugin_sdk.md`）— entry-points group、契约、兼容性
 - ✅ Step C — Align 端到端：`LangOps.split_sentences/clauses/by_length`、`rebalance_segment_words`、
   `AlignAgent` 双模 (json + text)、`AlignProcessor`、22 单测，端到端冒烟通过
-- ✅ 测试套 2042 passed / 3 skipped（HEAD `c6c7b16`）
+- ✅ 测试套 2070 passed / 3 skipped
 
 ## 下一步路线（按顺序）
 
@@ -32,12 +34,6 @@
 - 是否引入新 backend（Azure / 自托管 XTTS 等）
 
 ## 推迟到后期
-
-### Step B3/B4 — hot_reload + tenant namespace（已延后）
-
-`application/pipeline/hot_reload.py` 监听 yaml 变化自动 reload；
-`application/pipeline/tenant.py` 多租户 namespace。等真有人在用编辑器
-频繁改 yaml + 多租户上线时再补。
 
 ### Step E — Phase 3+：流式 MVP / SaaS / 千级
 
