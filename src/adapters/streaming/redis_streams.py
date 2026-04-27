@@ -42,6 +42,39 @@ def _default_consumer_name() -> str:
     return f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:6]}"
 
 
+def _pending_count_for_consumer(pending: Any, consumer: str) -> int:
+    """Extract this consumer's PEL count from an ``XPENDING`` summary.
+
+    redis-py returns either a 4-tuple summary
+    ``(total, min_id, max_id, [(consumer, count), ...])`` or a dict
+    with the same shape. Shape-tolerant so we can swap clients later.
+    """
+    if not pending:
+        return 0
+    consumers: Any = None
+    if isinstance(pending, dict):
+        consumers = pending.get("consumers") or pending.get(b"consumers")
+    elif isinstance(pending, (list, tuple)) and len(pending) >= 4:
+        consumers = pending[3]
+    if not consumers:
+        return 0
+    target = consumer.encode() if isinstance(consumer, str) else consumer
+    for entry in consumers:
+        if isinstance(entry, dict):
+            name = entry.get("name") or entry.get(b"name")
+            count = entry.get("pending") or entry.get(b"pending") or 0
+        elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+            name, count = entry[0], entry[1]
+        else:
+            continue
+        if name in (consumer, target):
+            try:
+                return int(count)
+            except (TypeError, ValueError):
+                return 0
+    return 0
+
+
 class RedisStreamsMessageBus(MessageBus):
     """At-least-once cross-process bus over Redis Streams."""
 
@@ -138,12 +171,37 @@ class RedisStreamsMessageBus(MessageBus):
         self._closed = True
         for task in list(self._readers):
             task.cancel()
-        # T4 — best-effort XGROUP DELCONSUMER for every (topic, group)
+        # R17 — best-effort XGROUP DELCONSUMER for every (topic, group)
         # we ever joined, so this consumer's pel entries don't linger
-        # on the broker once we shut down.
+        # on the broker once we shut down. We **skip** the call when
+        # the consumer still has pending (un-ack'd) entries: deleting
+        # a consumer with PEL > 0 silently drops those entries and
+        # breaks at-least-once delivery — the surviving consumers will
+        # never see them. Better to leave a dead consumer behind than
+        # lose messages.
         for key in self._groups_ready:
             topic, _, group = key.partition("::")
             if not topic or not group:
+                continue
+            try:
+                pending = await self._r.xpending(topic, group)
+            except Exception:
+                log.debug(
+                    "redis bus: xpending probe failed for %s/%s",
+                    topic,
+                    group,
+                    exc_info=True,
+                )
+                continue
+            pel_count = _pending_count_for_consumer(pending, self._consumer)
+            if pel_count > 0:
+                log.info(
+                    "redis bus: skip xgroup_delconsumer %s/%s/%s — pel=%d",
+                    topic,
+                    group,
+                    self._consumer,
+                    pel_count,
+                )
                 continue
             try:
                 await self._r.xgroup_delconsumer(topic, group, self._consumer)

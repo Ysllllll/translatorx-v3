@@ -278,8 +278,12 @@ class LiveStreamHandle:
         self._closed = True
         self._seq += 1
         await self._pq.put((Priority.LOW + 1000, self._seq, _PUMP_SENTINEL))
-        if self._ticket is not None:
+        # R15 — release the ticket here ONLY when the pipeline never
+        # started: otherwise records()'s finally owns the release so
+        # the budget stays held until the runtime has fully drained.
+        if not self._started and self._ticket is not None:
             self._ticket.release()
+            self._ticket = None
 
     @property
     def failed(self) -> tuple[ErrorInfo, ...]:
@@ -344,6 +348,11 @@ class LiveStreamHandle:
                         status="completed" if success else "failed",
                     ),
                 )
+            # R15 — release the resource ticket only after the pipeline
+            # has fully drained and state has been flushed.
+            if self._ticket is not None:
+                self._ticket.release()
+                self._ticket = None
 
     async def __aenter__(self) -> LiveStreamHandle:
         return self

@@ -464,32 +464,13 @@ class VideoSession:
         if fingerprints:
             await store.set_fingerprints(self._video_key.video, fingerprints)
 
-        # Emit domain events AFTER successful writes so subscribers
-        # never observe a state that wasn't persisted (D-074).
-        if self._event_bus is not None:
-            from application.events import (
-                video_fingerprints_set,
-                video_records_patched,
-            )
-
-            if records:
-                await self._event_bus.publish(
-                    video_records_patched(
-                        course=self._video_key.course,
-                        video=self._video_key.video,
-                        record_ids=sorted(records.keys()),
-                    )
-                )
-            if fingerprints:
-                await self._event_bus.publish(
-                    video_fingerprints_set(
-                        course=self._video_key.course,
-                        video=self._video_key.video,
-                        fingerprints=fingerprints,
-                    )
-                )
-
-        # Clear dirty buffers atomically only after both writes succeed.
+        # R21 — clear dirty buffers IMMEDIATELY after persistence
+        # succeeds. If event publish below fails, the next flush
+        # must NOT re-publish records we already wrote (subscribers
+        # would observe duplicates of an already-persisted state).
+        # Capture local copies for the publish step.
+        published_records = records
+        published_fingerprints = fingerprints
         self._record_patches = {}
         self._variants = {}
         self._prompts = {}
@@ -499,6 +480,33 @@ class VideoSession:
         self._punc_cache = None
         self._chunk_cache = None
         self._last_flush_at = time.monotonic()
+
+        # Emit domain events AFTER successful writes so subscribers
+        # never observe a state that wasn't persisted (D-074). A
+        # publish failure here propagates; the records buffer is
+        # already clear, so we don't double-send on retry.
+        if self._event_bus is not None:
+            from application.events import (
+                video_fingerprints_set,
+                video_records_patched,
+            )
+
+            if published_records:
+                await self._event_bus.publish(
+                    video_records_patched(
+                        course=self._video_key.course,
+                        video=self._video_key.video,
+                        record_ids=sorted(published_records.keys()),
+                    )
+                )
+            if published_fingerprints:
+                await self._event_bus.publish(
+                    video_fingerprints_set(
+                        course=self._video_key.course,
+                        video=self._video_key.video,
+                        fingerprints=published_fingerprints,
+                    )
+                )
 
     # ------------------------------------------------------------------
     # Internals

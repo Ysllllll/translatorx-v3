@@ -167,6 +167,22 @@ class TestWatermarks:
         ch.close()
         assert "closed" in events
 
+    async def test_block_send_wakes_on_close(self):
+        """R22 — a BLOCK producer waiting on a full queue must wake up
+        when the channel is closed and raise ``RuntimeError``, not hang
+        forever (which would deadlock shutdown).
+        """
+        ch = MemoryChannel[int](ChannelConfig(capacity=1, overflow=OverflowPolicy.BLOCK))
+        await ch.send(1)  # fills the queue
+
+        send_task = asyncio.create_task(ch.send(2))
+        await asyncio.sleep(0.01)
+        assert not send_task.done()
+
+        ch.close()
+        with pytest.raises(RuntimeError):
+            await asyncio.wait_for(send_task, timeout=0.5)
+
     async def test_callback_failure_swallowed(self):
         def bad(*_):
             raise RuntimeError("boom")

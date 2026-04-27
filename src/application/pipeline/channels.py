@@ -99,10 +99,53 @@ class MemoryChannel(Generic[T]):
         policy = self._config.overflow
 
         if policy is OverflowPolicy.BLOCK:
-            await self._queue.put(item)
-            self._sent += 1
-            self._maybe_emit_high()
-            return
+            # Fast path: queue not full → put without yielding so the
+            # producer can fill up to capacity before any context
+            # switch (preserves high-watermark visibility).
+            try:
+                self._queue.put_nowait(item)
+            except asyncio.QueueFull:
+                pass
+            else:
+                self._sent += 1
+                self._maybe_emit_high()
+                return
+
+            # R22 — full queue: race the put against close so a
+            # producer blocked on a full queue wakes up when the
+            # channel is closed (otherwise it hangs forever and
+            # breaks shutdown).
+            put_task = asyncio.ensure_future(self._queue.put(item))
+            close_task = asyncio.ensure_future(self._close_event.wait())
+            try:
+                done, _ = await asyncio.wait(
+                    {put_task, close_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            except BaseException:
+                put_task.cancel()
+                close_task.cancel()
+                raise
+
+            if put_task in done and not put_task.cancelled():
+                close_task.cancel()
+                exc = put_task.exception()
+                if exc is not None:
+                    raise exc
+                self._sent += 1
+                self._maybe_emit_high()
+                return
+
+            # Close won the race: cancel the pending put. The item is
+            # dropped on the floor, which is the correct behaviour for
+            # a closed channel — the producer should treat send() on a
+            # closed channel as an error.
+            put_task.cancel()
+            try:
+                await put_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            raise RuntimeError(f"send() on closed channel {self._name!r}")
 
         # Non-blocking strategies need the lock so we don't race against
         # a concurrent producer.
