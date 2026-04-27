@@ -5,5 +5,6 @@ selects one based on :class:`ports.message_bus.BusConfig.type`.
 """
 
 from .memory import InMemoryMessageBus
+from .redis_streams import RedisStreamsMessageBus
 
-__all__ = ["InMemoryMessageBus"]
+__all__ = ["InMemoryMessageBus", "RedisStreamsMessageBus"]
