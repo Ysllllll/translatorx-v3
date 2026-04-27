@@ -89,6 +89,15 @@
 - `demos/demo_tenant_scheduler.py` 三租户公平调度演示
 - `docs/streaming.md §12` 用户文档
 
+### Phase 6 — Plugin entry-points（方案 F）
+
+> 实际在 Step B 期间随 commit `c1dec46` 一起落地，不是新增切片。
+
+- `application/pipeline/plugins.py`：`PluginGroup` 常量、`discover_stages(reg)`、`load_plugin(ep)`、`PluginLoadError`
+- `StageRegistry.from_app(... discover_plugins=True)`：默认走 `importlib.metadata.entry_points(group="translatorx.pipeline.stages")`
+- `tests/application/pipeline/test_plugins.py`：fake EP 注册 / 验证错误 / 注入失败回滚
+- `docs/plugin_sdk.md`：第三方 stage 包契约（pyproject 入口、`register(reg)` 钩子、版本兼容承诺）
+
 ---
 
 ## 🚧 进行中
@@ -139,7 +148,6 @@
 
 来自 [`design/streaming.md §8`](design/streaming.md)。
 
-- **Phase 6** — Plugin entry-points（方案 F）
 - **Phase 7** — 远期方案 E / G / H
 
 ---

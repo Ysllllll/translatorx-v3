@@ -372,6 +372,11 @@ on_cancel:
 
 ## 4. 方案 F — Microkernel + Plugin Manifest（新）
 
+> ✅ **已实现** —— 见 `docs/plugin_sdk.md` + `application/pipeline/plugins.py`。
+> `StageRegistry.from_app(discover_plugins=True)` 默认走
+> ``importlib.metadata.entry_points(group="translatorx.pipeline.stages")``
+> 自动注册第三方 stage。
+
 ### 4.1 思想
 
 Pipeline DSL 之上，把 Stage 做成"插件"：外部包可通过 Python entry-points 注册自己的 Stage，无需 fork 主仓。
