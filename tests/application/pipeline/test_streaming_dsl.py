@@ -310,3 +310,137 @@ class TestRuntimeBusBranch:
             assert captured
         finally:
             MemoryChannel.__init__ = original_init  # type: ignore[method-assign]
+
+
+# ---------------------------------------------------------------------------
+# J6 — bus.* DomainEvent observability
+# ---------------------------------------------------------------------------
+
+
+class TestBusEvents:
+    def test_bus_event_factory_connected(self):
+        from application.events import bus_event
+
+        ev = bus_event("connected", "c1", "v1", topic="t.x", stage_id="s1", stage="translate")
+        assert ev.type == "bus.connected"
+        assert ev.course == "c1"
+        assert ev.video == "v1"
+        assert ev.payload["topic"] == "t.x"
+        assert ev.payload["stage_id"] == "s1"
+        assert ev.payload["stage"] == "translate"
+        assert ev.payload["event"] == "connected"
+
+    def test_bus_event_factory_publish_failed_includes_error(self):
+        from application.events import bus_event
+
+        ev = bus_event("publish_failed", "c1", None, topic="t.x", error="ConnectionError: down")
+        assert ev.type == "bus.publish_failed"
+        assert ev.payload["error"] == "ConnectionError: down"
+
+    @pytest.mark.asyncio
+    async def test_bus_channel_emits_connected_and_disconnected(self):
+        from adapters.streaming import InMemoryMessageBus
+        from application.pipeline.bus_channel import BusChannel
+
+        events: list[tuple[str, dict]] = []
+        bus = InMemoryMessageBus()
+        ch = BusChannel(bus, "t.evt", ChannelConfig(capacity=4), on_bus_event=lambda evt, extra: events.append((evt, extra)))
+        # Send one item to trigger drain → connected
+        await ch.send("hello")
+        # Allow drain to fire connected
+        import asyncio as _a
+
+        await _a.sleep(0.05)
+        ch.close()
+        await _a.sleep(0.05)
+        await bus.close()
+
+        kinds = [e[0] for e in events]
+        assert "connected" in kinds
+        assert "disconnected" in kinds
+
+    @pytest.mark.asyncio
+    async def test_bus_channel_emits_publish_failed(self):
+        from application.pipeline.bus_channel import BusChannel
+        from ports.message_bus import BusMessage, MessageBus
+
+        events: list[tuple[str, dict]] = []
+
+        class _BrokenBus:
+            async def publish(self, topic, msg):
+                raise RuntimeError("boom")
+
+            def subscribe(self, topic):
+                async def _g():
+                    if False:
+                        yield  # pragma: no cover
+                    return
+
+                return _g()
+
+            async def ack(self, topic, msg_id):
+                pass
+
+            async def close(self):
+                pass
+
+        ch = BusChannel(
+            _BrokenBus(),  # type: ignore[arg-type]
+            "t.fail",
+            ChannelConfig(capacity=4),
+            on_bus_event=lambda evt, extra: events.append((evt, extra)),
+        )
+        # Wait for subscribe registration
+        import asyncio as _a
+
+        await _a.sleep(0.01)
+        with pytest.raises(RuntimeError):
+            await ch.send("x")
+        ch.close()
+        await _a.sleep(0.02)
+
+        kinds = [e[0] for e in events]
+        assert "publish_failed" in kinds
+        # error string captured
+        pf = next(e for e in events if e[0] == "publish_failed")
+        assert "boom" in pf[1].get("error", "")
+
+    @pytest.mark.asyncio
+    async def test_runtime_publishes_bus_events_to_event_bus(self):
+        from adapters.streaming import InMemoryMessageBus
+        from application.events.bus import EventBus
+        import dataclasses
+
+        reg = StageRegistry()
+        reg.register("src", lambda _p: _Source())
+        reg.register("id", lambda _p: _Identity())
+        ctx = await _make_ctx()
+        ev_bus = EventBus()
+        ctx = dataclasses.replace(ctx, event_bus=ev_bus)
+        sub = ev_bus.subscribe(type_prefix="bus.")
+
+        bus = InMemoryMessageBus()
+        rt = PipelineRuntime(reg, bus=bus)
+        defn = PipelineDef(name="p", build=StageDef(name="src", bus_topic="t.runtime"), enrich=(StageDef(name="id"),))
+        async for _r in rt.stream(defn, ctx):
+            pass
+        await bus.close()
+        # Let event bus drain
+        import asyncio as _a
+
+        await _a.sleep(0.05)
+
+        captured = []
+        try:
+            while True:
+                evt = sub._queue.get_nowait()
+                if evt is None:
+                    break
+                captured.append(evt)
+        except _a.QueueEmpty:
+            pass
+        sub.close()
+
+        types = [getattr(e, "type", None) for e in captured]
+        assert "bus.connected" in types
+        assert "bus.disconnected" in types

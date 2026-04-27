@@ -80,6 +80,7 @@ class BusChannel(Generic[T]):
         "_config",
         "_codec",
         "_on_watermark",
+        "_on_bus_event",
         "_name",
         "_permits",
         "_in_flight",
@@ -105,6 +106,7 @@ class BusChannel(Generic[T]):
         *,
         codec: Codec | None = None,
         on_watermark: Callable[[WatermarkEvent, ChannelStats], None] | None = None,
+        on_bus_event: Callable[[str, dict], None] | None = None,
         name: str = "",
     ) -> None:
         self._bus = bus
@@ -112,6 +114,7 @@ class BusChannel(Generic[T]):
         self._config = config or ChannelConfig()
         self._codec: Codec = codec or PickleCodec()
         self._on_watermark = on_watermark
+        self._on_bus_event = on_bus_event
         self._name = name or topic
         self._permits = asyncio.Semaphore(self._config.capacity)
         self._in_flight = 0
@@ -141,6 +144,7 @@ class BusChannel(Generic[T]):
             pending = asyncio.ensure_future(ait.__anext__())
             await asyncio.sleep(0)
             self._subscribed.set()
+            self._emit_bus("connected", {})
             # Drain runs forever; _finalize() cancels us once close()
             # is called and sent==received (or grace timeout fires).
             while True:
@@ -211,9 +215,10 @@ class BusChannel(Generic[T]):
         try:
             payload = self._codec.encode(item)
             await self._bus.publish(self._topic, BusMessage(payload=payload))
-        except BaseException:
+        except BaseException as exc:
             # rollback the permit we just took
             self._permits.release()
+            self._emit_bus("publish_failed", {"error": f"{type(exc).__name__}: {exc}"})
             raise
 
         self._in_flight += 1
@@ -265,6 +270,7 @@ class BusChannel(Generic[T]):
         self._closed = True
         self._close_event.set()
         self._emit("closed")
+        self._emit_bus("disconnected", {})
         # Schedule graceful shutdown: wait for in-flight messages to
         # settle, then cancel the drain task. recv() side will see
         # _eos via drain's finally block.
@@ -314,6 +320,15 @@ class BusChannel(Generic[T]):
             return
         try:
             cb(event, self.stats())
+        except Exception:
+            pass
+
+    def _emit_bus(self, event: str, extra: dict) -> None:
+        cb = self._on_bus_event
+        if cb is None:
+            return
+        try:
+            cb(event, extra)
         except Exception:
             pass
 

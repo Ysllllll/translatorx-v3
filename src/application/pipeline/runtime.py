@@ -239,6 +239,7 @@ class PipelineRuntime:
                 ch_cfg = upstream_def.downstream_channel or default_cfg
                 stage_id = sdef.id or sdef.name
                 emitter = _make_channel_emitter(ctx, stage_id, sdef.name)
+                bus_emitter = _make_bus_emitter(ctx, stage_id, sdef.name)
                 ch: Any
                 if self._bus is not None and (upstream_def.bus_topic or sdef.bus_topic):
                     topic = upstream_def.bus_topic or f"trx.{ctx.run_id}.{stage_id}"
@@ -248,6 +249,7 @@ class PipelineRuntime:
                         ch_cfg,
                         name=stage_id,
                         on_watermark=emitter,
+                        on_bus_event=lambda event, extra, _topic=topic: bus_emitter(event, _topic, extra) if bus_emitter else None,
                     )
                 else:
                     ch = MemoryChannel(
@@ -389,6 +391,56 @@ def _make_channel_emitter(
 
 
 def _to_error_info(stage_name: str, exc: BaseException) -> ErrorInfo:
+    return ErrorInfo(
+        processor=stage_name,
+        category="permanent",
+        code=type(exc).__name__,
+        message=f"{stage_name}: {exc}",
+        cause=type(exc).__name__,
+    )
+
+
+def _make_bus_emitter(
+    ctx: PipelineContext,
+    stage_id: str,
+    stage_name: str,
+):
+    """Build an emitter for ``bus.connected`` / ``bus.disconnected`` /
+    ``bus.publish_failed`` :class:`DomainEvent`s from a
+    :class:`BusChannel`. Returns ``None`` if no event bus is available.
+    """
+
+    bus = ctx.event_bus
+    publish = getattr(bus, "publish_nowait", None)
+    if publish is None:
+        return None
+
+    try:
+        from application.events import bus_event
+    except Exception:  # pragma: no cover
+        return None
+
+    course_obj = getattr(ctx.session, "video_key", None)
+    course = getattr(course_obj, "course", "") or ""
+    video = getattr(course_obj, "video", None)
+
+    def _emit(event: str, topic: str, extra: dict) -> None:
+        try:
+            publish(
+                bus_event(
+                    event,
+                    course,
+                    video,
+                    topic=topic,
+                    stage_id=stage_id,
+                    stage=stage_name,
+                    error=extra.get("error"),
+                ),
+            )
+        except Exception:
+            pass
+
+    return _emit
     return ErrorInfo(
         processor=stage_name,
         category="permanent",

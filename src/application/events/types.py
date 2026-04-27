@@ -237,6 +237,40 @@ def channel_event(
     )
 
 
+def bus_event(
+    event: str,
+    course: str,
+    video: str | None,
+    *,
+    topic: str,
+    stage_id: str | None = None,
+    stage: str | None = None,
+    error: str | None = None,
+) -> DomainEvent:
+    """Build a Phase 4 cross-process bus event.
+
+    ``event`` is one of ``"connected"`` / ``"disconnected"`` /
+    ``"publish_failed"`` and is encoded into the ``bus.<event>`` event
+    type. Used by :class:`BusChannel` to surface lifecycle and publish
+    failures to the same JSONL / live-UI consumers that already render
+    ``channel.*`` back-pressure events.
+    """
+
+    payload: dict[str, Any] = {"topic": topic, "event": event}
+    if stage_id is not None:
+        payload["stage_id"] = stage_id
+    if stage is not None:
+        payload["stage"] = stage
+    if error is not None:
+        payload["error"] = error
+    return DomainEvent(
+        type=f"bus.{event}",
+        course=course,
+        video=video,
+        payload=payload,
+    )
+
+
 __all__ = [
     "DomainEvent",
     "video_records_patched",
@@ -246,4 +280,5 @@ __all__ = [
     "stage_started",
     "stage_finished",
     "channel_event",
+    "bus_event",
 ]

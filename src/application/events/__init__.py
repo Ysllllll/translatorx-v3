@@ -21,6 +21,7 @@ from .bus import EventBus, Subscription
 from .progress import ProgressCallback, ProgressEvent, ProgressKind
 from .types import (
     DomainEvent,
+    bus_event,
     channel_event,
     course_metadata_patched,
     stage_finished,
@@ -37,6 +38,7 @@ __all__ = [
     "ProgressCallback",
     "ProgressEvent",
     "ProgressKind",
+    "bus_event",
     "channel_event",
     "course_metadata_patched",
     "stage_finished",
