@@ -38,6 +38,7 @@ from application.scheduler.base import (
     SchedulerTicket,
     _now,
 )
+from application.scheduler.observability import TenantMetrics
 from application.scheduler.tenant import DEFAULT_QUOTAS, TenantQuota
 
 _logger = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ class FairScheduler(PipelineScheduler):
         "_rejected_total",
         "_by_qos_tier",
         "_lock",
+        "_metrics",
     )
 
     def __init__(
@@ -74,6 +76,7 @@ class FairScheduler(PipelineScheduler):
         *,
         default_quota: TenantQuota | None = None,
         global_max: int | None = None,
+        metrics: "TenantMetrics | None" = None,
     ) -> None:
         self._quotas: dict[str, TenantQuota] = dict(quotas or {})
         self._default_quota: TenantQuota = default_quota or DEFAULT_QUOTAS["free"]
@@ -85,6 +88,7 @@ class FairScheduler(PipelineScheduler):
         self._rejected_total = 0
         self._by_qos_tier: dict[str, int] = defaultdict(int)
         self._lock = asyncio.Lock()
+        self._metrics = metrics
 
     # ------------------------------------------------------------------
     # Public API
@@ -105,6 +109,8 @@ class FairScheduler(PipelineScheduler):
 
         queued_at = _now()
         self._submitted_total += 1
+        if self._metrics is not None:
+            self._metrics.record_submitted(tenant_id)
 
         # Per-tenant gate.
         acquired_tenant = False
@@ -115,6 +121,8 @@ class FairScheduler(PipelineScheduler):
             else:
                 if not self._try_acquire(sem):
                     self._rejected_total += 1
+                    if self._metrics is not None:
+                        self._metrics.record_rejected(tenant_id)
                     raise QuotaExceeded(
                         tenant_id=tenant_id,
                         reason=f"per-tenant cap {quota.max_concurrent_streams} reached",
@@ -128,6 +136,8 @@ class FairScheduler(PipelineScheduler):
                 else:
                     if not self._try_acquire(self._global_sem):
                         self._rejected_total += 1
+                        if self._metrics is not None:
+                            self._metrics.record_rejected(tenant_id)
                         raise QuotaExceeded(
                             tenant_id=tenant_id,
                             reason=f"global cap {self._global_max} reached",
@@ -140,11 +150,14 @@ class FairScheduler(PipelineScheduler):
         granted_at = _now()
         self._active_by_tenant[tenant_id] += 1
         self._by_qos_tier[quota.qos_tier] += 1
+        wait_seconds = max(0.0, granted_at - queued_at)
+        if self._metrics is not None:
+            self._metrics.record_granted(tenant_id, wait_seconds=wait_seconds)
 
         ticket = SchedulerTicket(
             tenant_id=tenant_id,
             granted_at=granted_at,
-            wait_seconds=max(0.0, granted_at - queued_at),
+            wait_seconds=wait_seconds,
         )
         ticket._release_fn = lambda t=tenant_id, q=quota.qos_tier, s=sem: self._release(t, q, s)
         return ticket
@@ -186,6 +199,8 @@ class FairScheduler(PipelineScheduler):
             self._global_sem.release()
         self._active_by_tenant[tenant_id] = max(0, self._active_by_tenant[tenant_id] - 1)
         self._by_qos_tier[qos_tier] = max(0, self._by_qos_tier[qos_tier] - 1)
+        if self._metrics is not None:
+            self._metrics.record_released(tenant_id)
 
 
 __all__ = ["FairScheduler"]

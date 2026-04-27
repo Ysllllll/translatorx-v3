@@ -19,6 +19,7 @@ from application.scheduler.base import (
     SchedulerTicket,
 )
 from application.scheduler.fair import FairScheduler
+from application.scheduler.observability import TenantCounter, TenantMetrics
 from application.scheduler.tenant import (
     DEFAULT_QUOTAS,
     DEFAULT_TENANT_ID,
@@ -37,5 +38,7 @@ __all__ = [
     "SchedulerStats",
     "SchedulerTicket",
     "TenantContext",
+    "TenantCounter",
+    "TenantMetrics",
     "TenantQuota",
 ]
