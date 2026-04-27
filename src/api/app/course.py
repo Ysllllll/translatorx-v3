@@ -298,78 +298,84 @@ class CourseBuilder:
         max_concurrent = self.app.config.runtime.max_concurrent_videos
         sem = asyncio.Semaphore(max_concurrent)
 
-        result: CourseResult | None = None
-
-        for tgt_lang in t.tgt:
-
-            async def _run_one(
-                v: _CourseVideoEntry,
-                _tgt: str = tgt_lang,
-            ) -> tuple[str, VideoResult | BaseException]:
-                async with sem:
-                    vid_lang = v.language or src_lang
-                    vb: VideoBuilder = (
-                        self.app.video(course=self.course, video=v.video)
-                        .source(
-                            v.path,
-                            language=vid_lang,
-                            kind=v.kind,
-                        )
-                        .translate(src=vid_lang, tgt=_tgt, engine=t.engine_name)
-                    )
-                    if self._summary is not None:
-                        vb = vb.summary(
-                            engine=self._summary.engine_name,
-                            window_words=self._summary.window_words,
-                        )
-                    if self._align is not None:
-                        a = self._align
-                        vb = vb.align(
-                            engine=a.engine_name,
-                            enable_text_mode=a.enable_text_mode,
-                            json_norm_ratio=a.json_norm_ratio,
-                            json_accept_ratio=a.json_accept_ratio,
-                            text_norm_ratio=a.text_norm_ratio,
-                            text_accept_ratio=a.text_accept_ratio,
-                            rearrange_chunk_len=a.rearrange_chunk_len,
-                        )
-                    if self._tts is not None:
-                        tt = self._tts
-                        vb = vb.tts(
-                            library=tt.library,
-                            voice=tt.voice,
-                            format=tt.format,
-                            rate=tt.rate,
-                        )
-                    if self._error_reporter is not None:
-                        vb = vb.with_error_reporter(self._error_reporter)
-                    if self._usage_sink is not None:
-                        vb = vb.with_usage_sink(self._usage_sink)
-                    try:
-                        vres = await vb.run()
-                    except asyncio.CancelledError:
-                        raise
-                    except BaseException as e:  # noqa: BLE001
-                        return v.video, e
-                    return v.video, vres
-
-            start = time.monotonic()
-            tasks = [asyncio.create_task(_run_one(v)) for v in self._videos]
-            try:
-                gathered = await asyncio.gather(*tasks, return_exceptions=False)
-            except asyncio.CancelledError:
-                for tk in tasks:
-                    tk.cancel()
-                await asyncio.gather(*tasks, return_exceptions=True)
-                raise
-
-            result = CourseResult(
-                videos=tuple(gathered),
-                elapsed_s=time.monotonic() - start,
+        # B1 fix: per-video Store writes to a single
+        # ``<course>/zzz_translation/<video>.json`` file, so two parallel
+        # target languages would race the same record set. Until the
+        # storage layout supports multi-target outputs, accept only one
+        # target per CourseBuilder invocation. Callers wanting multiple
+        # targets should run separate CourseBuilder calls (each with a
+        # distinct ``tgt``) and merge results at a higher layer.
+        if len(t.tgt) != 1:
+            raise ValueError(
+                f"CourseBuilder.translate() requires exactly one target language; got {list(t.tgt)!r}. "
+                "Run CourseBuilder once per target language."
             )
+        tgt_lang = t.tgt[0]
 
-        assert result is not None  # at least one tgt guaranteed
-        return result
+        async def _run_one(
+            v: _CourseVideoEntry,
+        ) -> tuple[str, VideoResult | BaseException]:
+            async with sem:
+                vid_lang = v.language or src_lang
+                vb: VideoBuilder = (
+                    self.app.video(course=self.course, video=v.video)
+                    .source(
+                        v.path,
+                        language=vid_lang,
+                        kind=v.kind,
+                    )
+                    .translate(src=vid_lang, tgt=tgt_lang, engine=t.engine_name)
+                )
+                if self._summary is not None:
+                    vb = vb.summary(
+                        engine=self._summary.engine_name,
+                        window_words=self._summary.window_words,
+                    )
+                if self._align is not None:
+                    a = self._align
+                    vb = vb.align(
+                        engine=a.engine_name,
+                        enable_text_mode=a.enable_text_mode,
+                        json_norm_ratio=a.json_norm_ratio,
+                        json_accept_ratio=a.json_accept_ratio,
+                        text_norm_ratio=a.text_norm_ratio,
+                        text_accept_ratio=a.text_accept_ratio,
+                        rearrange_chunk_len=a.rearrange_chunk_len,
+                    )
+                if self._tts is not None:
+                    tt = self._tts
+                    vb = vb.tts(
+                        library=tt.library,
+                        voice=tt.voice,
+                        format=tt.format,
+                        rate=tt.rate,
+                    )
+                if self._error_reporter is not None:
+                    vb = vb.with_error_reporter(self._error_reporter)
+                if self._usage_sink is not None:
+                    vb = vb.with_usage_sink(self._usage_sink)
+                try:
+                    vres = await vb.run()
+                except asyncio.CancelledError:
+                    raise
+                except BaseException as e:  # noqa: BLE001
+                    return v.video, e
+                return v.video, vres
+
+        start = time.monotonic()
+        tasks = [asyncio.create_task(_run_one(v)) for v in self._videos]
+        try:
+            gathered = await asyncio.gather(*tasks, return_exceptions=False)
+        except asyncio.CancelledError:
+            for tk in tasks:
+                tk.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
+
+        return CourseResult(
+            videos=tuple(gathered),
+            elapsed_s=time.monotonic() - start,
+        )
 
 
 __all__ = ["CourseBuilder"]

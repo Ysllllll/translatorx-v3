@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,7 @@ class WhisperXConfig:
     diarize: bool = False
     hf_token: str | None = None
     language: str | None = None
+    align_cache_size: int = 2
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -76,7 +78,11 @@ class WhisperXTranscriber:
         self._config = config or WhisperXConfig()
         self._lock = threading.Lock()
         self._model: Any = None
-        self._align_cache: dict[str, tuple[Any, Any]] = {}
+        # R12 fix: bounded LRU keyed by language so a long-running
+        # process that visits many languages does not hold every
+        # alignment model on the GPU forever. Eviction calls release()
+        # on the model when supported.
+        self._align_cache: OrderedDict[str, tuple[Any, Any]] = OrderedDict()
         self._diarize_pipeline: Any = None
 
     # ------------------------------------------------------------------
@@ -149,10 +155,28 @@ class WhisperXTranscriber:
     def _get_align_model(self, whisperx: Any, language: str, device: str):
         cached = self._align_cache.get(language)
         if cached is not None:
+            self._align_cache.move_to_end(language)
             return cached
         align_model, metadata = whisperx.load_align_model(language_code=language, device=device)
         self._align_cache[language] = (align_model, metadata)
+        # Evict LRU entries to keep VRAM bounded.
+        max_size = max(1, self._config.align_cache_size)
+        while len(self._align_cache) > max_size:
+            _, (evicted_model, _) = self._align_cache.popitem(last=False)
+            try:
+                if hasattr(evicted_model, "to"):
+                    evicted_model.to("cpu")
+            except Exception:
+                pass
+            del evicted_model
         return align_model, metadata
+
+    def release(self) -> None:
+        """Drop cached models (alignment + ASR + diarize) to free VRAM."""
+        with self._lock:
+            self._align_cache.clear()
+            self._model = None
+            self._diarize_pipeline = None
 
 
 # ---------------------------------------------------------------------------
