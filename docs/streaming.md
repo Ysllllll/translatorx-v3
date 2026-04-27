@@ -1,0 +1,257 @@
+# Streaming MVP — Bounded Channel + Back-pressure
+
+> Phase 3 of the runtime refactor (commit range `c524d88..e5c6208` on
+> `feature/runtime-refactor`). Implements 方案 I from
+> `docs/refactor/refactor-streaming.md §2`.
+
+This document is the user-facing guide for the live-streaming side of
+`PipelineRuntime`. The batch path (`PipelineRuntime.run`) is unchanged.
+
+---
+
+## 1. What problem does this solve?
+
+Before Phase 3, `PipelineRuntime.stream()` chained the source and each
+enrich stage with raw `AsyncIterator` plumbing — no buffer between
+stages. That works fine when the consumer drains items as fast as the
+source produces them, but it has two failure modes:
+
+1. **Slow consumer / fast source** — the `AsyncIterator` was
+   single-step, so the whole chain advanced at the speed of its slowest
+   stage. There was no bounded buffer to absorb micro-bursts, and no
+   way to express "let upstream get ahead by N records before
+   stalling".
+2. **No observability** — there was no signal when a stage was
+   falling behind, or whether the system was bottlenecked.
+
+Phase 3 inserts a **bounded in-memory channel** between every adjacent
+stage pair and emits `channel.*` `DomainEvent`s on watermark
+crossings, so back-pressure is both *enforced* and *visible*.
+
+---
+
+## 2. Mental model
+
+```
+   ┌────────────┐  pump-task   ┌─────────────────┐  pump-task   ┌──────────────┐
+   │ source     │ ───────────▶ │ MemoryChannel A │ ───────────▶ │  enrich[0]   │
+   │ .stream()  │              │  capacity=64    │              │  .transform()│
+   └────────────┘              └─────────────────┘              └──────────────┘
+                                                                       │
+                                                                       ▼
+                                                              ┌─────────────────┐
+                                                              │ MemoryChannel B │  ⋯⋯⋯
+                                                              └─────────────────┘
+```
+
+* Each channel has a capacity (default 64), high/low watermarks, and
+  an overflow policy.
+* A pump-task pulls from upstream and `await`s `channel.send(item)`.
+* The downstream stage iterates the channel via `async for`. When the
+  channel closes, the iterator naturally raises `StopAsyncIteration`.
+* When the consumer breaks early, runtime cancels every still-running
+  pump and re-raises the first non-cancel exception.
+
+`SourceStage.stream(ctx)` and `RecordStage.transform(upstream, ctx)`
+contracts are **unchanged** — channels deliberately implement
+`__aiter__`, so existing stage code keeps working.
+
+---
+
+## 3. The channel itself
+
+`src/ports/backpressure.py` defines the contract; `src/application/pipeline/channels.py`
+implements it:
+
+```python
+class OverflowPolicy(str, Enum):
+    BLOCK     = "block"      # producer awaits until space frees up
+    DROP_NEW  = "drop_new"   # discard the incoming item
+    DROP_OLD  = "drop_old"   # evict oldest, enqueue the new one
+    REJECT    = "reject"     # raise BackpressureError on send
+
+@dataclass(frozen=True, slots=True)
+class ChannelConfig:
+    capacity: int = 64
+    high_watermark: float = 0.8
+    low_watermark: float = 0.3
+    overflow: OverflowPolicy = OverflowPolicy.BLOCK
+```
+
+`ChannelStats` snapshot exposed via `channel.stats()`:
+
+| field | meaning |
+|---|---|
+| `capacity` | configured max buffer size |
+| `filled` | items currently buffered |
+| `sent` | total `send()` calls (incl. dropped ones) |
+| `received` | items consumed via `recv()` / `__aiter__` |
+| `dropped` | items shed under DROP_NEW / DROP_OLD / REJECT |
+| `high_watermark_hits` | times fill ratio crossed `high_watermark` upward |
+| `closed` | bool — channel has been closed |
+
+---
+
+## 4. Configuring channels
+
+### 4.1 `AppConfig.streaming` — runtime default
+
+```yaml
+streaming:
+  default_channel:
+    capacity: 128
+    high_watermark: 0.75
+    low_watermark: 0.25
+    overflow: block        # block | drop_new | drop_old | reject
+```
+
+This default is forwarded by `StreamBuilder` to `PipelineRuntime` and
+applies to every inter-stage channel that doesn't override it.
+
+### 4.2 Per-stage `downstream_channel`
+
+Each stage can override the channel feeding the *next* stage:
+
+```yaml
+pipeline:
+  build:
+    stage: from_push_queue
+    downstream_channel:        # configures channel feeding enrich[0]
+      capacity: 256
+      overflow: drop_old
+  enrich:
+    - stage: translate
+      downstream_channel:      # configures channel feeding enrich[1] (tts)
+        capacity: 32
+    - stage: tts
+```
+
+Convention: stage *i*'s `downstream_channel` configures the channel
+feeding stage *i+1*. `enrich[0]` reads from `build.downstream_channel`.
+If a stage omits it, the runtime default is used.
+
+The JSON Schema (`pipeline_json_schema()` /
+`registry_json_schema()`) advertises `downstream_channel` on every
+stage variant, so editor IntelliSense and CLI validation work
+out-of-the-box.
+
+---
+
+## 5. Observability — `channel.*` events
+
+`PipelineRuntime.stream()` wires a sync `on_watermark` callback into
+every channel. Whenever the fill ratio crosses a watermark — or the
+channel drops an item, or closes — it publishes a
+[`DomainEvent`](../../src/application/events/types.py) on
+`ctx.event_bus`:
+
+| event type | when |
+|---|---|
+| `channel.high_watermark` | fill ratio crosses `high_watermark` upward |
+| `channel.low_watermark` | fill ratio crosses `low_watermark` downward |
+| `channel.dropped` | item discarded (DROP_NEW / DROP_OLD / REJECT) |
+| `channel.closed` | channel `close()` called (final stats snapshot) |
+
+Payload:
+
+```python
+{
+    "stage_id": "translate",      # downstream stage_id
+    "stage": "translate",         # downstream stage name
+    "capacity": 64,
+    "filled": 48,
+    "sent": 152,
+    "received": 104,
+    "dropped": 0,
+    "high_watermark_hits": 1,
+    "closed": False,
+}
+```
+
+Failures inside `event_bus.publish_nowait` are swallowed by the
+runtime — observability never breaks the data path.
+
+To consume:
+
+```python
+sub = app.event_bus.subscribe(type_prefix="channel.")
+async for event in sub:
+    ...   # log, surface in dashboard, drive auto-scaling, etc.
+```
+
+---
+
+## 6. End-to-end demo
+
+`demos/demo_streaming.py` wires a fast source (30 records, no awaits)
+into a deliberately slow enrich stage (50 ms per record) through a
+`capacity=4, high_watermark=0.5` channel, runs the pipeline twice
+(BLOCK then DROP_OLD), and prints the live event timeline:
+
+```
+=== overflow=block ===
+  time event                    stage               filled/cap  sent  recv  drop  hwm
+──────────────────────────────────────────────────────────────────────────────
+ 0.000 channel.high_watermark   slow_translator     2/4            2     0     0    1
+ 1.260 channel.closed           slow_translator     4/4           30    26     0    1
+ 1.411 channel.low_watermark    slow_translator     1/4           30    29     0    1
+received 30 records (overflow=block)
+
+=== overflow=drop_old ===
+ 0.001 channel.high_watermark   slow_translator     2/4            2     0     0    1
+ 0.001 channel.dropped          slow_translator     3/4            4     1     1    1
+ ...   (many drops)
+ 0.003 channel.closed           slow_translator     4/4           30    26    26    1
+received 4 records (overflow=drop_old)
+```
+
+The integration test `tests/demos/test_demo_streaming.py` asserts the
+demo is genuinely exercising back-pressure (high_watermark must fire,
+DROP_OLD must shed records).
+
+---
+
+## 7. Cancellation & error semantics
+
+| event | behaviour |
+|---|---|
+| Source raises | active pumps drained; the consumer's `async for` re-raises the source exception after pumps finish |
+| Enrich stage raises | upstream pumps cancelled; consumer re-raises that stage's exception |
+| Consumer breaks early | every still-running pump cancelled; channels closed; clean shutdown |
+| `CancelToken` triggered | propagates through `CancelScope`; pumps' `finally` blocks close their channels |
+| `OverflowPolicy.REJECT` + full | producer pump raises `BackpressureError`; treated like a source error → consumer sees it after pumps finish |
+
+`PipelineRuntime.run()` (batch) is **not** affected — it still uses
+`stage.transform(items, ctx)` collect-style execution.
+
+---
+
+## 8. What this *isn't*
+
+Phase 3 deliberately scopes itself to a single-process MVP:
+
+- **Not multi-tenant scheduling** — that's Phase 5 (方案 L).
+- **Not a cross-process bus** — no Redis Streams / Kafka / SQS.
+  Channels live entirely inside one Python process.
+- **Not WebSocket bidirectional control** — that's Phase 4 (方案 K).
+- **Not OpenTelemetry** — `channel.*` events flow through the same
+  in-process EventBus as everything else.
+- **Not reorder-tolerant** — channels are FIFO. Out-of-order arrival
+  on the source side is preserved as-is.
+
+These are explicit Phase 4+ work and tracked in `ROADMAP.md` and
+`docs/refactor/refactor-streaming.md §8`.
+
+---
+
+## 9. Quick reference
+
+| Need | Import / reference |
+|---|---|
+| Channel types | `from ports.backpressure import OverflowPolicy, ChannelConfig, ChannelStats, BackpressureError` |
+| Concrete channel | `from application.pipeline.channels import MemoryChannel` |
+| Default config | `AppConfig.streaming.default_channel` |
+| Per-stage override | `StageDef.downstream_channel` (YAML: `downstream_channel:`) |
+| Subscribe to events | `app.event_bus.subscribe(type_prefix="channel.")` |
+| Live demo | `python demos/demo_streaming.py` |
+| Integration test | `tests/demos/test_demo_streaming.py` |

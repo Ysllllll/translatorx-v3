@@ -13,7 +13,15 @@
 - ✅ Plugin SDK 文档（`docs/plugin_sdk.md`）— entry-points group、契约、兼容性
 - ✅ Step C — Align 端到端：`LangOps.split_sentences/clauses/by_length`、`rebalance_segment_words`、
   `AlignAgent` 双模 (json + text)、`AlignProcessor`、22 单测，端到端冒烟通过
-- ✅ 测试套 2070 passed / 3 skipped
+- ✅ Phase 3 — 流式 MVP：Bounded Channel + 背压（方案 I）：
+  `ports/backpressure.py`（OverflowPolicy / ChannelConfig / ChannelStats /
+  BoundedChannel）、`MemoryChannel` 实现（4 策略 + 关闭语义 + watermark 回调）、
+  `PipelineRuntime.stream` 改用 pump-task + per-stage MemoryChannel、
+  `AppConfig.streaming.default_channel` + YAML `downstream_channel:` DSL +
+  JSON Schema、`channel.*` DomainEvent 观测（high/low watermark / dropped /
+  closed）、`demos/demo_streaming.py` BLOCK + DROP_OLD 双场景可视化、
+  端到端集成测试覆盖
+- ✅ 测试套 2126 passed / 3 skipped
 
 ## 下一步路线（按顺序）
 
@@ -35,10 +43,10 @@
 
 ## 推迟到后期
 
-### Step E — Phase 3+：流式 MVP / SaaS / 千级
+### Step E — Phase 3+：流式深化 / SaaS / 千级
 
 来自 `refactor-streaming.md §8`：
-- Phase 3：Bounded Channel + 背压（方案 I）
+- ✅ Phase 3：Bounded Channel + 背压（方案 I） — 已完成
 - Phase 4：Redis Streams 总线 + WS 协议（方案 J + K）
 - Phase 5：Tenant Scheduler + 分级架构（方案 L + M）
 - Phase 6：Plugin entry-points（方案 F）
