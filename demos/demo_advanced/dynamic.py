@@ -7,7 +7,7 @@ from dataclasses import replace as _replace
 
 from rich.table import Table
 
-from _demo_shared import console, step, truncate
+from _shared import console, step, truncate
 from api.trx import create_context
 from application.checker import default_checker
 from application.terminology.providers import PreloadableTerms

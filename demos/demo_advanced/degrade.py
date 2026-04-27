@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from rich.table import Table
 
-from _demo_shared import console, step, truncate
+from _shared import console, step, truncate
 from api.trx import create_context
 from application.checker import default_checker
 from application.translate import ContextWindow, translate_with_verify

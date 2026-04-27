@@ -41,7 +41,7 @@ from pathlib import Path
 
 from rich.panel import Panel
 
-from _demo_shared import (
+from _shared import (
     DEFAULT_SRT,
     DEFAULT_TERMS,
     console,

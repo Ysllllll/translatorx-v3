@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rich.table import Table
 
-from _demo_shared import console, step, translate_records, truncate
+from _shared import console, step, translate_records, truncate
 from domain.model import SentenceRecord
 from ports.engine import LLMEngine
 

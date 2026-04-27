@@ -28,7 +28,7 @@ python -m demos.<package>            # for package-style demos
 | `demo_subtitle.py` | 105 | Subtitle parsing, word alignment, segment rebuild. | — |
 | `demo_media.py` | 136 | yt-dlp source + ffmpeg probe / extract_audio. | — |
 | `demo_service.py` | 258 | FastAPI + SSE service entry-point (Stage 7). | ✅ |
-| `_demo_shared.py` | 316 | **Library** for the top-level demos (engine factory, preprocess config factories, `render_records` / `render_translations`, `preprocess()` + `translate_records()` primitives). Imported, never run. | — |
+| `_shared.py` | 316 | **Library** for the top-level demos (engine factory, preprocess config factories, `render_records` / `render_translations`, `preprocess()` + `translate_records()` primitives). Imported, never run. | — |
 
 ## Sub-packages
 
@@ -74,11 +74,11 @@ WebSocket streaming preprocess demo (server + client).
   `App.set_engine() / wrap_engine()`. The `_pipelines` / `_engines["…"]`
   patterns are deprecated and will fail review.
 - **Backend config schema is locked by `tests/demos/test_shared_configs.py`.**
-  The `_demo_shared.make_punc_config` / `make_chunk_config` factories are
+  The `_shared.make_punc_config` / `make_chunk_config` factories are
   asserted to actually load via `PuncRestorer.from_config` and
   `Chunker.from_config`. If you change those factories, run that test.
 - **Rich rendering for new demos.** New top-level demos should use
-  `_demo_shared.render_records` / `render_translations` (rich `Console` +
+  `_shared.render_records` / `render_translations` (rich `Console` +
   `Table` + `Panel`) rather than ad-hoc `print()`. The `course_batch/`
   demos still use plain `print()` for now.
 - **Live LLM demos must guard with `llm_up()`** (or skip with a clear
@@ -90,7 +90,7 @@ WebSocket streaming preprocess demo (server + client).
 # Format
 /home/ysl/workspace/.venv/bin/ruff format demos/
 
-# Schema lock for _demo_shared
+# Schema lock for _shared
 /home/ysl/workspace/.venv/bin/pytest tests/demos/test_shared_configs.py -v
 
 # Whole suite

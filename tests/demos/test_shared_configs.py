@@ -1,4 +1,4 @@
-"""Lock the schema of demos/_demo_shared.py config factories.
+"""Lock the schema of demos/_shared.py config factories.
 
 These tests prevent silent regressions where the demo factories drift away
 from what ``PuncRestorer.from_config`` / ``Chunker.from_config`` actually
@@ -22,9 +22,9 @@ sys.path.insert(0, str(_DEMOS_DIR))
 
 @pytest.fixture(scope="module")
 def demo_shared():
-    import _demo_shared
+    import _shared
 
-    return _demo_shared
+    return _shared
 
 
 def test_make_punc_config_loads_in_restorer(demo_shared):

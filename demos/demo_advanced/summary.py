@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import AsyncIterator
 
-from _demo_shared import console, step, truncate
+from _shared import console, step, truncate
 from adapters.storage import JsonFileStore, Workspace
 from api.trx import create_context
 from application.processors.summary import SummaryProcessor
