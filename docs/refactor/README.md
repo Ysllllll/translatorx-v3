@@ -35,9 +35,9 @@ docs/refactor/
 - **要做下一步规划**：`ROADMAP.md` § 下一步候选
 - **想理解当前 PipelineRuntime 设计**：`history/phase1-architecture.md` +
   `history/phase1-deep-dive.md`
-- **要写新 stage / 新 backend**：`../plugin_sdk.md`（第三方插件契约）+
-  `../ADAPTER_BACKENDS_GUIDE.md`（注册器后端）
-- **要部署生产环境**：`../ARCHITECTURE_SCALING.md`
+- **要写新 stage / 新 backend**：`../guides/plugin-sdk.md`（第三方插件契约）+
+  `../guides/adapter-backends.md`（注册器后端）
+- **要部署生产环境**：`../architecture/scaling.md`
 - **WS / SSE 协议参考**：`../streaming.md`（用户向 user guide）
 
 ## 维护约定

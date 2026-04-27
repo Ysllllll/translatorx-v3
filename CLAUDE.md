@@ -486,9 +486,15 @@ python benchmark/validate_subtitles.py /path/to/course_data --workers 8
 
 ### Docs (`docs/`)
 
-- `ARCHITECTURE_LAYERS.md` — layer dependency rules and rationale
-- `ARCHITECTURE_SCALING.md` — scaling / deployment patterns
-- `ADAPTER_BACKENDS_GUIDE.md` — how to add new preprocess backends
+See [`docs/README.md`](docs/README.md) for the index. Key references:
+
+- `docs/architecture/layers.md` — layer dependency rules + ASCII diagram
+- `docs/architecture/scaling.md` — horizontal scaling / deployment topology
+- `docs/guides/adapter-backends.md` — registry pattern for adding new backends
+- `docs/guides/plugin-sdk.md` — third-party stage entry-points contract
+- `docs/guides/streaming.md` — SSE / WebSocket / Redis Streams user guide
+- `docs/reference/srt-issues.md` — real-world subtitle quality catalog
+- `docs/refactor/` — historical record of the v2 → v3 refactor
 
 ## Fonts
 

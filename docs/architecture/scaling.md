@@ -1,4 +1,4 @@
-# ARCHITECTURE_SCALING.md
+# Scaling and Deployment
 
 **Audience:** Operators, platform engineers, and anyone planning to
 deploy translatorx-v3 at scale, port parts of it to another language,

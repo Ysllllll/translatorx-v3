@@ -14,7 +14,7 @@
 ### 基础设施
 
 - Punc / Chunk 多语言适配
-- `CLAUDE.md` + `ARCHITECTURE_LAYERS.md` 同步五层架构
+- `CLAUDE.md` + `docs/architecture/layers.md` 同步五层架构
 
 ### Phase 1 (方案 C) — Pipeline DSL
 
@@ -36,7 +36,7 @@
 - YAML loader + Pydantic v2 validator + JSON Schema 导出
 - `pipelines/` + `stages/` REST routers
 - B3 hot reload、B4 tenant namespace、B5 OpenAPI response models
-- Plugin SDK 文档（`docs/plugin_sdk.md`）— entry-points group / 契约 / 兼容性
+- Plugin SDK 文档（`docs/guides/plugin-sdk.md`）— entry-points group / 契约 / 兼容性
 
 ### Step C — Align 端到端
 
@@ -72,7 +72,7 @@
 - `api/service/runtime/ws_session.py`：收发循环 + 三任务并发（receive / records pump / events pump）+ shielded teardown 防 TestClient portal 取消
 - `api/service/routers/ws_streams.py`：`/api/ws/streams` endpoint，复用 X-API-Key / cookie / access_token 鉴权
 - `demos/demo_ws_client.py` 单进程演示完整生命周期
-- `docs/streaming.md §11` 协议文档
+- `docs/guides/streaming.md §11` 协议文档
 
 ### Phase 5 — Tenant Scheduler + 分级架构（方案 L）
 
@@ -87,7 +87,7 @@
 - `api/service/routers/streams.py`：SSE 路径走 `start_async(wait=False)`，`QuotaExceeded` → HTTP 429
 - Phase 4 🔴 #8 收尾：`WebSocketDisconnect` 分支发 best-effort `WsClosed` 后再退出
 - `demos/demo_tenant_scheduler.py` 三租户公平调度演示
-- `docs/streaming.md §12` 用户文档
+- `docs/guides/streaming.md §12` 用户文档
 
 ### Phase 6 — Plugin entry-points（方案 F）
 
@@ -96,7 +96,7 @@
 - `application/pipeline/plugins.py`：`PluginGroup` 常量、`discover_stages(reg)`、`load_plugin(ep)`、`PluginLoadError`
 - `StageRegistry.from_app(... discover_plugins=True)`：默认走 `importlib.metadata.entry_points(group="translatorx.pipeline.stages")`
 - `tests/application/pipeline/test_plugins.py`：fake EP 注册 / 验证错误 / 注入失败回滚
-- `docs/plugin_sdk.md`：第三方 stage 包契约（pyproject 入口、`register(reg)` 钩子、版本兼容承诺）
+- `docs/guides/plugin-sdk.md`：第三方 stage 包契约（pyproject 入口、`register(reg)` 钩子、版本兼容承诺）
 
 ### Phase 4 技术债清理（T0–T4 sweep）
 
@@ -108,7 +108,7 @@
   显式 `CancelledError` 吞 + `Exception` debug log（KeyboardInterrupt /
   SystemExit / GeneratorExit 正常传播），新增 `LiveStreamHandle.is_closed`
   property 替代私有属性访问，`WsAudioChunk` / `WsConfigUpdate` / `WsPartial`
-  + `docs/streaming.md §11.1` 标注 Reserved (Phase 7)
+  + `docs/guides/streaming.md §11.1` 标注 Reserved (Phase 7)
 - **T2 — Bus degraded metric**：DROP_OLD → DROP_NEW 降级从一次性 warning 改为
   循环 `bus.degraded` DomainEvent + `BusChannel.degraded_count` 计数器
 - **T3 — JsonRecordCodec**：`SentenceRecord` 跨语言 JSON wire 格式（pickle 仍是

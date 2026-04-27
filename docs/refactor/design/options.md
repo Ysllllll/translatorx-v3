@@ -8,7 +8,7 @@
 > |---|---|---|
 > | C — Pipeline DSL | ✅ Phase 1 | `application/pipeline/runtime.py` + `stages/` |
 > | D — YAML 配置驱动 | ✅ Step B | `application/config.py` + `api/service/routers/pipelines.py` |
-> | F — Plugin entry-points | ✅ 随 Step B | `application/pipeline/plugins.py` + `docs/plugin_sdk.md` |
+> | F — Plugin entry-points | ✅ 随 Step B | `application/pipeline/plugins.py` + `docs/guides/plugin-sdk.md` |
 > | A / B / E / G / H | ⏸ 暂未采纳 | 设计审计保留 |
 >
 > 流式增强 I/J/K/L/M 见 [`streaming.md`](streaming.md)。
@@ -386,7 +386,7 @@ on_cancel:
 
 ## 4. 方案 F — Microkernel + Plugin Manifest（新）
 
-> ✅ **已实现** —— 见 `docs/plugin_sdk.md` + `application/pipeline/plugins.py`。
+> ✅ **已实现** —— 见 `docs/guides/plugin-sdk.md` + `application/pipeline/plugins.py`。
 > `StageRegistry.from_app(discover_plugins=True)` 默认走
 > ``importlib.metadata.entry_points(group="translatorx.pipeline.stages")``
 > 自动注册第三方 stage。
