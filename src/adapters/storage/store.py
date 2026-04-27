@@ -46,8 +46,11 @@ from typing import Any, Iterable, Literal, Protocol, runtime_checkable
 
 from domain.model import Segment, Word
 from adapters.storage.workspace import Workspace
-
-SCHEMA_VERSION = 2
+from adapters.storage._migrations import (
+    SCHEMA_VERSION,
+    IncompatibleStoreError,
+    check_schema as _check_schema,
+)
 
 SegmentType = Literal["srt", "whisperx"]
 
@@ -92,8 +95,9 @@ def get_stale_steps(stored: dict[str, str] | None, current: dict[str, str]) -> l
     return stale
 
 
-class IncompatibleStoreError(RuntimeError):
-    """Stored data has a schema_version this runtime cannot read (D-046)."""
+# `IncompatibleStoreError` is re-exported from :mod:`adapters.storage._migrations`
+# via the import at module top so existing callers that did
+# ``from adapters.storage.store import IncompatibleStoreError`` still work.
 
 
 def empty_video_data() -> dict[str, Any]:
@@ -305,44 +309,8 @@ def _read_json(path: Path) -> dict[str, Any] | None:
         return json.load(f)
 
 
-def _migrate_video_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
-    """Upgrade a v1 video JSON document to v2 in-place.
-
-    v2 added the ``variants`` and ``prompts`` top-level dicts (see
-    :func:`empty_video_data`). Existing v1 files simply lacked those
-    keys; we provide empty dicts so downstream code sees a uniform
-    shape regardless of whether the file was newly created or read
-    from an older deployment.
-    """
-    data.setdefault("variants", {})
-    data.setdefault("prompts", {})
-    data.setdefault("terms", {})
-    data["schema_version"] = 2
-    return data
-
-
-_VIDEO_MIGRATIONS: dict[int, Any] = {
-    1: _migrate_video_v1_to_v2,
-}
-
-
-def _check_schema(data: dict[str, Any], where: str) -> None:
-    version = data.get("schema_version")
-    if version is None:
-        # Treat unmarked documents as v1 — the earliest format we ever
-        # wrote — and run them through the migration ladder so callers
-        # always see the current shape.
-        version = 1
-        data["schema_version"] = 1
-    if version > SCHEMA_VERSION:
-        raise IncompatibleStoreError(f"{where}: schema_version={version} is newer than runtime (supports <= {SCHEMA_VERSION})")
-    # Walk the migration ladder. Each migration bumps version by 1.
-    while data.get("schema_version", version) < SCHEMA_VERSION:
-        cur = int(data["schema_version"])
-        migrate = _VIDEO_MIGRATIONS.get(cur)
-        if migrate is None:
-            raise IncompatibleStoreError(f"{where}: no migration from schema_version={cur} -> {cur + 1}")
-        migrate(data)
+# Schema migrations live in ``adapters.storage._migrations`` —
+# ``_check_schema`` is imported at module top.
 
 
 class JsonFileStore:
