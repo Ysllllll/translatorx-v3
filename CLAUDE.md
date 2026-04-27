@@ -76,7 +76,9 @@ src/
 │   └── reporters/reporters.py       # LoggerReporter, JsonlErrorReporter, ChainReporter
 │
 ├── application/                     【L3 · use cases / orchestration】
-│   ├── orchestrator/                # VideoOrchestrator, StreamingOrchestrator, CourseOrchestrator
+│   ├── orchestrator/                # VideoSession (per-video state + flush) + VideoResult dataclass
+│   ├── pipeline/                    # PipelineRuntime + StageRegistry + middleware (Tracing/Progress)
+│   ├── stages/                      # Build/Structure/Enrich stages (FromSrt/Whisperx/Push, Punc/Chunk/Merge, Translate/Summary/Align/Tts)
 │   ├── translate/                   # TranslationContext, translate_with_verify, providers, agents, prompts
 │   ├── checker/                     # Checker engine, rules, per-language profiles, default_checker
 │   ├── processors/                  # TranslateProcessor, SummaryProcessor, AlignProcessor, TtsProcessor
@@ -243,7 +245,8 @@ course_result = await (
 | `TranslateProcessor`, `SummaryProcessor` | `application.processors` |
 | `AlignAgent`, `BisectResult` | `application.align` |
 | `IncrementalSummaryAgent` | `application.summary` |
-| `VideoOrchestrator`, `CourseOrchestrator` | `application.orchestrator` |
+| `VideoSession`, `VideoResult` | `application.orchestrator` |
+| `PipelineRuntime`, `StageRegistry`, `PipelineDef` | `application.pipeline` / `ports.pipeline` |
 | `JsonFileStore`, `Workspace` | `adapters.storage` |
 | `AppConfig` | `application.config` |
 | `App`, `VideoBuilder`, `CourseBuilder`, `StreamBuilder` | `api.app` |
@@ -377,30 +380,57 @@ fn = chunker.for_language("en")
 fn(["long text..."])  # → [["chunk1", "chunk2"]]
 ```
 
-### Orchestration (async, immutable)
+### Orchestration (async, immutable, declarative)
+
+All execution flows through :class:`PipelineRuntime` driven by a
+:class:`PipelineDef` (build → structure → enrich stages). The legacy
+``VideoOrchestrator`` / ``CourseOrchestrator`` / ``StreamingOrchestrator``
+classes have been retired — :class:`VideoBuilder`,
+:class:`CourseBuilder`, and :class:`StreamBuilder` are now the only
+entry points and they all compose :class:`PipelineRuntime` internally.
 
 ```
-from application.orchestrator import VideoOrchestrator, CourseOrchestrator, StreamingOrchestrator
-from application.processors import TranslateProcessor, TranslateNodeConfig
-from application.config import AppConfig
-from adapters.sources.srt import SrtSource
-from adapters.sources.whisperx import WhisperXSource
-from adapters.sources.push import PushQueueSource
-from adapters.storage import JsonFileStore, Workspace
-from ports.source import VideoKey
 from api.app import App
 
-# Lower-level: assemble orchestrator manually
-orch = VideoOrchestrator(
-    source=SrtSource(path, language="en"),
-    processors=[TranslateProcessor(engine, checker)],
-    ctx=ctx,
-    store=JsonFileStore(Workspace(root=..., course="c1")),
-    video_key=VideoKey(course="c1", video="lec01"),
-)
-result = await orch.run()
-records = result.records
+app = App.from_yaml("""
+store: {root: ./workspace}
+engines:
+  default: {kind: openai_compat, model: gpt-4o-mini, base_url: ...}
+""")
 
+# Batch — VideoBuilder
+result = await (
+    app.video(course="c1", video="lec01")
+    .source("lec01.srt", language="en")
+    .translate(src="en", tgt="zh")
+    .run()
+)
+records = result.records  # VideoResult
+
+# Batch — CourseBuilder (multi-video, bounded concurrency)
+course_result = await (
+    app.course(course="c1")
+    .add_video("lec01", "lec01.srt", language="en")
+    .add_video("lec02", "lec02.srt", language="en")
+    .translate(src="en", tgt="zh")
+    .run()
+)
+for video_id, outcome in course_result.videos:
+    ...  # VideoResult or BaseException (failure isolation)
+
+# Live — StreamBuilder + LiveStreamHandle
+async with app.stream(course="c1", video="lec01", language="en")
+    .translate(tgt="zh").start() as handle:
+    await handle.feed(segment)
+    await handle.close()
+    async for rec in handle.records():
+        ...
+```
+
+For lower-level use cases, drop down to :class:`PipelineRuntime`
+directly with a hand-built :class:`PipelineDef` + :class:`StageRegistry`.
+
+```
 # Configuration (Pydantic v2 with `extra="forbid"`):
 cfg = AppConfig.load("app.yaml")             # file
 cfg = AppConfig.from_yaml("engines:\n ...")   # string

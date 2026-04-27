@@ -28,7 +28,9 @@ api  →  application  →  adapters  →  ports  →  domain
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  application  (L3 · orchestration, use cases)                   │
-│  ├── orchestrator/   VideoOrchestrator / Streaming / Course     │
+│  ├── orchestrator/   VideoSession (per-video state) + VideoResult │
+│  ├── pipeline/       PipelineRuntime + StageRegistry + middleware │
+│  ├── stages/         Build / Structure / Enrich stage definitions │
 │  ├── processors/     TranslateProcessor / SummaryProcessor /    │
 │  │                   AlignProcessor / TtsProcessor / prefix     │
 │  ├── translate/      translate_with_verify, providers, prompts  │
