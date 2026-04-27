@@ -12,7 +12,7 @@ for _p in (_REPO / "src", _REPO / "demos"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from demo_ws_client import main as demo_main  # noqa: E402
+from streaming.ws_client import main as demo_main  # noqa: E402
 
 
 def test_demo_ws_client_runs(capsys: pytest.CaptureFixture[str]) -> None:

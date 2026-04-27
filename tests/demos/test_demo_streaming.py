@@ -34,7 +34,7 @@ from ports.backpressure import ChannelConfig, OverflowPolicy  # noqa: E402
 from ports.pipeline import PipelineDef, StageDef  # noqa: E402
 from ports.source import VideoKey  # noqa: E402
 
-from demo_streaming import FastSource, SlowEnrich  # noqa: E402
+from streaming.memory import FastSource, SlowEnrich  # noqa: E402
 
 
 pytestmark = pytest.mark.asyncio

@@ -38,7 +38,7 @@ from ports.backpressure import ChannelConfig  # noqa: E402
 from ports.pipeline import PipelineDef, StageDef  # noqa: E402
 from ports.source import VideoKey  # noqa: E402
 
-from demo_redis_bus import _MemStore, _Source, _Translate  # noqa: E402
+from streaming.redis_bus import _MemStore, _Source, _Translate  # noqa: E402
 
 
 pytestmark = pytest.mark.asyncio

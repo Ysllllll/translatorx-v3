@@ -45,9 +45,7 @@ def section(label: str, title: str) -> None:
     """Major heading. Use once per top-level scenario in a demo."""
     if _HAVE_RICH and _console is not None:
         _console.print()
-        _console.print(
-            Rule(f"[bold cyan]{label}[/bold cyan] — [bold]{title}[/bold]", style="cyan")
-        )
+        _console.print(Rule(f"[bold cyan]{label}[/bold cyan] — [bold]{title}[/bold]", style="cyan"))
     else:
         print()
         print(f"=== {label} — {title} ===")

@@ -27,11 +27,11 @@ for _p in (_REPO / "src", _REPO / "demos"):
 from adapters.sources.push import PushQueueSource  # noqa: E402
 from domain.model import Segment, SentenceRecord, Word  # noqa: E402
 
-from demo_stream_preprocess.processors import (  # noqa: E402
+from streaming.preprocess_server.processors import (  # noqa: E402
     PreprocessProcessor,
     PuncBufferStage,
 )
-from demo_stream_preprocess.ws_app import _safe_send  # noqa: E402
+from streaming.preprocess_server.ws_app import _safe_send  # noqa: E402
 
 
 # ─── PuncBufferStage ────────────────────────────────────────────────
