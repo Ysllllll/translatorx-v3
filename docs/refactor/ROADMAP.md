@@ -4,8 +4,8 @@
 
 ## 当前快照
 
-- **HEAD**：`f25b012` — `docs(roadmap): close Phase 4 (J + K)`
-- **测试套**：2226 passed / 3 skipped
+- **HEAD**：`214d24b` — `feat(scheduler): L5 — WS/SSE quota enforcement + Phase 4 #8 disconnect fix`
+- **测试套**：2275 passed / 3 skipped
 
 ---
 
@@ -74,6 +74,21 @@
 - `demos/demo_ws_client.py` 单进程演示完整生命周期
 - `docs/streaming.md §11` 协议文档
 
+### Phase 5 — Tenant Scheduler + 分级架构（方案 L）
+
+- `application/scheduler/tenant.py`：`TenantContext` + `TenantQuota` + `DEFAULT_QUOTAS`（free / standard / premium）
+- `application/scheduler/base.py`：`PipelineScheduler` Protocol + `SchedulerTicket` + `QuotaExceeded`
+- `application/scheduler/fair.py`：`FairScheduler` —— per-tenant `asyncio.Semaphore` + 可选 global cap，`wait=False` 立即抛 `QuotaExceeded`
+- `application/scheduler/observability.py`：`TenantMetrics` —— per-tenant 计数（submitted / granted / rejected / queue_wait / active_streams）
+- `application/config.py`：`AppConfig.tenants: dict[str, TenantQuotaEntry]` + `build_tenant_quotas()`
+- `api/app/app.py`：`App.scheduler` 懒初始化 + `set_scheduler` 注入
+- `api/app/stream.py`：`StreamBuilder.tenant(tenant_id, wait=True)` + `start_async()` —— 构造 Runtime 前申请 ticket，失败立即释放；`LiveStreamHandle.close()` 释放 ticket
+- `api/service/runtime/ws_session.py`：`tenant_id` 字段 + `_handle_start` 走 `start_async`，超额返回 `WsError(category="quota_exceeded")` + `WsClosed`
+- `api/service/routers/streams.py`：SSE 路径走 `start_async(wait=False)`，`QuotaExceeded` → HTTP 429
+- Phase 4 🔴 #8 收尾：`WebSocketDisconnect` 分支发 best-effort `WsClosed` 后再退出
+- `demos/demo_tenant_scheduler.py` 三租户公平调度演示
+- `docs/streaming.md §12` 用户文档
+
 ---
 
 ## 🚧 进行中
@@ -84,18 +99,7 @@
 
 ## 📋 下一步候选（按优先级）
 
-### Phase 5 — Tenant Scheduler + 分级架构（方案 L + M）
-
-来自 [`design/streaming.md §8`](design/streaming.md)。要点：
-- 按 tenant tier 限速 / 限并发（free / pro / enterprise）
-- 慢 stage 不阻塞高优先级 tenant
-- 分级 worker pool（CPU / GPU / 弹性）
-
-### Phase 4 技术债清理（建议在 Phase 5 第一切片捎带）
-
-🔴 **应优先处理**
-- WS client disconnect 路径不发 `WsClosed` —— 客户端无法区分"服务端正常结束" vs "网络断开"
-- `_pump_events` 监听全局 EventBus 没按 course / video 过滤 —— 多并发流互相收对方进度
+### Phase 4 技术债清理（剩余）
 
 🟡 **中等**
 - `BusChannel.capacity` 是本地信号量，不是远端 stream MAXLEN，多 publisher 同 topic 会爆远端

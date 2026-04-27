@@ -194,6 +194,22 @@ api/
 
 ## 5. 方案 L — 每流独立 Runtime 实例 + Tenant Scheduler
 
+> ✅ **已实现** — Phase 5（HEAD 见 [`../ROADMAP.md`](../ROADMAP.md)）。
+> 当前实现路径：
+> - `application/scheduler/` — `tenant.py`（`TenantContext` / `TenantQuota` / `DEFAULT_QUOTAS`）、
+>   `base.py`（`PipelineScheduler` Protocol + `SchedulerTicket` + `QuotaExceeded`）、
+>   `fair.py`（`FairScheduler` 实现）、`observability.py`（`TenantMetrics` 计数）。
+> - `AppConfig.tenants: dict[str, TenantQuotaEntry]`（YAML / dict 可配，
+>   `AppConfig.build_tenant_quotas()` 构造 scheduler 入参）。
+> - `App.scheduler` 懒初始化 `FairScheduler`；`StreamBuilder.tenant(tenant_id, wait=True)` +
+>   `StreamBuilder.start_async()` 在构造 Runtime 之前申请 ticket，`LiveStreamHandle.close()`
+>   释放。
+> - 服务层接入：WS `/api/ws/streams` 拒绝时发 `WsError(category="quota_exceeded")` +
+>   `WsClosed`；SSE `POST /api/streams` 拒绝时返回 HTTP 429。
+> - 用户文档见 [`../../streaming.md` §12](../../streaming.md)；演示 `demos/demo_tenant_scheduler.py`。
+>
+> 下面保留原始设计意图作为历史快照。
+
 ### 5.1 思想
 
 C 的 Runtime 是 stateless 共享。多租户场景下我们**每流分配独立轻量 Runtime 句柄**，Scheduler 决定调度策略。

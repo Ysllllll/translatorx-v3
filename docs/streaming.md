@@ -456,3 +456,95 @@ client — the JSON frame shapes are identical.
 - `audio_chunk` real decoding + transcribe stage wiring
 - WS token refresh during long-lived sessions
 - Multiplex: one connection serving multiple `stream_id`s
+
+## 12. Tenant scheduler (Phase 5 / L)
+
+The :class:`StreamBuilder` from §11 can be bound to a *tenant* via
+``.tenant(tenant_id, wait=True)`` to participate in fair-share admission
+control. This is the layer that protects a multi-tenant deployment from a
+single tenant monopolising the host's concurrency budget.
+
+### 12.1 Components
+
+- ``application/scheduler/tenant.py`` —
+  :class:`TenantQuota` (max_concurrent_streams, max_qps, qos_tier,
+  cost_budget_usd_per_min) + :data:`DEFAULT_QUOTAS` (free / standard /
+  premium presets).
+- ``application/scheduler/base.py`` —
+  :class:`PipelineScheduler` Protocol + :class:`SchedulerTicket`
+  (``release()`` is idempotent) + :class:`QuotaExceeded`.
+- ``application/scheduler/fair.py`` —
+  :class:`FairScheduler`: per-tenant ``asyncio.Semaphore`` + optional
+  ``global_max`` cap. Atomic acquire — if the global gate fails after the
+  tenant gate succeeds, the tenant permit is released before raising.
+- ``application/scheduler/observability.py`` —
+  :class:`TenantMetrics` records ``submitted`` / ``granted`` /
+  ``rejected`` / ``queue_wait_seconds`` / ``active_streams`` per tenant.
+
+### 12.2 Configuration
+
+```yaml
+tenants:
+  acme:
+    max_concurrent_streams: 16
+    max_qps: 16.0
+    qos_tier: premium
+  contoso:
+    max_concurrent_streams: 4
+    max_qps: 4.0
+    qos_tier: standard
+```
+
+The :class:`AppConfig` builds quotas via ``cfg.build_tenant_quotas()`` and
+``App`` lazily constructs a default :class:`FairScheduler` from them on
+first ``app.scheduler`` access. Tests / demos can override with
+``app.set_scheduler(custom)``.
+
+### 12.3 Wire-up
+
+```python
+async with (
+    app.stream(course="c1", video="lec01", language="en")
+    .translate(tgt="zh")
+    .tenant(principal.tenant, wait=False)
+    .start_async()
+) as handle:
+    ...
+```
+
+- ``wait=True`` (default): callers block on the scheduler queue when the
+  tenant cap is saturated. Suited for batch / SSE.
+- ``wait=False``: callers get ``QuotaExceeded`` immediately. Suited for
+  WS / SSE rejections where the client should retry.
+
+### 12.4 Service-layer behaviour
+
+- **WS** (``/api/ws/streams``): the ``start`` frame submits with
+  ``wait=False``. On rejection the server emits
+  ``WsError(category="quota_exceeded")`` followed by
+  ``WsClosed(reason="quota_exceeded")``, then closes the socket.
+- **SSE** (``POST /api/streams``): rejection returns HTTP **429** with a
+  ``quota_exceeded`` detail body.
+
+The tenant id is taken from :class:`api.service.auth.Principal.tenant`,
+which the auth middleware fills from the API-key 3-tuple
+``(user_id, tier, tenant)``.
+
+### 12.5 Demo
+
+::
+
+    python demos/demo_tenant_scheduler.py
+
+Three tenants compete for ``global_max=2``. The output shows GRANTED /
+REJECTED / RELEASED with timestamps and a final per-tenant metrics dump.
+
+### 12.6 Not in scope (Phase 6+)
+
+- Cross-process scheduling (the in-process scheduler is per-replica).
+  Multi-replica fairness needs a Redis-backed scheduler.
+- True QoS preemption — a busy ``free`` tenant cannot currently be
+  cancelled to make room for an arriving ``premium`` stream. Today only
+  the ``wait=False`` path enforces tier ordering.
+- ``cost_budget_usd_per_min`` is reserved for a future cost governor;
+  the existing ``ResourceManager`` ledger continues to enforce LLM cost.
