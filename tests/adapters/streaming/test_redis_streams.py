@@ -148,3 +148,41 @@ class TestRedisStreamsMessageBus:
         assert bus._consumer  # auto-generated
         assert "-" in bus._consumer
         await bus.close()
+
+    async def test_close_runs_xgroup_delconsumer(self):
+        """T4 — close() best-effort removes our consumer from every joined group."""
+        bus, client = _make_bus(consumer="c-cleanup")
+        out: list = []
+        out2: list = []
+        t1 = asyncio.create_task(_drain(bus, "t1", 1, out))
+        t2 = asyncio.create_task(_drain(bus, "t2", 1, out2))
+        await asyncio.sleep(0.05)
+        await bus.publish("t1", BusMessage(payload=b"x"))
+        await bus.publish("t2", BusMessage(payload=b"y"))
+        await asyncio.wait_for(t1, timeout=2)
+        await asyncio.wait_for(t2, timeout=2)
+
+        cons_t1 = await client.xinfo_consumers("t1", "g")
+        cons_t2 = await client.xinfo_consumers("t2", "g")
+        names_before = {c["name"] for c in cons_t1} | {c["name"] for c in cons_t2}
+        assert b"c-cleanup" in names_before
+
+        await bus.close()
+
+        cons_t1_after = await client.xinfo_consumers("t1", "g")
+        cons_t2_after = await client.xinfo_consumers("t2", "g")
+        names_after = {c["name"] for c in cons_t1_after} | {c["name"] for c in cons_t2_after}
+        assert b"c-cleanup" not in names_after
+
+    async def test_close_swallows_xgroup_delconsumer_errors(self):
+        """T4 — XGROUP DELCONSUMER failures must not break close()."""
+        bus, _client = _make_bus(consumer="c-err")
+        bus._groups_ready.add("nosuch::g")
+
+        async def _boom(*a, **kw):
+            raise RuntimeError("nope")
+
+        bus._r.xgroup_delconsumer = _boom  # type: ignore[assignment]
+        # Should not raise.
+        await bus.close()
+        assert bus._closed

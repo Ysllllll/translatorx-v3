@@ -138,6 +138,23 @@ class RedisStreamsMessageBus(MessageBus):
         self._closed = True
         for task in list(self._readers):
             task.cancel()
+        # T4 — best-effort XGROUP DELCONSUMER for every (topic, group)
+        # we ever joined, so this consumer's pel entries don't linger
+        # on the broker once we shut down.
+        for key in self._groups_ready:
+            topic, _, group = key.partition("::")
+            if not topic or not group:
+                continue
+            try:
+                await self._r.xgroup_delconsumer(topic, group, self._consumer)
+            except Exception:
+                log.debug(
+                    "redis bus: xgroup_delconsumer failed for %s/%s/%s",
+                    topic,
+                    group,
+                    self._consumer,
+                    exc_info=True,
+                )
         if self._own:
             try:
                 close_fn = getattr(self._r, "aclose", None) or getattr(self._r, "close", None)
