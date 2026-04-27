@@ -33,6 +33,12 @@ def detect_language(text: str) -> str:
 def _detect_via_langdetect(text: str) -> str:
     """Detect using the ``langdetect`` library."""
     import langdetect
+    from langdetect import DetectorFactory
+
+    # C6 — langdetect's internal RNG is unseeded by default, so the
+    # same input can produce different ISO codes across calls. Pin the
+    # factory seed so detection is deterministic.
+    DetectorFactory.seed = 0
 
     # langdetect needs a reasonable sample; use up to 2000 chars.
     sample = text[:2000]

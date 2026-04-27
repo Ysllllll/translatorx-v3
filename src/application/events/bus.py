@@ -121,6 +121,11 @@ class Subscription:
         self._try_put(None)
         self._bus._unsubscribe(self)
 
+    @property
+    def is_closed(self) -> bool:
+        """Public accessor for the closed flag — see C16."""
+        return self._closed
+
     def __aiter__(self) -> "Subscription":
         return self
 

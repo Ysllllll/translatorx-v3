@@ -500,6 +500,12 @@ def _apply_env_overrides(data: dict[str, Any], *, prefix: str) -> dict[str, Any]
     Nested values are reached via ``__`` separators. Leaf values are
     assigned as strings (Pydantic coerces as needed). Missing intermediate
     dicts are created.
+
+    C20 — when an intermediate path resolves to a non-dict scalar in the
+    source data, raising is preferred over silently overwriting it: a
+    typo like ``TRX_STORE__ROOT__SUB=...`` against ``store.root: str``
+    would otherwise turn ``root`` into a fresh dict and lose the user's
+    configured value.
     """
     for env_key, env_val in os.environ.items():
         if not env_key.startswith(prefix):
@@ -510,10 +516,26 @@ def _apply_env_overrides(data: dict[str, Any], *, prefix: str) -> dict[str, Any]
         cur: dict[str, Any] = data
         for p in parts[:-1]:
             nxt = cur.get(p)
-            if not isinstance(nxt, dict):
+            if nxt is None:
                 nxt = {}
                 cur[p] = nxt
+            elif not isinstance(nxt, dict):
+                raise ValueError(
+                    f"env override {env_key!r} expects a nested mapping at "
+                    f"{'.'.join(parts[: parts.index(p) + 1])!r} but the config "
+                    f"provides a scalar of type {type(nxt).__name__}. "
+                    "Refusing to silently overwrite."
+                )
             cur = nxt
+        # Final-leaf scalar/dict mismatch: refuse to overwrite a dict
+        # with a string value (would clobber a whole sub-tree).
+        existing = cur.get(parts[-1])
+        if isinstance(existing, dict):
+            raise ValueError(
+                f"env override {env_key!r} would replace the dict at "
+                f"{'.'.join(parts)!r} with a scalar string. Use the dotted "
+                "leaf form instead (e.g. set the individual sub-keys)."
+            )
         cur[parts[-1]] = env_val
     return data
 

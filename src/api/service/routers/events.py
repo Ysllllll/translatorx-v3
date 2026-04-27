@@ -44,10 +44,10 @@ async def events_stream(
 
     async def gen() -> AsyncIterator[dict]:
         try:
-            while not sub._closed:
+            while not sub.is_closed:
                 item = await sub.get(timeout=30.0)
                 if item is None:
-                    if sub._closed:
+                    if sub.is_closed:
                         break
                     yield {"event": "ping", "data": "{}"}
                     continue

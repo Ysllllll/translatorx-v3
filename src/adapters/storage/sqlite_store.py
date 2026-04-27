@@ -99,14 +99,24 @@ class SqliteStore:
     in one root share a database; pass ``db_path`` to override.
     """
 
-    def __init__(self, workspace: Workspace, *, db_path: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        workspace: Workspace,
+        *,
+        db_path: Path | str | None = None,
+        max_locks: int = 1024,
+    ) -> None:
         self._ws = workspace
         if db_path is None:
             db_path = Path(workspace.root) / "translatorx.sqlite"
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self._locks: dict[str, asyncio.Lock] = {}
+        # C11 — bounded LRU per-video lock cache (see JsonFileStore).
+        from collections import OrderedDict
+
+        self._locks: "OrderedDict[str, asyncio.Lock]" = OrderedDict()
+        self._max_locks = max_locks
         self._course_lock = asyncio.Lock()
         self._locks_guard = asyncio.Lock()
 
@@ -144,7 +154,16 @@ class SqliteStore:
             lock = self._locks.get(video)
             if lock is None:
                 lock = asyncio.Lock()
+                while len(self._locks) >= self._max_locks:
+                    for victim_key, victim_lock in list(self._locks.items()):
+                        if not victim_lock.locked():
+                            del self._locks[victim_key]
+                            break
+                    else:
+                        break
                 self._locks[video] = lock
+            else:
+                self._locks.move_to_end(video)
             return lock
 
     # ------------------------------------------------------------------

@@ -327,9 +327,15 @@ class JsonFileStore:
     event loop.
     """
 
-    def __init__(self, workspace: Workspace) -> None:
+    def __init__(self, workspace: Workspace, *, max_locks: int = 1024) -> None:
         self._ws = workspace
-        self._locks: dict[str, asyncio.Lock] = {}
+        # C11 — bounded LRU so a long-running service handling millions
+        # of distinct videos does not grow ``_locks`` unboundedly.
+        # OrderedDict gives us O(1) move-to-end / popitem(last=False).
+        from collections import OrderedDict
+
+        self._locks: "OrderedDict[str, asyncio.Lock]" = OrderedDict()
+        self._max_locks = max_locks
         self._course_lock = asyncio.Lock()
         self._locks_guard = asyncio.Lock()
 
@@ -354,7 +360,21 @@ class JsonFileStore:
             lock = self._locks.get(video)
             if lock is None:
                 lock = asyncio.Lock()
+                # Evict the LRU entry only when the cache is full and
+                # the victim isn't currently held — held locks must not
+                # disappear from a writer's view. We scan oldest-first
+                # for an unlocked entry; if every slot is busy we let
+                # the dict grow (the held locks still need to live).
+                while len(self._locks) >= self._max_locks:
+                    for victim_key, victim_lock in list(self._locks.items()):
+                        if not victim_lock.locked():
+                            del self._locks[victim_key]
+                            break
+                    else:
+                        break
                 self._locks[video] = lock
+            else:
+                self._locks.move_to_end(video)
             return lock
 
     # -- video ops -------------------------------------------------------

@@ -20,6 +20,7 @@ an anonymous ``free``-tier principal.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
@@ -120,6 +121,18 @@ def create_app(
         if tier is None:
             raise ValueError(f"unknown tier {tier_name!r} for api_key mapping")
         auth_map[key] = Principal(user_id=user_id, tier=tier, tenant=tenant)
+
+    if not auth_map:
+        # C17 — empty api_keys means every caller is treated as
+        # anonymous. Convenient for local dev / demos but a footgun in
+        # production. Emit a single startup warning so it can't be
+        # missed in service logs.
+        logging.getLogger("api.service").warning(
+            "create_app(): no api_keys configured — running in anonymous "
+            "dev mode. Every request will be treated as the 'anonymous' "
+            "free-tier principal. Do not deploy this configuration to a "
+            "shared environment.",
+        )
 
     @asynccontextmanager
     async def lifespan(api: FastAPI):

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from threading import Lock
+from typing import Any
+
 from ._core._cjk_common import _BaseCjkOps
 
 
@@ -61,9 +64,7 @@ class JapaneseOps(_BaseCjkOps):
         return _CONNECTIVES
 
     def _word_tokenize(self, text: str) -> list[str]:
-        import MeCab
-
-        tagger = MeCab.Tagger()
+        tagger = _get_tagger()
         node = tagger.parseToNode(text)
         tokens: list[str] = []
         while node:
@@ -71,3 +72,23 @@ class JapaneseOps(_BaseCjkOps):
                 tokens.append(node.surface)
             node = node.next
         return tokens
+
+
+# C5 — MeCab.Tagger() construction is non-trivial (loads dictionaries
+# from disk). Re-using a single Tagger across calls cuts per-call cost
+# from O(dict-load) to O(parse). The tagger is documented thread-safe
+# for parseToNode; we still gate behind a lock for first-time creation
+# to avoid duplicate loads under concurrent imports.
+_TAGGER: Any = None
+_TAGGER_LOCK = Lock()
+
+
+def _get_tagger() -> Any:
+    global _TAGGER
+    if _TAGGER is None:
+        with _TAGGER_LOCK:
+            if _TAGGER is None:
+                import MeCab
+
+                _TAGGER = MeCab.Tagger()
+    return _TAGGER
