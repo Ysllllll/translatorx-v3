@@ -9,7 +9,7 @@ Quick start::
     from api import trx
 
     engine = trx.create_engine(model="Qwen/Qwen3-32B", base_url="http://localhost:26592/v1")
-    result = await trx.translate_srt(srt_content, engine, src="en", tgt="zh")
+    records = await trx.translate_srt(srt_content, engine, src="en", tgt="zh")
 """
 
 from __future__ import annotations
@@ -18,19 +18,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from adapters.engines.openai_compat import EngineConfig, OpenAICompatEngine
-from application.processors.translate import TranslateProcessor
-from application.processors.prefix import TranslateNodeConfig
-from adapters.sources.srt import SrtSource
-from adapters.storage.store import JsonFileStore
-from adapters.storage.workspace import Workspace
-from application.checker import default_checker
-from application.orchestrator.video import VideoOrchestrator
 from application.terminology import StaticTerms, TermsProvider
 from application.translate.context import TranslationContext
 from domain.model import SentenceRecord, Segment, Word
 from domain.subtitle import Subtitle
 from ports.engine import LLMEngine
-from ports.source import VideoKey
 
 from api.app import App
 
@@ -99,33 +91,35 @@ async def translate_srt(
     tgt: str = "zh",
     *,
     terms: dict[str, str] | None = None,
-    config: TranslateNodeConfig | None = None,
     workspace_root: Path | str | None = None,
     course: str = "default",
     video: str = "srt",
 ) -> list[SentenceRecord]:
-    """Translate SRT content end-to-end in one call."""
+    """Translate SRT content end-to-end in one call.
+
+    Uses :class:`App` + :class:`VideoBuilder` under the hood so the
+    full PipelineRuntime stack (registry / middleware / session) is
+    exercised — identical to a YAML-driven app.
+    """
     with TemporaryDirectory() as tmp:
         srt_path = Path(tmp) / "in.srt"
         srt_path.write_text(srt_content, encoding="utf-8")
 
         ws_root = Path(workspace_root) if workspace_root else Path(tmp) / "ws"
-        ws = Workspace(root=ws_root, course=course)
-        store = JsonFileStore(ws)
 
-        ctx = create_context(src, tgt, terms=terms)
-        checker = default_checker(src, tgt)
-        processor = TranslateProcessor(engine, checker, config=config)
+        cfg: dict = {
+            "store": {"root": str(ws_root)},
+        }
+        if terms:
+            cfg["contexts"] = {
+                f"{src}_{tgt}": {"src": src, "tgt": tgt, "terms": terms},
+            }
 
-        orch = VideoOrchestrator(
-            source=SrtSource(srt_path, language=src),
-            processors=[processor],
-            ctx=ctx,
-            store=store,
-            video_key=VideoKey(course=course, video=video),
-        )
-        result = await orch.run()
-        return result.records
+        app = App.from_dict(cfg)
+        app.set_engine("default", engine)
+
+        result = await app.video(course=course, video=video).source(srt_path, language=src).translate(src=src, tgt=tgt).run()
+        return list(result.records)
 
 
 __all__ = [

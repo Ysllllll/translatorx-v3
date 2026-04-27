@@ -1,17 +1,17 @@
-"""Orchestration use cases — video/session primitives.
+"""Orchestration use cases — session + result types.
 
-The legacy ``CourseOrchestrator`` / ``StreamingOrchestrator`` have been
-retired; multi-video and live-stream execution now live in
-:mod:`api.app.course` (CourseBuilder) and :mod:`api.app.stream`
-(StreamBuilder + LiveStreamHandle), which compose
+The legacy ``VideoOrchestrator`` / ``CourseOrchestrator`` /
+``StreamingOrchestrator`` classes have been retired; batch and live
+execution now live in :mod:`api.app.video` (VideoBuilder),
+:mod:`api.app.course` (CourseBuilder), and :mod:`api.app.stream`
+(LiveStreamHandle), all composed on top of
 :class:`application.pipeline.runtime.PipelineRuntime`.
 """
 
 from .session import VideoSession
-from .video import VideoOrchestrator, VideoResult
+from .video import VideoResult
 
 __all__ = [
     "VideoSession",
-    "VideoOrchestrator",
     "VideoResult",
 ]
