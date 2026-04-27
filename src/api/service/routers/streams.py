@@ -86,12 +86,28 @@ async def _pump(stream: _LiveStream) -> None:
 async def open_stream(
     body: CreateStreamRequest,
     request: Request,
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ) -> StreamInfo:
     app = request.app.state.app
     builder = app.stream(course=body.course, video=body.video, language=body.src)
     builder = builder.translate(src=body.src, tgt=body.tgt, engine=body.engine)
-    handle = builder.start()
+    if principal.tenant is not None:
+        # Phase 5 (方案 L) — admission control. SSE clients get HTTP 429 when
+        # their tenant cap is exhausted; ``wait=False`` keeps the request
+        # short instead of holding a TCP connection on the queue.
+        builder = builder.tenant(principal.tenant, wait=False)
+
+    try:
+        handle = await builder.start_async()
+    except Exception as exc:
+        from application.scheduler import QuotaExceeded
+
+        if isinstance(exc, QuotaExceeded):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"quota_exceeded: {exc}",
+            )
+        raise
 
     reg = _registry(request)
     sid = uuid.uuid4().hex

@@ -81,9 +81,10 @@ class WsSession:
         "_subscription",
         "_send_lock",
         "_closed",
+        "_tenant_id",
     )
 
-    def __init__(self, ws: WebSocket, *, app: "App") -> None:
+    def __init__(self, ws: WebSocket, *, app: "App", tenant_id: str | None = None) -> None:
         self._ws = ws
         self._app = app
         self._handle: LiveStreamHandle | None = None
@@ -93,6 +94,7 @@ class WsSession:
         self._subscription = None
         self._send_lock = asyncio.Lock()
         self._closed = False
+        self._tenant_id = tenant_id
 
     # ------------------------------------------------------------------
     # Public entry point.
@@ -107,6 +109,11 @@ class WsSession:
                     raw = await self._ws.receive_text()
                 except WebSocketDisconnect:
                     reason = "client_abort" if not aborted else reason
+                    # Phase 4 🔴 #8 — best-effort closing frame on transport
+                    # drop. _send is no-op when the socket is already gone,
+                    # so this is safe even when the disconnect wasn't graceful.
+                    with _suppress():
+                        await self._send(WsClosed(reason=reason))
                     break
 
                 try:
@@ -198,8 +205,28 @@ class WsSession:
                 video=frame.video,
                 language=frame.src,
             ).translate(src=frame.src, tgt=frame.tgt)
-            self._handle = builder.start()
+            if self._tenant_id is not None:
+                # Phase 5 (方案 L) — admission control through FairScheduler.
+                # WS clients get an immediate quota_exceeded close instead of
+                # blocking the upgrade indefinitely.
+                builder = builder.tenant(self._tenant_id, wait=False)
+            self._handle = await builder.start_async()
         except Exception as exc:
+            from application.scheduler import QuotaExceeded
+
+            if isinstance(exc, QuotaExceeded):
+                await self._send(
+                    WsError(
+                        category="quota_exceeded",
+                        message=str(exc),
+                    ),
+                )
+                # Best-effort closing frame so clients see a clean
+                # rejection. Connection is then closed by the surrounding
+                # ws_streams handler when run() returns.
+                with _suppress():
+                    await self._send(WsClosed(reason="quota_exceeded"))
+                return
             await self._send(WsError(category="start_failed", message=str(exc)))
             return
 

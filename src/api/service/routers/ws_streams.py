@@ -65,7 +65,7 @@ async def ws_streams(ws: WebSocket) -> None:
         await ws.close(code=status.WS_1011_INTERNAL_ERROR)
         return
 
-    session = WsSession(ws, app=app)
+    session = WsSession(ws, app=app, tenant_id=principal.tenant)
     try:
         await session.run()
     except Exception:
