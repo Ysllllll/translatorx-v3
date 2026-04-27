@@ -1,48 +1,13 @@
-# TranslatorX v3 — Refactor 文档
+# TranslatorX v3 — Refactor
 
-Pipeline-DSL 重构（C → C+D → C+D+F → 流式 SaaS）的设计、路线、历史快照。
+Pipeline-DSL 重构（C → C+D → C+D+F → 流式 SaaS）的收尾文档。
 
-## 当前进度
+- **当前 HEAD**：`1ca809a`
+- **测试套**：2309 passed / 3 skipped
+- **状态**：Phase 1–6 + R0–R5 全部闭环
 
-- **HEAD**：`0f9e1e2`
-- **测试套**：2308 passed / 3 skipped
-- **最近交付**：R0–R4 风险登记全闭环（`8078c95` / `49d7b2a` / `0f9e1e2`）—
-  lang singleton lazy / aclose 协议对称 / WhisperX VRAM 进程级缓存 /
-  schema migration ladder / SRT encoding sniff / WS error tail frame
-- **下一切片**：整体框架 review / Step D — TTS 端到端
+完整内容（框架梳理 / 阶段交付 / 决策审计 / 流式设计 / Phase 1 实施快照）见
+[`ROADMAP.md`](ROADMAP.md)。
 
-详见 [`ROADMAP.md`](ROADMAP.md)。
-
-## 文档结构
-
-```
-docs/refactor/
-├── README.md                       # 本文件 — 索引 + 当前快照
-├── ROADMAP.md                      # 路线状态：已完成 / 进行中 / 计划中
-├── design/                         # ★ 长期参考的设计文档（已实现的方案保留为决策审计）
-│   ├── options.md                  # 主方案对比（A–H 八方案，C+D+F 路线已全部落地）
-│   └── streaming.md                # 流式深化（方案 I/J/K/L/M + 7 阶段路线）
-└── history/                        # 已冻结的设计快照
-    ├── kickoff.md                  # 启动 brief（仅作历史回溯）
-    ├── phase1-architecture.md      # Phase 1 (C) 架构详细设计
-    └── phase1-deep-dive.md         # Phase 1 (C) 实施 deep dive
-```
-
-## 阅读路径
-
-- **第一次接触本仓库**：`ROADMAP.md` → `design/options.md` §0–2（C 已落地）→
-  `design/streaming.md` §1（流式核心问题）
-- **要做下一步规划**：`ROADMAP.md` § 下一步候选
-- **想理解当前 PipelineRuntime 设计**：`history/phase1-architecture.md` +
-  `history/phase1-deep-dive.md`
-- **要写新 stage / 新 backend**：`../guides/plugin-sdk.md`（第三方插件契约）+
-  `../guides/adapter-backends.md`（注册器后端）
-- **要部署生产环境**：`../architecture/scaling.md`
-- **WS / SSE 协议参考**：`../streaming.md`（用户向 user guide）
-
-## 维护约定
-
-- `ROADMAP.md` — 每个里程碑收尾时同步更新（"已完成"加条目，bump 测试套基线）。
-- `design/*.md` — 设计变更或新阶段细化时编辑；保持"长期可读"风格。
-  已落地方案保留作决策审计，对应章节加 ✅ 标注 + 实现指针。
-- `history/*.md` — 冻结，不再修改。仅作为决策审计 / 上下文回溯。
+> 历史 `design/` 和 `history/` 目录已折叠为 ROADMAP 的附录 A/B/C。
+> 项目级文档入口：[`../README.md`](../README.md)。

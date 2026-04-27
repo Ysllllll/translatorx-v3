@@ -3,7 +3,7 @@
 > User-facing guide for the live-streaming side of `PipelineRuntime`.
 > The batch path (`PipelineRuntime.run`) is unchanged.
 >
-> Implements 方案 I/J/K/L from `docs/refactor/design/streaming.md`:
+> Implements 方案 I/J/K/L from `docs/refactor/ROADMAP.md 附录 B`:
 >
 > | Section | Phase | 方案 | What it covers |
 > |---|---|---|---|
@@ -248,7 +248,7 @@ Phase 3 deliberately scopes itself to a single-process MVP:
   on the source side is preserved as-is.
 
 These are explicit Phase 4+ work and tracked in `ROADMAP.md` and
-`docs/refactor/design/streaming.md §8`.
+`docs/refactor/ROADMAP.md 附录 B`.
 
 ---
 
