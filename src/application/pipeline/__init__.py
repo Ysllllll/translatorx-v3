@@ -1,5 +1,6 @@
 """application.pipeline — Pipeline DSL runtime (Phase 1, Step 2)."""
 
+from .bus_channel import BusChannel, Codec, PickleCodec
 from .loader import load_pipeline_dict, load_pipeline_yaml, parse_pipeline_yaml
 from .context import PipelineContext
 from .hot_reload import PollWatcher, Watcher, WatchdogWatcher, make_watcher
@@ -30,6 +31,8 @@ from .validator import (
 
 __all__ = [
     "AsyncioSemaphoreLimiter",
+    "BusChannel",
+    "Codec",
     "ConcurrencyLimiter",
     "DEFAULT_REGISTRY",
     "NoOpAuditSink",
@@ -39,6 +42,7 @@ __all__ = [
     "NoOpMetrics",
     "NoOpTracer",
     "NullLogger",
+    "PickleCodec",
     "PipelineCache",
     "PipelineContext",
     "PipelineRuntime",
