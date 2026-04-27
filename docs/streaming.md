@@ -376,3 +376,83 @@ Streams, just a different `MessageBus` adapter. See
 - `XRANGE`-based replay / cross-restart recovery
 - Kafka / NATS / SQS adapters (Protocol is ready; adapters are not)
 - Cross-replica `LiveStreamHandle` migration
+
+## 11. WebSocket bidirectional protocol (Phase 4 / K)
+
+Where the SSE endpoint at `/api/streams` is a one-shot HTTP POST →
+event stream (clients can only push by issuing additional REST calls),
+the WebSocket endpoint at `/api/ws/streams` lets a single connection
+**both push and receive** frames concurrently. This is the recommended
+transport for live ASR / live translation overlays where the same
+client owns the upstream segment producer and the downstream
+translation consumer.
+
+### 11.1 Frame catalogue
+
+All frames are JSON objects with a `type` discriminator. Pydantic v2
+schemas live in `src/api/service/runtime/ws_protocol.py`; helpers
+`parse_client_frame` / `parse_server_frame` / `dump_frame` are exposed
+for test harnesses.
+
+**Client → Server**
+
+| `type` | Required fields | Purpose |
+|---|---|---|
+| `start` | `pipeline`, `course`, `video`, `src`, `tgt` | open a `LiveStreamHandle` for this connection |
+| `segment` | `seq`, `start`, `end`, `text` | push a subtitle segment into the source |
+| `audio_chunk` | `seq`, `data` (b64) | reserved for transcribe stages — current build replies with `unsupported_frame` |
+| `config_update` | `params` | reserved for Phase 5 — current build replies with `unsupported_frame` |
+| `abort` | — | drain the handle, send `closed`, end the session |
+| `ping` | — | heartbeat |
+
+**Server → Client**
+
+| `type` | Fields | Trigger |
+|---|---|---|
+| `started` | `stream_id` | server accepted `start`; per-connection stream id |
+| `progress` | `stage`, `channel_fill` | from `channel.*` DomainEvents — live back-pressure |
+| `final` | `record_id`, `src`, `tgt`, `start`, `end` | a `SentenceRecord` cleared the pipeline |
+| `error` | `category`, `message`, `retry_after?` | bus / stage / validation errors |
+| `closed` | `reason` | session ending — `client_abort` / `completed` / `error` |
+| `pong` | — | heartbeat reply |
+
+### 11.2 Lifecycle
+
+1. Client connects to `/api/ws/streams` with `X-API-Key` header (or
+   `trx_api_key` cookie / `access_token` query param). Same auth map
+   as the HTTP endpoints — connections without a valid principal are
+   rejected with WS code `1008`.
+2. Server `accept()`s the upgrade.
+3. Client sends `start` → server replies `started`.
+4. Client interleaves `segment` / `ping` / `config_update`.
+5. Server emits `final` per record + `progress` per channel watermark.
+6. Either side initiates close:
+   - Client sends `abort` → server drains records (≤5s) → emits `closed{reason: client_abort}` → endpoint returns.
+   - Client disconnects → server sees `WebSocketDisconnect` → same path.
+   - Stage error → server emits `error` then `closed{reason: error}`.
+
+### 11.3 Coexistence with SSE
+
+The SSE endpoints (`POST /api/streams`, `GET /api/streams/{id}/events`)
+are unchanged and remain the right choice for browsers that can't run
+WebSockets, or for monitoring-only consumers. Both transports share
+the same `StreamBuilder` / `LiveStreamHandle` core — only the
+serialisation layer differs.
+
+### 11.4 Demo
+
+`demos/demo_ws_client.py` walks the full protocol against an
+in-process FastAPI service, no external services required. Run::
+
+    python demos/demo_ws_client.py
+
+The test client used in the demo can be replaced 1-for-1 with
+`websockets.connect("ws://host/api/ws/streams")` for a real network
+client — the JSON frame shapes are identical.
+
+### 11.5 Not in scope (Phase 5)
+
+- Cross-replica WS routing (sticky `stream_id` ↔ worker)
+- `audio_chunk` real decoding + transcribe stage wiring
+- WS token refresh during long-lived sessions
+- Multiplex: one connection serving multiple `stream_id`s
