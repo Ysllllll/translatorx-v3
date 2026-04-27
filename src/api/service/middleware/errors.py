@@ -94,10 +94,14 @@ def install_error_handlers(api: FastAPI) -> None:
 
     @api.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):
+        # R4 fix: do not leak the exception class/message to clients —
+        # an attacker can fingerprint the stack from 500 bodies. Full
+        # detail (with traceback) goes to the server log only; clients
+        # see a stable opaque envelope.
         log.exception("unhandled exception on %s %s", request.method, request.url.path)
         return JSONResponse(
             status_code=500,
-            content=_envelope("fatal", "internal", f"{type(exc).__name__}: {exc}"),
+            content=_envelope("fatal", "internal", "internal server error"),
         )
 
 

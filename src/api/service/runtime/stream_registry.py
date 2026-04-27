@@ -39,6 +39,7 @@ class LiveStream:
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     pump_task: asyncio.Task | None = None
     status: str = "open"
+    principal_user_id: str | None = None
 
 
 @runtime_checkable

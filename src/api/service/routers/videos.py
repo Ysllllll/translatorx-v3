@@ -44,22 +44,52 @@ def _as_state(task: Task) -> VideoState:
     )
 
 
-def _resolve_source(app: "App", course: str, req: CreateVideoRequest) -> tuple[Path, str | None]:
-    """Resolve the request body to a source path on disk + kind hint."""
+def _resolve_source(app: "App", course: str, req: CreateVideoRequest, *, auth_enabled: bool) -> tuple[Path, str | None]:
+    """Resolve the request body to a source path on disk + kind hint.
+
+    R2 — path-traversal hardening: when auth is enabled (production
+    mode, ``app.state.auth_map`` non-empty) the resolved path **must**
+    sit under ``app.config.store.root``. In anonymous dev mode the
+    legacy "any path the OS user can read" behaviour is preserved so
+    local CLIs continue to work, but ``..`` segments and traversal
+    attempts are still rejected.
+    """
     if req.source_path:
-        p = Path(req.source_path)
-        if not p.is_absolute():
-            p = Path(app.config.store.root).expanduser() / p
-        if not p.exists():
+        candidate = Path(req.source_path)
+        store_root = Path(app.config.store.root).expanduser().resolve()
+        if candidate.is_absolute():
+            try:
+                resolved = candidate.resolve()
+            except OSError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="source_path could not be resolved",
+                )
+            if auth_enabled:
+                try:
+                    resolved.relative_to(store_root)
+                except ValueError:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="source_path must be under the store root",
+                    )
+        else:
+            try:
+                resolved = (store_root / candidate).resolve()
+                resolved.relative_to(store_root)
+            except (ValueError, OSError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="source_path escapes the store root",
+                )
+        if not resolved.exists():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"source_path not found: {p}",
+                detail="source_path not found",
             )
-        return p, req.source_kind
+        return resolved, req.source_kind
 
     if req.source_content:
-        # Persist inline SRT into the course's subtitle subdir so later
-        # result lookups by video stem still work.
         ws = app.store(course).workspace
         sub = ws.get_subdir("subtitle")
         target = sub.path_for(req.video, suffix=".srt")
@@ -73,6 +103,20 @@ def _resolve_source(app: "App", course: str, req: CreateVideoRequest) -> tuple[P
     )
 
 
+def _assert_can_access(task: "Task", principal: Principal) -> None:
+    """R1 — per-resource authz: only the submitting principal may
+    inspect / cancel / stream a task. Anonymous (dev) mode keeps the
+    legacy "anyone can see anything" behaviour.
+    """
+    if task.principal_user_id is None:
+        return
+    if task.principal_user_id == principal.user_id:
+        return
+    # Surface as 404 (not 403) so probe-callers can't enumerate the
+    # task ID space across tenants.
+    raise HTTPException(status_code=404, detail="task not found")
+
+
 @router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=VideoState)
 async def create_video_task(
     course: str,
@@ -81,7 +125,8 @@ async def create_video_task(
     principal: Principal = RequirePrincipal,
 ) -> VideoState:
     manager = _manager(request)
-    source_path, source_kind = _resolve_source(manager.app, course, body)
+    auth_enabled = bool(getattr(request.app.state, "auth_map", {}) or {})
+    source_path, source_kind = _resolve_source(manager.app, course, body, auth_enabled=auth_enabled)
     task = manager.submit(
         course=course,
         video=body.video,
@@ -112,11 +157,12 @@ async def get_video_task(
     course: str,
     task_id: str,
     request: Request,
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ) -> VideoState:
     task = _manager(request).get(task_id)
     if task is None or task.course != course:
         raise HTTPException(status_code=404, detail="task not found")
+    _assert_can_access(task, principal)
     return _as_state(task)
 
 
@@ -125,12 +171,13 @@ async def cancel_video_task(
     course: str,
     task_id: str,
     request: Request,
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ) -> VideoState:
     manager = _manager(request)
     task = manager.get(task_id)
     if task is None or task.course != course:
         raise HTTPException(status_code=404, detail="task not found")
+    _assert_can_access(task, principal)
     await manager.cancel(task_id)
     # Give the runner a tick to observe the cancel.
     await asyncio.sleep(0)
@@ -142,11 +189,12 @@ async def stream_video_events(
     course: str,
     task_id: str,
     request: Request,
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ):
     task = _manager(request).get(task_id)
     if task is None or task.course != course:
         raise HTTPException(status_code=404, detail="task not found")
+    _assert_can_access(task, principal)
     return EventSourceResponse(task_event_stream(task))
 
 
@@ -156,9 +204,19 @@ async def get_video_result(
     video: str,
     request: Request,
     format: str = "json",
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ):
     manager = _manager(request)
+    # Per-video result has no task_id, so authorize by checking that
+    # any in-memory task for this (course, video) belongs to the caller.
+    # If no task is found we fall through to the on-disk lookup; this is
+    # intentional because the file may have been persisted by a previous
+    # process the principal authored — strict cross-process ownership
+    # tracking is Phase 5 work.
+    for t in manager.list_for_course(course):
+        if t.video == video:
+            _assert_can_access(t, principal)
+            break
     try:
         content, media_type = load_result_bytes(manager.app, course, video, format)
     except FileNotFoundError:

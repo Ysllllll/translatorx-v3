@@ -76,7 +76,8 @@ class TestMeteringEngine:
 
 def test_api_usage_endpoints(tmp_path: Path) -> None:
     ws = tmp_path / "ws"
-    srt = tmp_path / "lec.srt"
+    ws.mkdir(parents=True, exist_ok=True)
+    srt = ws / "lec.srt"
     write_srt(srt, ["Hello.", "World."])
 
     app = make_app(ws)

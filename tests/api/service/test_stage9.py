@@ -119,12 +119,16 @@ def test_auth_via_cookie(tmp_path: Path) -> None:
         assert r.status_code == 200
 
 
-def test_auth_via_query_token(tmp_path: Path) -> None:
+def test_auth_via_query_token_is_rejected(tmp_path: Path) -> None:
+    """R3 — ``?access_token=`` query fallback was removed (URL-bound
+    credentials leak into access logs and proxy caches). Browser SSE
+    clients must use the cookie path instead.
+    """
     app = make_app(tmp_path / "ws")
     api = create_app(app, api_keys={"secret": ("u", "free")})
     with TestClient(api) as client:
         r = client.get("/api/courses/c/videos?access_token=secret")
-        assert r.status_code == 200
+        assert r.status_code == 401
 
 
 # ---------------------------------------------------------------------------

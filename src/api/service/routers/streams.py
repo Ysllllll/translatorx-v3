@@ -118,6 +118,7 @@ async def open_stream(
         src=body.src,
         tgt=body.tgt,
         handle=handle,
+        principal_user_id=principal.user_id,
     )
     reg.put(stream)
     stream.pump_task = asyncio.get_running_loop().create_task(_pump(stream))
@@ -131,16 +132,29 @@ async def open_stream(
     )
 
 
+def _assert_stream_owner(stream: _LiveStream, principal: Principal) -> None:
+    """R1 — only the stream's submitting principal may push, observe or
+    close it. Anonymous (dev) streams are accessible to all anonymous
+    callers (legacy behaviour).
+    """
+    if stream.principal_user_id is None:
+        return
+    if stream.principal_user_id == principal.user_id:
+        return
+    raise HTTPException(status_code=404, detail="stream not found")
+
+
 @router.post("/{stream_id}/segments", status_code=status.HTTP_202_ACCEPTED)
 async def push_segment(
     stream_id: str,
     body: StreamSegmentIn,
     request: Request,
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ) -> dict[str, str]:
     stream = _registry(request).get(stream_id)
     if stream is None:
         raise HTTPException(status_code=404, detail="stream not found")
+    _assert_stream_owner(stream, principal)
     if stream.status != "open":
         raise HTTPException(status_code=409, detail="stream is not open")
     await stream.handle.feed(
@@ -153,11 +167,12 @@ async def push_segment(
 async def stream_events(
     stream_id: str,
     request: Request,
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ):
     stream = _registry(request).get(stream_id)
     if stream is None:
         raise HTTPException(status_code=404, detail="stream not found")
+    _assert_stream_owner(stream, principal)
 
     async def gen() -> AsyncIterator[dict]:
         while True:
@@ -177,12 +192,13 @@ async def stream_events(
 async def close_stream(
     stream_id: str,
     request: Request,
-    _p: Principal = RequirePrincipal,
+    principal: Principal = RequirePrincipal,
 ) -> StreamInfo:
     reg = _registry(request)
     stream = reg.get(stream_id)
     if stream is None:
         raise HTTPException(status_code=404, detail="stream not found")
+    _assert_stream_owner(stream, principal)
     stream.status = "closing"
     await stream.handle.close()
     if stream.pump_task is not None:

@@ -72,6 +72,8 @@ class TaskStore:
             "total": task.total,
             "error": task.error,
             "elapsed_s": task.elapsed_s,
+            "principal_user_id": task.principal_user_id,
+            "principal_tenant": task.principal_tenant,
         }
         p = self.path(task.task_id)
         tmp = p.with_suffix(".json.tmp")
@@ -109,6 +111,8 @@ class Task:
     total: int | None = None
     error: str | None = None
     elapsed_s: float | None = None
+    principal_user_id: str | None = None
+    principal_tenant: str | None = None
     result: Any = None  # VideoResult
     _runner: asyncio.Task | None = None
     _queues: list[asyncio.Queue] = field(default_factory=list)
@@ -200,6 +204,8 @@ class TaskManager:
                 total=row.get("total"),
                 error=row.get("error"),
                 elapsed_s=row.get("elapsed_s"),
+                principal_user_id=row.get("principal_user_id"),
+                principal_tenant=row.get("principal_tenant"),
             )
             # Anything mid-flight at restart time is forever lost —
             # mark failed so clients can resubmit.
@@ -285,6 +291,8 @@ class TaskManager:
             tgt=list(tgt),
             stages=list(stages),
             status="queued",
+            principal_user_id=principal.user_id,
+            principal_tenant=principal.tenant,
         )
         self._tasks[task_id] = task
         self._persist(task)

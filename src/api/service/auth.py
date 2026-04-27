@@ -45,14 +45,18 @@ async def require_principal(request: Request) -> Principal:
 
     1. ``X-API-Key`` HTTP header (preferred, CLI-friendly)
     2. ``trx_api_key`` cookie (browser SSE — EventSource can't send headers)
-    3. ``?access_token=...`` query parameter (fallback for SSE)
+
+    The ``?access_token=`` query parameter fallback was removed (R3) —
+    URL-bound credentials leak into access logs, browser history and
+    upstream proxy caches. Browser SSE clients should set the
+    ``trx_api_key`` cookie instead.
     """
     auth_map: dict[str, Principal] = getattr(request.app.state, "auth_map", {}) or {}
     if not auth_map:
         # Dev mode — no auth required.
         return Principal(user_id="anonymous", tier=DEFAULT_TIERS["free"])
 
-    key = request.headers.get(API_KEY_HEADER) or request.cookies.get("trx_api_key") or request.query_params.get("access_token")
+    key = request.headers.get(API_KEY_HEADER) or request.cookies.get("trx_api_key")
     if not key:
         raise _unauthorized(f"Missing {API_KEY_HEADER} header")
 
