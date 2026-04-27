@@ -19,6 +19,7 @@ from .noops import (
 )
 from .registry import DEFAULT_REGISTRY, StageEntry, StageFactory, StageRegistry
 from .runtime import PipelineRuntime
+from .schema import pipeline_json_schema, registry_json_schema, stage_params_schema
 from .validator import (
     PipelineValidationError,
     ValidationIssue,
@@ -58,5 +59,8 @@ __all__ = [
     "load_pipeline_yaml",
     "load_plugin",
     "parse_pipeline_yaml",
+    "pipeline_json_schema",
+    "registry_json_schema",
+    "stage_params_schema",
     "validate_pipeline",
 ]
