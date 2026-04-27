@@ -86,7 +86,7 @@ src/
 │   ├── summary/                     # IncrementalSummaryAgent — incremental summary use case
 │   ├── terminology/                 # TermsProvider protocol + terminology extraction agent
 │   ├── resources/                   # InMemoryResourceManager + RedisResourceManager (quotas, slots, ledger)
-│   ├── observability/               # ProgressEvent, ProgressReporter (errors live in ports/errors.py)
+│   ├── events/                      # DomainEvent + EventBus + ProgressEvent (errors live in ports/errors.py)
 │   └── config.py                    # AppConfig (Pydantic v2)
 │
 └── api/                             【L4 · user entrypoints】

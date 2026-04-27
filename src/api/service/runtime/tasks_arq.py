@@ -216,7 +216,7 @@ async def _worker_run_task(ctx: dict, payload: dict) -> None:
     ``events_prefix``). ``payload`` is what :meth:`ArqTaskManager.submit`
     wrote to the queue.
     """
-    from application.observability.progress import ProgressEvent
+    from application.events.progress import ProgressEvent
 
     redis = ctx["redis"]
     app = ctx["app"]

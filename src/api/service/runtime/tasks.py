@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from application.observability.progress import ProgressEvent
+from application.events.progress import ProgressEvent
 
 if TYPE_CHECKING:
     from api.app.app import App

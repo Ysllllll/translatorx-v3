@@ -37,7 +37,7 @@ api  →  application  →  adapters  →  ports  →  domain
 │  ├── checker/        Rule-engine: Checker + per-language rules  │
 │  ├── engines/        Engine factory (wires ports/engine)        │
 │  ├── resources/      InMemoryResourceManager + tiers            │
-│  ├── observability/  ProgressEvent / ProgressReporter           │
+│  ├── events/        DomainEvent + EventBus + ProgressEvent       │
 │  └── config.py       AppConfig (Pydantic v2)                    │
 └──────────────────────────────┬──────────────────────────────────┘
                                ▼
@@ -85,7 +85,7 @@ flowchart TB
     procs[processors/]
     trn[translate/]
     chk[checker/]
-    cfg[config · resources · observability · engines]
+    cfg[config · resources · events · engines]
   end
 
   subgraph adapters[L2 · adapters]

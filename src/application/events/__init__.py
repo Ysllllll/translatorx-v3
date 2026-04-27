@@ -1,14 +1,24 @@
-"""Domain event layer (C-stage).
+"""Domain event layer + progress notification primitives.
 
-* :class:`DomainEvent` — JSON-serializable cross-language wire shape.
-* :class:`EventBus` — in-process async pub/sub fan-out.
-* Convenience constructors for canonical event types.
+Two event flavours co-located here, intentionally distinct:
 
-Emit events from :class:`VideoSession.flush` and other commit points;
-subscribe via :meth:`EventBus.subscribe` for SSE / WebSocket / audit.
+* :class:`DomainEvent` (+ :class:`EventBus`) — JSON-serialisable
+  cross-process wire shape. Emitted at commit points
+  (``video.records_patched``, ``stage.started``, ``channel.*`` …);
+  fanned out to SSE / WebSocket / audit subscribers.
+
+* :class:`ProgressEvent` (+ :data:`ProgressCallback`) — sync, in-process
+  notification stream from a single :class:`Processor` to a
+  caller-supplied callback. Complementary to the data ``yield``
+  stream (D-047).
+
+These were previously split between ``application/events`` and
+``application/observability`` — same package now, same docs, but the
+*types* stay distinct because their audiences differ.
 """
 
 from .bus import EventBus, Subscription
+from .progress import ProgressCallback, ProgressEvent, ProgressKind
 from .types import (
     DomainEvent,
     channel_event,
@@ -24,6 +34,9 @@ __all__ = [
     "DomainEvent",
     "EventBus",
     "Subscription",
+    "ProgressCallback",
+    "ProgressEvent",
+    "ProgressKind",
     "channel_event",
     "course_metadata_patched",
     "stage_finished",

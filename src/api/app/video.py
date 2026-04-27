@@ -16,7 +16,7 @@ from adapters.sources.whisperx import WhisperXSource
 if TYPE_CHECKING:
     from api.app.app import App
     from ports.errors import ErrorReporter
-    from application.observability.progress import ProgressCallback
+    from application.events.progress import ProgressCallback
 
 
 # ---------------------------------------------------------------------------
@@ -482,7 +482,7 @@ class VideoBuilder:
         # ``done`` and ``total`` so consumers (Task runtime, SSE) that key
         # off ``event.total`` keep working under the pipeline path.
         if self._progress is not None:
-            from application.observability.progress import ProgressEvent
+            from application.events.progress import ProgressEvent
 
             try:
                 self._progress(

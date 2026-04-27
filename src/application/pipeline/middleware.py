@@ -250,7 +250,7 @@ class ProgressMiddleware:
     :class:`VideoOrchestrator` progress channel — it does not replace
     structured ``stage.*`` domain events from
     :class:`TracingMiddleware`. Provide a callable that conforms to
-    :data:`application.observability.progress.ProgressCallback`. When
+    :data:`application.events.progress.ProgressCallback`. When
     ``stage_filter`` is set, only the listed stage names emit events
     (default: every stage).
     """
@@ -282,7 +282,7 @@ class ProgressMiddleware:
         if not hasattr(result, "__aiter__"):
             return result
 
-        from application.observability.progress import ProgressEvent
+        from application.events.progress import ProgressEvent
 
         upstream = result
         callback = self._callback
