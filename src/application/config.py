@@ -34,10 +34,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from application.scheduler import TenantQuota
 
 from ports.backpressure import ChannelConfig, OverflowPolicy
 
@@ -383,6 +386,32 @@ class HotReloadConfig(BaseModel):
     interval_s: float = Field(default=2.0, gt=0.0)
 
 
+class TenantQuotaEntry(BaseModel):
+    """Pydantic mirror of :class:`application.scheduler.TenantQuota`.
+
+    Phase 5 (方案 L). Configurable per tenant under :attr:`AppConfig.tenants`;
+    materialized into the frozen ``TenantQuota`` dataclass via :meth:`build`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_concurrent_streams: int = Field(default=1, ge=1)
+    max_qps: float = Field(default=1.0, gt=0.0)
+    qos_tier: Literal["free", "standard", "premium"] = "free"
+    cost_budget_usd_per_min: float | None = Field(default=None, ge=0.0)
+
+    def build(self) -> "TenantQuota":
+        """Materialize into the frozen :class:`TenantQuota` dataclass."""
+        from application.scheduler import TenantQuota
+
+        return TenantQuota(
+            max_concurrent_streams=self.max_concurrent_streams,
+            max_qps=self.max_qps,
+            qos_tier=self.qos_tier,
+            cost_budget_usd_per_min=self.cost_budget_usd_per_min,
+        )
+
+
 class AppConfig(BaseModel):
     """Root configuration model."""
 
@@ -418,6 +447,13 @@ class AppConfig(BaseModel):
     :meth:`PipelineRuntime.stream` unless a stage carries its own
     ``downstream_channel`` override in the YAML DSL."""
 
+    tenants: dict[str, TenantQuotaEntry] = Field(default_factory=dict)
+    """Per-tenant streaming quotas (Phase 5 — 方案 L). Keyed by
+    ``tenant_id``. Tenants not listed here fall back to
+    :data:`application.scheduler.DEFAULT_QUOTAS["free"]`. Materialized by
+    :meth:`build_tenant_quotas` into ``dict[str, TenantQuota]`` for the
+    scheduler."""
+
     # -- loaders ---------------------------------------------------------
 
     @classmethod
@@ -441,6 +477,16 @@ class AppConfig(BaseModel):
         """Construct from a plain dict, applying env overrides."""
         data = _apply_env_overrides(dict(data), prefix="TRX_")
         return cls.model_validate(data)
+
+    def build_tenant_quotas(self) -> "dict[str, TenantQuota]":
+        """Materialize :attr:`tenants` into the frozen scheduler dataclass map.
+
+        Returns a fresh ``dict[str, TenantQuota]`` keyed by tenant id.
+        Callers (e.g. :class:`api.app.App` / :class:`FairScheduler`) merge
+        this with :data:`application.scheduler.DEFAULT_QUOTAS` so unlisted
+        tenants still receive a sane default.
+        """
+        return {tid: entry.build() for tid, entry in self.tenants.items()}
 
 
 # ---------------------------------------------------------------------------
