@@ -53,12 +53,13 @@ class _AlwaysPassChecker:
     def target_lang(self) -> str:
         return self._target_lang
 
-    def check(self, source: str, translation: str, profile: str | None = None, **_) -> CheckReport:
+    def check(self, source: str, translation: str, profile: str | None = None, **_) -> tuple[str, CheckReport]:
         self.call_count += 1
-        return CheckReport.ok()
+        return translation, CheckReport.ok()
 
     def run(self, ctx, *, scene=None, **_):
-        return ctx, self.check(ctx.source, ctx.target)
+        _, report = self.check(ctx.source, ctx.target)
+        return ctx, report
 
     def regression(self, *_args, **_kw) -> bool:
         return True
@@ -79,14 +80,15 @@ class _FailNTimesChecker:
     def target_lang(self) -> str:
         return "zh"
 
-    def check(self, source: str, translation: str, profile: str | None = None, **_) -> CheckReport:
+    def check(self, source: str, translation: str, profile: str | None = None, **_) -> tuple[str, CheckReport]:
         self.call_count += 1
         if self.call_count <= self._fail_count:
-            return CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="bad"),))
-        return CheckReport.ok()
+            return translation, CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="bad"),))
+        return translation, CheckReport.ok()
 
     def run(self, ctx, *, scene=None, **_):
-        return ctx, self.check(ctx.source, ctx.target)
+        _, report = self.check(ctx.source, ctx.target)
+        return ctx, report
 
     def regression(self, *_args, **_kw) -> bool:
         return True
@@ -106,12 +108,13 @@ class _AlwaysFailChecker:
     def target_lang(self) -> str:
         return "zh"
 
-    def check(self, source: str, translation: str, profile: str | None = None, **_) -> CheckReport:
+    def check(self, source: str, translation: str, profile: str | None = None, **_) -> tuple[str, CheckReport]:
         self.call_count += 1
-        return CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="always bad"),))
+        return translation, CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="always bad"),))
 
     def run(self, ctx, *, scene=None, **_):
-        return ctx, self.check(ctx.source, ctx.target)
+        _, report = self.check(ctx.source, ctx.target)
+        return ctx, report
 
     def regression(self, *_args, **_kw) -> bool:
         return True

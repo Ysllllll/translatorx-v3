@@ -98,17 +98,21 @@ class SceneConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class CheckerConfigV2:
+class CheckerConfig:
     """Top-level checker config: a default scene + a named scene table."""
 
     default_scene: str = ""
     scenes: Mapping[str, SceneConfig] = field(default_factory=dict)
 
     @staticmethod
-    def from_dict(payload: Mapping[str, Any]) -> CheckerConfigV2:
+    def from_dict(payload: Mapping[str, Any]) -> CheckerConfig:
         scenes_raw = payload.get("scenes") or {}
         scenes = {name: SceneConfig.from_dict(name, body or {}) for name, body in scenes_raw.items()}
-        return CheckerConfigV2(default_scene=str(payload.get("default_scene", "")), scenes=scenes)
+        return CheckerConfig(default_scene=str(payload.get("default_scene", "")), scenes=scenes)
+
+
+# Backwards-compatible alias (the ``V2`` suffix was a migration tag).
+CheckerConfigV2 = CheckerConfig
 
 
 # ---------------------------------------------------------------------------
@@ -181,10 +185,15 @@ def _drop_disabled(specs: Sequence[RuleSpec], disabled: Iterable[str]) -> tuple[
 
 def _dedup_keep_last(specs: Sequence[RuleSpec]) -> tuple[RuleSpec, ...]:
     """Last-wins dedup by rule name. Preserves the order of the *last* occurrence."""
-    seen: dict[str, RuleSpec] = {}
-    for s in specs:
-        seen[s.name] = s
-    return tuple(seen.values())
+    seen: set[str] = set()
+    out: list[RuleSpec] = []
+    for spec in reversed(specs):
+        if spec.name in seen:
+            continue
+        seen.add(spec.name)
+        out.append(spec)
+    out.reverse()
+    return tuple(out)
 
 
 def resolve_scene(

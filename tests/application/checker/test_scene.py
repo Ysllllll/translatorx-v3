@@ -90,6 +90,12 @@ def test_resolve_dedup_keep_last():
     assert resolved.rules[0].severity is Severity.WARNING
 
 
+def test_resolve_dedup_preserves_last_occurrence_order():
+    scenes = {"parent": SceneConfig(name="parent", rules=(RuleSpec(name="non_empty"), RuleSpec(name="length_ratio"))), "child": SceneConfig(name="child", extends=("parent",), rules=(RuleSpec(name="non_empty", severity=Severity.WARNING),))}
+    resolved = resolve_scene("child", scenes)
+    assert [(r.name, r.severity) for r in resolved.rules] == [("length_ratio", Severity.ERROR), ("non_empty", Severity.WARNING)]
+
+
 def test_resolve_cycle_raises():
     scenes = {"a": SceneConfig(name="a", extends=("b",)), "b": SceneConfig(name="b", extends=("a",))}
     with pytest.raises(SceneResolutionError):

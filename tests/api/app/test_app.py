@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from domain.model.usage import CompletionResult
-from application.checker import CheckReport
+from application.checker import CheckContext, CheckReport
 from application.checker import Checker
 
 from api.app import App
@@ -95,6 +95,27 @@ class TestApp:
     def test_workspace_materialized(self, app: App):
         ws = app.workspace("c1")
         assert ws.course_path.exists()
+
+    def test_checker_honors_configured_scene(self):
+        app = App.from_yaml(
+            """
+checker:
+  default_scene: demo.translate
+  scenes:
+    demo.translate:
+      extends: builtin.translate.strict
+      overrides:
+        length_ratio:
+          severity: warning
+"""
+        )
+
+        checker = app.checker("en", "zh")
+        _, report = checker.run(CheckContext(source="Hi.", target="你好" * 60, source_lang="en", target_lang="zh"))
+
+        assert checker.default_scene == "demo.translate"
+        assert report.passed is True
+        assert any(issue.rule == "length_ratio" for issue in report.warnings)
 
 
 class TestVideoBuilder:

@@ -10,6 +10,7 @@ Example (``_lang/arabic.py``)::
     from . import LangProfile
 
     PROFILE = LangProfile(
+        script_family="other",
         forbidden_terms=["..."],
         hallucination_starts=[...],
         question_marks=["?", "؟"],
@@ -21,6 +22,9 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass, field
+from typing import Literal
+
+ScriptFamily = Literal["latin", "cjk", "other"]
 
 
 @dataclass(frozen=True)
@@ -29,6 +33,10 @@ class LangProfile:
 
     Attributes
     ----------
+    script_family :
+        Coarse script bucket (``latin`` / ``cjk`` / ``other``). Drives
+        cross-script length-ratio thresholds in
+        :mod:`application.checker.factory`.
     forbidden_terms :
         Substrings that must NOT appear in a translation targeting
         this language (case-insensitive).
@@ -45,6 +53,7 @@ class LangProfile:
         the model likely hallucinated a meta-response.
     """
 
+    script_family: ScriptFamily = "latin"
     forbidden_terms: list[str] = field(default_factory=list)
     hallucination_starts: list[tuple[str, str | None]] = field(default_factory=list)
     question_marks: list[str] = field(default_factory=lambda: ["?"])

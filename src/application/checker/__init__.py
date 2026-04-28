@@ -6,24 +6,29 @@ Subpackage structure::
     ├── types.py       — Severity, Issue, CheckReport, CheckContext, RuleSpec
     ├── registry.py    — @register decorator + build() lookup (kind=check|sanitize)
     ├── rules_fn.py    — function-based rule / sanitizer factories
-    ├── _scene.py      — SceneConfig, CheckerConfigV2, resolve_scene, presets API
+    ├── scene.py       — SceneConfig, CheckerConfig, resolve_scene, presets API
     ├── presets.py     — builtin scene presets (registered on import)
     ├── checkers.py    — Checker class (run()-only, scene-driven)
     ├── factory.py     — default_checker(src, tgt) → Checker bound to a per-pair scene
     └── lang/          — per-language profiles (add xx.py for new language)
 
-Quick start::
+Quick start (recommended — high-level API)::
 
     from application.checker import default_checker
-    from application.checker.types import CheckContext
 
     checker = default_checker("en", "zh")
-    ctx = CheckContext(source=src_text, target=translated_text,
-                       source_lang="en", target_lang="zh")
-    new_ctx, report = checker.run(ctx)
+    new_target, report = checker.check(src_text, translated_text)
     if not report.passed:
         for issue in report.errors:
             print(f"[{issue.severity.value}] {issue.rule}: {issue.message}")
+
+Lower-level entrypoint (when you need to pass ``usage`` / ``prior``)::
+
+    from application.checker.types import CheckContext
+
+    ctx = CheckContext(source=src_text, target=translated_text,
+                       source_lang="en", target_lang="zh", usage=usage)
+    new_ctx, report = checker.run(ctx)
 """
 
 from .types import (
@@ -47,8 +52,9 @@ from .registry import (
 # and load builtin scene presets before any consumer resolves scenes.
 from . import rules_fn as _rules_fn  # noqa: F401
 from . import presets as _presets  # noqa: F401
-from ._scene import (
-    CheckerConfigV2,
+from .scene import (
+    CheckerConfig,
+    CheckerConfigV2,  # backwards-compatible alias
     SceneConfig,
     SceneResolutionError,
     get_preset_scene,
@@ -58,7 +64,7 @@ from ._scene import (
 )
 from .checkers import Checker
 from .factory import default_checker
-from .lang import LangProfile, get_profile, registered_langs
+from .lang import LangProfile, ScriptFamily, get_profile, registered_langs
 
 __all__ = [
     # Types
@@ -77,6 +83,7 @@ __all__ = [
     "RegistryError",
     # Scene config / resolver / presets
     "SceneConfig",
+    "CheckerConfig",
     "CheckerConfigV2",
     "SceneResolutionError",
     "resolve_scene",
@@ -88,6 +95,7 @@ __all__ = [
     "default_checker",
     # Language profiles
     "LangProfile",
+    "ScriptFamily",
     "get_profile",
     "registered_langs",
 ]

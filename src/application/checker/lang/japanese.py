@@ -1,6 +1,7 @@
 from . import LangProfile
 
 PROFILE = LangProfile(
+    script_family="cjk",
     forbidden_terms=[
         "翻訳してください",
         "翻訳します",

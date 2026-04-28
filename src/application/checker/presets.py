@@ -24,7 +24,7 @@ Available presets:
 
 from __future__ import annotations
 
-from ._scene import SceneConfig, register_preset_scene
+from .scene import SceneConfig, register_preset_scene
 from .types import RuleSpec, Severity
 
 

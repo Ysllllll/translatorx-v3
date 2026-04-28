@@ -23,7 +23,6 @@ from .prompts import get_default_system_prompt
 from ports.engine import LLMEngine, Message
 from ports.retries import retry_until_valid
 from application.checker import CheckReport, Checker, Severity
-from application.checker.types import CheckContext
 
 
 def _score(report: CheckReport) -> tuple[int, int]:
@@ -208,22 +207,18 @@ async def translate_with_verify(
     # Track the last (translation, report) so we can fall back on exhaustion.
     last_seen: dict[str, object] = {"translation": "", "report": CheckReport.ok()}
 
-    def _make_ctx(target: str, *, usage=None) -> CheckContext:
-        return CheckContext(
-            source=source,
-            target=target,
-            source_lang=context.source_lang,
-            target_lang=context.target_lang,
-            usage=usage,
-            prior=prior,
-        )
-
     async def _call(attempt: int) -> tuple[str, CheckReport]:
         messages = _messages_for_attempt(attempt)
         result = await engine.complete(messages)
-        ctx = _make_ctx(result.text.strip(), usage=result.usage)
-        ctx, report = checker.run(ctx, scene=scene)
-        translation = ctx.target
+        translation, report = checker.check(
+            source,
+            result.text.strip(),
+            usage=result.usage,
+            prior=prior,
+            scene=scene,
+            source_lang=context.source_lang,
+            target_lang=context.target_lang,
+        )
         last_seen["translation"] = translation
         last_seen["report"] = report
         return translation, report
@@ -243,7 +238,14 @@ async def translate_with_verify(
     if outcome.accepted:
         translation, report = outcome.value  # type: ignore[misc]
         if prior and prior != translation:
-            _, prior_report = checker.run(_make_ctx(prior), scene=scene)
+            _, prior_report = checker.check(
+                source,
+                prior,
+                prior=prior,
+                scene=scene,
+                source_lang=context.source_lang,
+                target_lang=context.target_lang,
+            )
             if _score(report) > _score(prior_report):
                 return TranslateResult(
                     translation=prior,

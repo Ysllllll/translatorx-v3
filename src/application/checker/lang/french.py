@@ -1,6 +1,7 @@
 from . import LangProfile
 
 PROFILE = LangProfile(
+    script_family="latin",
     forbidden_terms=[
         "voici la traduction",
         "la traduction est",

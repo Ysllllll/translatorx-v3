@@ -139,3 +139,25 @@ class TestAppConfig:
     def test_align_rejects_unknown_keys(self):
         with pytest.raises(Exception):
             AppConfig.from_yaml("align:\n  bogus: 1\n")
+
+    def test_checker_config_v2_from_yaml(self):
+        cfg = AppConfig.from_yaml(
+            """
+checker:
+  default_scene: demo.translate
+  scenes:
+    demo.translate:
+      extends: builtin.translate.strict
+      disable: [pixel_width]
+      overrides:
+        length_ratio:
+          severity: warning
+"""
+        )
+
+        checker_cfg = cfg.checker_config_v2()
+        assert checker_cfg.default_scene == "demo.translate"
+        assert "demo.translate" in checker_cfg.scenes
+        scene = checker_cfg.scenes["demo.translate"]
+        assert scene.extends == ("builtin.translate.strict",)
+        assert scene.disable == frozenset({"pixel_width"})

@@ -9,32 +9,23 @@ terms, keyword pairs, target-lang for CJK content).
 from __future__ import annotations
 
 from .checkers import Checker
-from ._scene import SceneConfig
-from .lang import LangProfile, get_profile
-
-# Ensure registry side-effects (function-based rules + sanitizers
-# + builtin presets) are loaded before scenes resolve.
-from . import rules_fn  # noqa: F401
-from . import presets  # noqa: F401
-
+from .lang import LangProfile, ScriptFamily, get_profile
+from .scene import SceneConfig
 
 # -------------------------------------------------------------------
 # Script family helpers
 # -------------------------------------------------------------------
-
-_CJK_LANGS = frozenset({"zh", "ja", "ko"})
 
 _SAME_SCRIPT = dict(short=5.0, medium=3.0, long=2.0, very_long=1.6)
 _CJK_TO_LATIN = dict(short=8.0, medium=5.0, long=3.5, very_long=2.5)
 _LATIN_TO_CJK = dict(short=4.0, medium=2.5, long=1.8, very_long=1.4)
 
 
-def _ratio_thresholds(src_lang: str, tgt_lang: str) -> dict[str, float]:
-    src_cjk = src_lang in _CJK_LANGS
-    tgt_cjk = tgt_lang in _CJK_LANGS
-    if src_cjk and not tgt_cjk:
+def _ratio_thresholds(src_family: ScriptFamily, tgt_family: ScriptFamily) -> dict[str, float]:
+    """Pick length-ratio thresholds based on cross-script direction."""
+    if src_family == "cjk" and tgt_family != "cjk":
         return dict(_CJK_TO_LATIN)
-    if not src_cjk and tgt_cjk:
+    if src_family != "cjk" and tgt_family == "cjk":
         return dict(_LATIN_TO_CJK)
     return dict(_SAME_SCRIPT)
 
@@ -55,7 +46,6 @@ def _build_keyword_pairs(
 def _build_translate_scene(
     name: str,
     *,
-    src_lang: str,
     tgt_lang: str,
     src_profile: LangProfile,
     tgt_profile: LangProfile,
@@ -63,7 +53,7 @@ def _build_translate_scene(
 ) -> SceneConfig:
     """Build a scene that wires per-language profile data into the
     builtin translate preset via parameter overrides."""
-    thresholds = _ratio_thresholds(src_lang, tgt_lang)
+    thresholds = _ratio_thresholds(src_profile.script_family, tgt_profile.script_family)
     keyword_pairs = _build_keyword_pairs(src_profile, tgt_profile)
 
     overrides: dict[str, dict] = {
@@ -75,6 +65,7 @@ def _build_translate_scene(
         },
         "question_mark": {
             "params": {
+                "source_marks": list(src_profile.question_marks),
                 "expected_marks": list(tgt_profile.question_marks),
             }
         },
@@ -109,7 +100,6 @@ def default_checker(source_lang: str, target_lang: str) -> Checker:
         scenes={
             scene_name: _build_translate_scene(
                 scene_name,
-                src_lang=source_lang,
                 tgt_lang=target_lang,
                 src_profile=src_profile,
                 tgt_profile=tgt_profile,

@@ -28,6 +28,7 @@ from typing import Any
 try:
     from rich.console import Console
     from rich.rule import Rule
+    from rich.table import Table
 
     _console: Console | None = Console()
     _HAVE_RICH = True
@@ -107,6 +108,29 @@ def kv(key: str, value: Any, *, width: int = 20) -> None:
         print(f"  {key_str}  {value}")
 
 
+def table(title: str, columns: list[str], rows: list[dict[str, Any]]) -> None:
+    """Render a compact table from dict rows."""
+    if _HAVE_RICH and _console is not None:
+        tbl = Table(title=title, show_lines=False)
+        for col in columns:
+            tbl.add_column(col)
+        for row in rows:
+            tbl.add_row(*(str(row.get(col, "")) for col in columns))
+        _console.print(tbl)
+        return
+
+    print(title)
+    if not rows:
+        print("  (empty)")
+        return
+    widths = {col: max(len(str(col)), *(len(str(row.get(col, ""))) for row in rows)) for col in columns}
+    header = " | ".join(f"{col:<{widths[col]}}" for col in columns)
+    print(header)
+    print("-+-".join("-" * widths[col] for col in columns))
+    for row in rows:
+        print(" | ".join(f"{str(row.get(col, '')):<{widths[col]}}" for col in columns))
+
+
 def banner(text: str) -> None:
     """One-shot banner for the very top of a demo."""
     if _HAVE_RICH and _console is not None:
@@ -128,5 +152,6 @@ __all__ = [
     "ok",
     "section",
     "step",
+    "table",
     "warn",
 ]

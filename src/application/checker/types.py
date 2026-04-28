@@ -14,28 +14,36 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Mapping
 
 if TYPE_CHECKING:
     from domain.model.usage import Usage
 
 
-class Severity(Enum):
-    """Check-result severity level."""
+class Severity(str, Enum):
+    """Check-result severity level.
+
+    Inherits from :class:`str` so the enum value serializes naturally to
+    JSON / YAML and compares equal to its string form (``Severity.ERROR == "error"``).
+    """
 
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
 
 
-@dataclass(frozen=True)
+_EMPTY_DETAILS: Mapping[str, Any] = MappingProxyType({})
+
+
+@dataclass(frozen=True, slots=True)
 class Issue:
     """A single problem found by a rule."""
 
     rule: str
     severity: Severity
     message: str
-    details: dict = field(default_factory=dict)
+    details: Mapping[str, Any] = _EMPTY_DETAILS
 
 
 @dataclass(frozen=True)

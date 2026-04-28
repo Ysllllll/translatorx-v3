@@ -113,7 +113,13 @@ class App:
         )
 
     def checker(self, src: str, tgt: str) -> Checker:
-        """Return a default :class:`Checker` for the pair."""
+        """Return a :class:`Checker` for the pair."""
+        if self._config.checker:
+            return Checker.from_config(
+                self._config.checker_config(),
+                source_lang=src,
+                target_lang=tgt,
+            )
         return default_checker(src, tgt)
 
     @property

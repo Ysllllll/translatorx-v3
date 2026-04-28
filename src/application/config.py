@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 from ports.backpressure import ChannelConfig, OverflowPolicy
 
-from .checker._scene import CheckerConfigV2  # noqa: F401  (re-exported for convenience)
+from .checker.scene import CheckerConfig  # noqa: F401  (re-exported for convenience)
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +439,7 @@ class AppConfig(BaseModel):
               overrides:
                 length_ratio: {severity: warning}
 
-    Materialised on demand via :meth:`AppConfig.checker_config_v2`.
+    Materialised on demand via :meth:`AppConfig.checker_config`.
     """
 
     pipelines_dir: str | None = None
@@ -502,6 +502,13 @@ class AppConfig(BaseModel):
         tenants still receive a sane default.
         """
         return {tid: entry.build() for tid, entry in self.tenants.items()}
+
+    def checker_config(self) -> CheckerConfig:
+        """Materialize the raw ``checker`` mapping into scene config."""
+        return CheckerConfig.from_dict(self.checker)
+
+    # Backwards-compatible alias (the ``v2`` suffix was a migration tag).
+    checker_config_v2 = checker_config
 
 
 # ---------------------------------------------------------------------------

@@ -77,10 +77,11 @@ def _kana_char_count(text: str) -> int:
 
 
 def _estimate_words(text: str) -> int:
-    cjk = _cjk_char_count(text) + _hangul_char_count(text) + _kana_char_count(text)
-    if cjk > len(text.strip()) * 0.3:
+    stripped = text.strip()
+    cjk = _cjk_char_count(stripped) + _hangul_char_count(stripped) + _kana_char_count(stripped)
+    if cjk > len(stripped) * 0.3:
         return cjk
-    return len(text.split())
+    return len(stripped.split())
 
 
 _CJK_LANGS = frozenset({"zh", "ja", "ko"})
@@ -173,22 +174,28 @@ def _format_artifacts_factory(
     hallucination_starts: list[tuple[str, str | None]] | None = None,
 ):
     """Newlines, markdown bold, hallucination prefixes, bracket asymmetry."""
-    starts = tuple(hallucination_starts or ())
+    # Pre-compile every pattern once at factory time so the hot path
+    # (one match per call) is just a regex execution, not a recompile.
+    compiled_starts: tuple[re.Pattern[str], ...] = tuple(
+        re.compile(f"{pattern}(?!{exclude})" if exclude else pattern) for pattern, exclude in (hallucination_starts or ())
+    )
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         tgt = ctx.target.strip()
         src = ctx.source.strip()
         tgt_lower = tgt.lower()
 
+        # Allow newlines inside LaTeX math blocks (``$$ ... $$``): two or
+        # more ``$$`` markers means the target is a multi-line equation,
+        # not a hallucinated paragraph.
         if not allow_newlines and "\n" in tgt and tgt.count("$$") < 2:
             yield Issue("format_newline", spec.severity, "unexpected newline in translation")
 
         if "**" in tgt:
             yield Issue("format_markdown", spec.severity, "markdown bold artifact '**' in translation")
 
-        for pattern, exclude in starts:
-            full = f"{pattern}(?!{exclude})" if exclude else pattern
-            if re.match(full, tgt_lower):
+        for pat in compiled_starts:
+            if pat.match(tgt_lower):
                 yield Issue(
                     "format_hallucination",
                     spec.severity,
@@ -211,21 +218,29 @@ def _format_artifacts_factory(
 @register("question_mark", kind="check")
 def _question_mark_factory(
     *,
+    source_marks: list[str] | None = None,
     expected_marks: list[str] | None = None,
     whitelist_suffixes: list[str] | None = None,
     whitelist_severity: Severity = Severity.INFO,
 ):
-    """Source ends with ``?``/``？`` but translation has no question mark."""
-    marks = tuple(expected_marks or ["?"])
+    """Source ends with a question mark but translation has none.
+
+    Both the source-side detector (``source_marks``) and the target-side
+    expectation (``expected_marks``) are configurable so non-Latin source
+    languages (Arabic ``؟``, Greek ``;`` …) can plug in their own marks
+    via :class:`LangProfile`.
+    """
+    src_marks = tuple(source_marks or ["?", "？"])
+    tgt_marks = tuple(expected_marks or ["?"])
     whitelist = tuple(
         suf.lower() for suf in (whitelist_suffixes if whitelist_suffixes is not None else ["right?", "ok?", "okay?", "okey?", "why?"])
     )
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         src = ctx.source.rstrip()
-        if not (src.endswith("?") or src.endswith("？")):
+        if not any(src.endswith(m) for m in src_marks):
             return
-        if any(m in ctx.target for m in marks):
+        if any(m in ctx.target for m in tgt_marks):
             return
         is_whitelisted = any(src.lower().endswith(suf) for suf in whitelist)
         sev = whitelist_severity if is_whitelisted else spec.severity
@@ -303,6 +318,7 @@ def _output_tokens_factory(
                 f"short input ({in_tok} tok) produced large output ({out_tok} tok)",
                 details={"prompt_tokens": in_tok, "completion_tokens": out_tok},
             )
+            return
         if in_tok and out_tok / in_tok > output_input_ratio_max:
             yield Issue(
                 "output_tokens_ratio",
@@ -373,26 +389,21 @@ def _pixel_width_factory(
 ):
     """Optional Pillow-based pixel-width hallucination guard.
 
-    No-ops when Pillow / font is unavailable. Lazily loads the font on
-    first call.
+    The font is loaded **once** at factory time. No-ops when Pillow or
+    the font path is unavailable. Because the Checker compiles each
+    scene exactly once (see :class:`Checker._compiled`), this factory
+    runs at most once per scene per process.
     """
-    state = {"loaded": False, "font": None}
-
-    def _ensure_font():
-        if state["loaded"]:
-            return state["font"]
-        state["loaded"] = True
-        if not font_path:
-            return None
+    font = None
+    if font_path:
         try:
             from PIL import ImageFont
 
-            state["font"] = ImageFont.truetype(font_path, font_size)
+            font = ImageFont.truetype(font_path, font_size)
         except Exception:
-            state["font"] = None
-        return state["font"]
+            font = None
 
-    def _measure(text: str, font) -> int:
+    def _measure(text: str) -> int:
         try:
             bbox = font.getbbox(text)
             return int(bbox[2] - bbox[0])
@@ -403,17 +414,16 @@ def _pixel_width_factory(
                 return 0
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
-        font = _ensure_font()
         if font is None:
             return
         src = ctx.source.strip()
         tgt = ctx.target.strip()
         if not src or not tgt:
             return
-        src_w = _measure(src, font)
+        src_w = _measure(src)
         if src_w <= 0:
             return
-        tgt_w = _measure(tgt, font)
+        tgt_w = _measure(tgt)
         ratio = tgt_w / src_w
         if ratio > max_ratio:
             yield Issue(
