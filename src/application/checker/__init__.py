@@ -36,6 +36,16 @@ from .rules import (
 from .checkers import Checker
 from .factory import default_checker
 from .lang import LangProfile, get_profile, registered_langs
+from .sanitize import (
+    BackticksStrip,
+    ColonToPunctuation,
+    LeadingPunctStrip,
+    QuoteStrip,
+    Sanitizer,
+    SanitizerChain,
+    TrailingAnnotationStrip,
+    default_sanitizer_chain,
+)
 
 __all__ = [
     # Types
@@ -62,4 +72,13 @@ __all__ = [
     "LangProfile",
     "get_profile",
     "registered_langs",
+    # Sanitizers
+    "Sanitizer",
+    "SanitizerChain",
+    "BackticksStrip",
+    "TrailingAnnotationStrip",
+    "ColonToPunctuation",
+    "QuoteStrip",
+    "LeadingPunctStrip",
+    "default_sanitizer_chain",
 ]

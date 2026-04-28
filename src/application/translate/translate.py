@@ -22,7 +22,7 @@ from .context import ContextWindow, TranslationContext
 from .prompts import get_default_system_prompt
 from ports.engine import LLMEngine, Message
 from ports.retries import retry_until_valid
-from application.checker import CheckReport, Checker
+from application.checker import CheckReport, Checker, SanitizerChain, default_sanitizer_chain
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +152,7 @@ async def translate_with_verify(
     window: ContextWindow,
     *,
     system_prompt: str = "",
+    sanitizer: SanitizerChain | None = None,
 ) -> TranslateResult:
     """Translate *source* with quality verification and prompt degradation.
 
@@ -167,6 +168,7 @@ async def translate_with_verify(
     ``accepted=False`` and NOT added to the history window.
     """
     max_retries = context.max_retries
+    sanitize_chain = sanitizer if sanitizer is not None else default_sanitizer_chain()
 
     # Merge provider terms (if ready) in front of user-supplied frozen_pairs.
     provider = context.terms_provider
@@ -194,7 +196,7 @@ async def translate_with_verify(
     async def _call(attempt: int) -> tuple[str, CheckReport]:
         messages = _messages_for_attempt(attempt)
         result = await engine.complete(messages)
-        translation = result.text.strip()
+        translation = sanitize_chain.sanitize(source, result.text.strip())
         report = checker.check(source, translation)
         last_seen["translation"] = translation
         last_seen["report"] = report
