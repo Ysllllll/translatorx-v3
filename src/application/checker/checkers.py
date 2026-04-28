@@ -79,6 +79,34 @@ class Checker:
 
         return CheckReport(issues=tuple(issues))
 
+    def regression(
+        self,
+        source: str,
+        prior: str,
+        candidate: str,
+        *,
+        profile: str | None = None,
+        usage: Usage | None = None,
+    ) -> bool:
+        """Return True iff *candidate* is at least as good as *prior*.
+
+        Mirrors the legacy CNENMatcher behaviour where re-translation
+        attempts were rejected if they introduced new quality issues.
+        Comparison is by error-count-then-warning-count: candidate is
+        accepted when its (errors, warnings) tuple is ≤ prior's.
+        """
+        if prior == candidate:
+            return True
+        prior_report = self.check(source, prior, profile=profile, usage=usage)
+        cand_report = self.check(source, candidate, profile=profile, usage=usage)
+
+        def _score(report: CheckReport) -> tuple[int, int]:
+            errors = sum(1 for i in report.issues if i.severity is Severity.ERROR)
+            warnings = sum(1 for i in report.issues if i.severity is Severity.WARNING)
+            return (errors, warnings)
+
+        return _score(cand_report) <= _score(prior_report)
+
     # ---- introspection ---------------------------------------------
 
     @property

@@ -153,6 +153,7 @@ async def translate_with_verify(
     *,
     system_prompt: str = "",
     sanitizer: SanitizerChain | None = None,
+    prior: str = "",
 ) -> TranslateResult:
     """Translate *source* with quality verification and prompt degradation.
 
@@ -166,6 +167,10 @@ async def translate_with_verify(
 
     If every attempt fails the last translation is returned with
     ``accepted=False`` and NOT added to the history window.
+
+    When ``prior`` is supplied (non-empty), the result is also checked
+    for regression: if the new translation has strictly more issues
+    than ``prior``, it is rejected and ``prior`` is returned instead.
     """
     max_retries = context.max_retries
     sanitize_chain = sanitizer if sanitizer is not None else default_sanitizer_chain()
@@ -216,6 +221,13 @@ async def translate_with_verify(
 
     if outcome.accepted:
         translation, report = outcome.value  # type: ignore[misc]
+        if prior and not checker.regression(source, prior, translation):
+            return TranslateResult(
+                translation=prior,
+                report=checker.check(source, prior),
+                attempts=outcome.attempts,
+                accepted=False,
+            )
         window.add(source, translation)
         return TranslateResult(
             translation=translation,
