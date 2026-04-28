@@ -43,10 +43,10 @@ class _RecordingEngine:
 
 class _PassChecker(Checker):
     def __init__(self) -> None:
-        super().__init__(rules=[])
+        super().__init__()
 
-    def check(self, source: str, translation: str, profile=None, **_) -> CheckReport:
-        return CheckReport.ok()
+    def run(self, ctx, *, scene=None, **_):
+        return ctx, CheckReport.ok()
 
 
 def _variant(model: str = "mock-model-v1", *, alias: str = "", prompt: str = "", prompt_id: str = "default", **config) -> VariantSpec:

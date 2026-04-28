@@ -1,113 +1,124 @@
-"""Checker — rule engine for translation quality checking.
+"""Checker — scene-driven rule engine for translation quality checking.
 
-The :class:`Checker` holds an ordered list of :class:`Rule` instances
-and optional profile-based rule sets.  Calling :meth:`Checker.check`
-runs every rule in order, collecting :class:`Issue` objects.  On the
-first ``ERROR``-level issue the engine short-circuits and returns
-immediately.
+The single public entrypoint is :meth:`Checker.run`: it accepts a
+:class:`CheckContext`, resolves the scene (built-in or user-supplied),
+runs sanitize steps in order to advance ``ctx.target``, then runs check
+rules with ERROR-level short-circuit semantics. Returns
+``(updated_ctx, report)``.
 """
 
 from __future__ import annotations
 
-from domain.model.usage import Usage
+from dataclasses import replace
+from typing import Any, Mapping
 
-from .config import PROFILES, ProfileOverrides
-from .rules import Rule, build_default_rules, RatioThresholds
-from .types import CheckReport, Issue, Severity
+from ._scene import CheckerConfigV2, SceneConfig, resolve_scene
+from .registry import build as _build_step
+from .types import CheckContext, CheckReport, Issue, ResolvedScene, Severity
 
 
 class Checker:
-    """Rule-based translation quality checker.
+    """Scene-driven translation quality checker."""
 
-    Parameters
-    ----------
-    rules :
-        Ordered rule list (the "base" rules).
-    source_lang / target_lang :
-        Bound at construction time so :meth:`check` doesn't need them.
-    profile_rules :
-        Optional mapping from profile name to alternative rule list.
-        When ``check(..., profile="lenient")`` is called, the rules
-        from this mapping are used instead of the base rules.
-    """
-
-    __slots__ = ("_rules", "_source_lang", "_target_lang", "_profile_rules")
+    __slots__ = (
+        "_source_lang",
+        "_target_lang",
+        "_scenes",
+        "_default_scene",
+    )
 
     def __init__(
         self,
-        rules: list[Rule],
         *,
         source_lang: str = "",
         target_lang: str = "",
-        profile_rules: dict[str, list[Rule]] | None = None,
+        scenes: Mapping[str, SceneConfig] | None = None,
+        default_scene: str = "",
     ) -> None:
-        self._rules = rules
         self._source_lang = source_lang
         self._target_lang = target_lang
-        self._profile_rules = profile_rules or {}
+        self._scenes = dict(scenes or {})
+        self._default_scene = default_scene
 
-    # ---- public API ------------------------------------------------
-
-    def check(
-        self,
-        source: str,
-        translation: str,
+    @classmethod
+    def from_v2(
+        cls,
+        config: CheckerConfigV2,
         *,
-        profile: str | None = None,
-        usage: Usage | None = None,
-    ) -> CheckReport:
-        """Run all rules and return a :class:`CheckReport`.
+        source_lang: str = "",
+        target_lang: str = "",
+    ) -> Checker:
+        """Build a Checker bound to a v2 scene config."""
+        return cls(
+            source_lang=source_lang,
+            target_lang=target_lang,
+            scenes=config.scenes,
+            default_scene=config.default_scene,
+        )
 
-        If *profile* is given (e.g. ``"lenient"``), uses the
-        profile-specific rule set if available.
+    def run(
+        self,
+        ctx: CheckContext,
+        *,
+        scene: str | None = None,
+        rules: list[Any] | tuple[Any, ...] | None = None,
+        overrides: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> tuple[CheckContext, CheckReport]:
+        """Run sanitize + check pipeline for *ctx* under *scene*.
 
-        ``usage`` (optional) is forwarded to rules that support
-        token-aware checks (e.g. :class:`OutputTokenRule`); rules that
-        don't care swallow it via ``**_``.
+        Resolution order:
 
-        Short-circuit: on the first ``ERROR``-level issue, stop
-        and return immediately (collecting everything up to that point).
+        1. ``scene`` argument > ``self._default_scene``. If neither is
+           set, raises :class:`ValueError`.
+        2. ``rules=[...]`` *replaces* the resolved rule list (sanitize
+           steps from the scene still run).
+        3. ``overrides={name: {severity?, params?}}`` apply on top.
+
+        Returns ``(updated_ctx, report)`` where ``updated_ctx.target``
+        reflects the cumulative sanitize result.
         """
-        rules = self._profile_rules.get(profile, self._rules) if profile else self._rules
+        scene_name = scene or self._default_scene
+        if not scene_name:
+            raise ValueError("Checker.run requires a scene name (no default_scene set)")
+
+        resolved = resolve_scene(scene_name, self._scenes)
+
+        if rules is not None:
+            from ._scene import _coerce_rule_entry
+
+            resolved = ResolvedScene(
+                name=resolved.name,
+                sanitize=resolved.sanitize,
+                rules=tuple(_coerce_rule_entry(r) for r in rules),
+            )
+
+        if overrides:
+            from ._scene import _apply_overrides
+
+            resolved = ResolvedScene(
+                name=resolved.name,
+                sanitize=_apply_overrides(resolved.sanitize, overrides),
+                rules=_apply_overrides(resolved.rules, overrides),
+            )
+
+        return self._execute(ctx, resolved)
+
+    def _execute(self, ctx: CheckContext, scene: ResolvedScene) -> tuple[CheckContext, CheckReport]:
+        for spec in scene.sanitize:
+            fn = _build_step(spec.name, kind="sanitize", **spec.params)
+            new_target = fn(ctx, spec)
+            if new_target != ctx.target:
+                ctx = replace(ctx, target=new_target)
 
         issues: list[Issue] = []
-        for rule in rules:
-            new_issues = rule.check(source, translation, usage=usage)
+        for spec in scene.rules:
+            fn = _build_step(spec.name, kind="check", **spec.params)
+            new_issues = list(fn(ctx, spec))
             issues.extend(new_issues)
             if any(i.severity is Severity.ERROR for i in new_issues):
-                return CheckReport(issues=tuple(issues))
+                break
 
-        return CheckReport(issues=tuple(issues))
-
-    def regression(
-        self,
-        source: str,
-        prior: str,
-        candidate: str,
-        *,
-        profile: str | None = None,
-        usage: Usage | None = None,
-    ) -> bool:
-        """Return True iff *candidate* is at least as good as *prior*.
-
-        Mirrors the legacy CNENMatcher behaviour where re-translation
-        attempts were rejected if they introduced new quality issues.
-        Comparison is by error-count-then-warning-count: candidate is
-        accepted when its (errors, warnings) tuple is ≤ prior's.
-        """
-        if prior == candidate:
-            return True
-        prior_report = self.check(source, prior, profile=profile, usage=usage)
-        cand_report = self.check(source, candidate, profile=profile, usage=usage)
-
-        def _score(report: CheckReport) -> tuple[int, int]:
-            errors = sum(1 for i in report.issues if i.severity is Severity.ERROR)
-            warnings = sum(1 for i in report.issues if i.severity is Severity.WARNING)
-            return (errors, warnings)
-
-        return _score(cand_report) <= _score(prior_report)
-
-    # ---- introspection ---------------------------------------------
+        return ctx, CheckReport(issues=tuple(issues))
 
     @property
     def source_lang(self) -> str:
@@ -118,5 +129,9 @@ class Checker:
         return self._target_lang
 
     @property
-    def rules(self) -> list[Rule]:
-        return list(self._rules)
+    def default_scene(self) -> str:
+        return self._default_scene
+
+    @property
+    def scenes(self) -> Mapping[str, SceneConfig]:
+        return dict(self._scenes)

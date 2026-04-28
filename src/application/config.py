@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 from ports.backpressure import ChannelConfig, OverflowPolicy
 
-from .checker.config import CheckerConfig
+from .checker._scene import CheckerConfigV2  # noqa: F401  (re-exported for convenience)
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +428,19 @@ class AppConfig(BaseModel):
     transcriber: TranscriberConfig = Field(default_factory=TranscriberConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
-    checker: CheckerConfig = Field(default_factory=CheckerConfig)
+    checker: dict[str, Any] = Field(default_factory=dict)
+    """Optional checker configuration in v2 scene shape::
+
+        checker:
+          default_scene: my_translate
+          scenes:
+            my_translate:
+              extends: [builtin.translate.strict]
+              overrides:
+                length_ratio: {severity: warning}
+
+    Materialised on demand via :meth:`AppConfig.checker_config_v2`.
+    """
 
     pipelines_dir: str | None = None
     """Optional directory of named pipeline YAML files (one pipeline per

@@ -57,6 +57,12 @@ class _AlwaysPassChecker:
         self.call_count += 1
         return CheckReport.ok()
 
+    def run(self, ctx, *, scene=None, **_):
+        return ctx, self.check(ctx.source, ctx.target)
+
+    def regression(self, *_args, **_kw) -> bool:
+        return True
+
 
 class _FailNTimesChecker:
     """Checker that fails N times then passes."""
@@ -79,6 +85,12 @@ class _FailNTimesChecker:
             return CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="bad"),))
         return CheckReport.ok()
 
+    def run(self, ctx, *, scene=None, **_):
+        return ctx, self.check(ctx.source, ctx.target)
+
+    def regression(self, *_args, **_kw) -> bool:
+        return True
+
 
 class _AlwaysFailChecker:
     """Checker that never passes."""
@@ -97,6 +109,12 @@ class _AlwaysFailChecker:
     def check(self, source: str, translation: str, profile: str | None = None, **_) -> CheckReport:
         self.call_count += 1
         return CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="always bad"),))
+
+    def run(self, ctx, *, scene=None, **_):
+        return ctx, self.check(ctx.source, ctx.target)
+
+    def regression(self, *_args, **_kw) -> bool:
+        return True
 
 
 # ---------------------------------------------------------------------------

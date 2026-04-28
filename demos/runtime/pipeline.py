@@ -85,10 +85,10 @@ class _FakeEngine:
 
 class _PassChecker(Checker):
     def __init__(self) -> None:
-        super().__init__(rules=[])
+        super().__init__()
 
-    def check(self, source, translation, profile=None, **_):
-        return CheckReport.ok()
+    def run(self, ctx, *, scene=None, **_):
+        return ctx, CheckReport.ok()
 
 
 def _write_srt(path: Path, lines: list[str]) -> None:

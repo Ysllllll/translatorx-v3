@@ -22,7 +22,15 @@ from .context import ContextWindow, TranslationContext
 from .prompts import get_default_system_prompt
 from ports.engine import LLMEngine, Message
 from ports.retries import retry_until_valid
-from application.checker import CheckReport, Checker, SanitizerChain, default_sanitizer_chain
+from application.checker import CheckReport, Checker, Severity
+from application.checker.types import CheckContext
+
+
+def _score(report: CheckReport) -> tuple[int, int]:
+    """(errors, warnings) tuple — used to gate regression rollback."""
+    errors = sum(1 for i in report.issues if i.severity is Severity.ERROR)
+    warnings = sum(1 for i in report.issues if i.severity is Severity.WARNING)
+    return (errors, warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +160,7 @@ async def translate_with_verify(
     window: ContextWindow,
     *,
     system_prompt: str = "",
-    sanitizer: SanitizerChain | None = None,
+    scene: str | None = None,
     prior: str = "",
 ) -> TranslateResult:
     """Translate *source* with quality verification and prompt degradation.
@@ -165,6 +173,9 @@ async def translate_with_verify(
     * attempt 2 → Level 2 (system + user, no history)
     * attempt 3+ → Level 3 (bare one-message fallback)
 
+    Sanitize + check both flow through :meth:`Checker.run` under the
+    resolved scene (``scene`` argument or ``checker.default_scene``).
+
     If every attempt fails the last translation is returned with
     ``accepted=False`` and NOT added to the history window.
 
@@ -173,7 +184,6 @@ async def translate_with_verify(
     than ``prior``, it is rejected and ``prior`` is returned instead.
     """
     max_retries = context.max_retries
-    sanitize_chain = sanitizer if sanitizer is not None else default_sanitizer_chain()
 
     # Merge provider terms (if ready) in front of user-supplied frozen_pairs.
     provider = context.terms_provider
@@ -198,11 +208,22 @@ async def translate_with_verify(
     # Track the last (translation, report) so we can fall back on exhaustion.
     last_seen: dict[str, object] = {"translation": "", "report": CheckReport.ok()}
 
+    def _make_ctx(target: str, *, usage=None) -> CheckContext:
+        return CheckContext(
+            source=source,
+            target=target,
+            source_lang=context.source_lang,
+            target_lang=context.target_lang,
+            usage=usage,
+            prior=prior,
+        )
+
     async def _call(attempt: int) -> tuple[str, CheckReport]:
         messages = _messages_for_attempt(attempt)
         result = await engine.complete(messages)
-        translation = sanitize_chain.sanitize(source, result.text.strip())
-        report = checker.check(source, translation, usage=result.usage)
+        ctx = _make_ctx(result.text.strip(), usage=result.usage)
+        ctx, report = checker.run(ctx, scene=scene)
+        translation = ctx.target
         last_seen["translation"] = translation
         last_seen["report"] = report
         return translation, report
@@ -221,13 +242,15 @@ async def translate_with_verify(
 
     if outcome.accepted:
         translation, report = outcome.value  # type: ignore[misc]
-        if prior and not checker.regression(source, prior, translation):
-            return TranslateResult(
-                translation=prior,
-                report=checker.check(source, prior),
-                attempts=outcome.attempts,
-                accepted=False,
-            )
+        if prior and prior != translation:
+            _, prior_report = checker.run(_make_ctx(prior), scene=scene)
+            if _score(report) > _score(prior_report):
+                return TranslateResult(
+                    translation=prior,
+                    report=prior_report,
+                    attempts=outcome.attempts,
+                    accepted=False,
+                )
         window.add(source, translation)
         return TranslateResult(
             translation=translation,

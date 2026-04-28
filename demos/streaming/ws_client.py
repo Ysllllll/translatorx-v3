@@ -66,10 +66,10 @@ class _Engine:
 
 class _PassChecker(Checker):
     def __init__(self) -> None:
-        super().__init__(rules=[])
+        super().__init__()
 
-    def check(self, source, translation, profile=None, **_) -> CheckReport:
-        return CheckReport.ok()
+    def run(self, ctx, *, scene=None, **_):
+        return ctx, CheckReport.ok()
 
 
 def _build_api(root: Path) -> Any:

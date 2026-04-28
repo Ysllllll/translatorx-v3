@@ -43,10 +43,10 @@ class _FakeTranslator:
 
 class _PassChecker(Checker):
     def __init__(self) -> None:
-        super().__init__(rules=[])
+        super().__init__()
 
-    def check(self, _src, _tgt, _profile=None, **_):
-        return CheckReport(issues=[])
+    def run(self, ctx, *, scene=None, **_):
+        return ctx, CheckReport(issues=())
 
 
 def _ctx(variant: VariantSpec | None = None) -> TranslationContext:

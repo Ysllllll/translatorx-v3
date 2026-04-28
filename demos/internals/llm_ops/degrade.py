@@ -18,8 +18,12 @@ from ._common import ScriptedEngine, header, print_messages, print_system_prompt
 class _AlwaysFailChecker:
     """Always reject — forces translate_with_verify to exhaust retries."""
 
-    def check(self, _src: str, _tgt: str, **_) -> CheckReport:
-        return CheckReport(issues=[Issue("demo_force_fail", Severity.ERROR, "demo forcing retry")])
+    @property
+    def default_scene(self) -> str:
+        return ""
+
+    def run(self, ctx, *, scene=None, **_):
+        return ctx, CheckReport(issues=(Issue("demo_force_fail", Severity.ERROR, "demo forcing retry"),))
 
 
 async def run() -> None:
