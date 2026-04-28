@@ -1,17 +1,16 @@
-"""Function registry for check / sanitize steps.
+"""检查/清洗步骤的函数注册表。
 
-The redesign replaces the Rule / Sanitizer class hierarchy with a
-**name-keyed registry of factory functions**. Each factory takes
-configuration kwargs (severity, thresholds, ...) and returns a callable
-that operates on a :class:`CheckContext` + :class:`RuleSpec`.
+重构后用 **以名称为键的工厂函数注册表** 替代了 Rule / Sanitizer 类层级。
+每个工厂接收配置关键字参数（severity、thresholds 等），返回一个
+操作 :class:`CheckContext` + :class:`RuleSpec` 的可调用对象。
 
-Two callable shapes:
+两种可调用签名：
 
 - **check**:    ``(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]``
 - **sanitize**: ``(ctx: CheckContext, spec: RuleSpec) -> str``
-                (returns the new value of ``ctx.target``)
+                （返回 ``ctx.target`` 的新值）
 
-Usage::
+用法::
 
     from application.checker.registry import register, build, list_names
 
@@ -25,8 +24,7 @@ Usage::
     fn = build("non_empty", kind="check")
     issues = list(fn(ctx, RuleSpec("non_empty")))
 
-P1 only ships the registry plumbing; rule/sanitizer factories are
-ported in P2.
+P1 仅提供注册表基础设施；规则/清洗器工厂在 P2 中移植。
 """
 
 from __future__ import annotations
@@ -48,14 +46,14 @@ _REGISTRY: dict[tuple[Kind, str], Factory] = {}
 
 
 class RegistryError(KeyError):
-    """Raised when a rule name is unknown or registered twice."""
+    """规则名称未知或重复注册时抛出。"""
 
 
 def register(name: str, *, kind: Kind = "check") -> Callable[[Factory], Factory]:
-    """Decorator that registers a check or sanitize factory under ``name``.
+    """将检查或清洗工厂注册到 ``name`` 下的装饰器。
 
-    Re-registering the same ``(kind, name)`` raises :class:`RegistryError`.
-    Use :func:`unregister` (test-only) to clear an entry first.
+    重复注册相同的 ``(kind, name)`` 会抛出 :class:`RegistryError`。
+    使用 :func:`unregister`（仅测试用）可先清除已有条目。
     """
 
     def deco(factory: Factory) -> Factory:
@@ -69,7 +67,7 @@ def register(name: str, *, kind: Kind = "check") -> Callable[[Factory], Factory]
 
 
 def unregister(name: str, *, kind: Kind = "check") -> None:
-    """Remove a registration. Test-only escape hatch."""
+    """移除一个注册条目。仅测试用的逃生出口。"""
     _REGISTRY.pop((kind, name), None)
 
 
@@ -78,9 +76,9 @@ def is_registered(name: str, *, kind: Kind = "check") -> bool:
 
 
 def build(name: str, *, kind: Kind = "check", **params: Any) -> StepFn:
-    """Instantiate a registered factory with ``params`` and return the callable.
+    """用 ``params`` 实例化已注册的工厂，返回可调用对象。
 
-    Raises :class:`RegistryError` if the ``(kind, name)`` is unknown.
+    如果 ``(kind, name)`` 未知，抛出 :class:`RegistryError`。
     """
     key = (kind, name)
     factory = _REGISTRY.get(key)
@@ -90,12 +88,12 @@ def build(name: str, *, kind: Kind = "check", **params: Any) -> StepFn:
 
 
 def list_names(*, kind: Kind | None = None) -> list[str]:
-    """Return all registered names, optionally filtered by kind."""
+    """返回所有已注册的名称，可按 kind 过滤。"""
     if kind is None:
         return sorted({n for _, n in _REGISTRY})
     return sorted(n for k, n in _REGISTRY if k == kind)
 
 
 def _clear_registry() -> None:
-    """Test-only: empty the entire registry."""
+    """仅测试用：清空整个注册表。"""
     _REGISTRY.clear()

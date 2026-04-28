@@ -216,8 +216,6 @@ async def translate_with_verify(
             usage=result.usage,
             prior=prior,
             scene=scene,
-            source_lang=context.source_lang,
-            target_lang=context.target_lang,
         )
         last_seen["translation"] = translation
         last_seen["report"] = report
@@ -243,8 +241,6 @@ async def translate_with_verify(
                 prior,
                 prior=prior,
                 scene=scene,
-                source_lang=context.source_lang,
-                target_lang=context.target_lang,
             )
             if _score(report) > _score(prior_report):
                 return TranslateResult(

@@ -1,11 +1,11 @@
-"""Per-language checker profile and registry.
+"""各语言检查器配置档案与注册表。
 
-To add a new language, create a file ``{language}.py`` (English full name)
-in this package that defines a module-level ``PROFILE`` of type
-:class:`LangProfile`.  Then add a mapping in ``_LANG_TO_MODULE`` below.
-The registry discovers it automatically on first access.
+新增语言时，在本包中创建 ``{language}.py``（英文全名）文件，
+定义模块级别的 ``PROFILE`` 变量，类型为 :class:`LangProfile`。
+然后在下方 ``_LANG_TO_MODULE`` 中添加映射即可。
+注册表在首次访问时自动发现。
 
-Example (``_lang/arabic.py``)::
+示例（``_lang/arabic.py``）::
 
     from . import LangProfile
 
@@ -29,28 +29,24 @@ ScriptFamily = Literal["latin", "cjk", "other"]
 
 @dataclass(frozen=True)
 class LangProfile:
-    """Quality-check data for a single target language.
+    """单一目标语言的质量检查数据。
 
-    Attributes
+    属性
     ----------
     script_family :
-        Coarse script bucket (``latin`` / ``cjk`` / ``other``). Drives
-        cross-script length-ratio thresholds in
-        :mod:`application.checker.factory`.
+        粗粒度文字系统分类（``latin`` / ``cjk`` / ``other``）。
+        驱动 :mod:`application.checker.factory` 中的跨文字系统长度比阈值。
     forbidden_terms :
-        Substrings that must NOT appear in a translation targeting
-        this language (case-insensitive).
+        不得出现在以该语言为目标的译文中的子串（不区分大小写）。
     hallucination_starts :
-        ``(regex_pattern, exclude_pattern_or_None)`` tuples.
-        If *exclude* matches immediately after the main pattern the
-        rule is skipped.
+        ``(regex_pattern, exclude_pattern_or_None)`` 元组。
+        如果 *exclude* 在主模式之后立即匹配，则跳过该规则。
     question_marks :
-        Characters considered valid question marks in this language.
+        该语言中视为有效问号的字符。
     concept_words :
-        ``{concept_name: [surface_form, ...]}`` mapping.  Used to
-        build cross-language keyword-consistency pairs: if the target
-        translation contains a concept word but the source does not,
-        the model likely hallucinated a meta-response.
+        ``{concept_name: [surface_form, ...]}`` 映射。
+        用于构建跨语言关键词一致性对：如果译文包含某个概念词但源文不包含，
+        则模型可能生成了幻觉元响应。
     """
 
     script_family: ScriptFamily = "latin"
@@ -61,10 +57,10 @@ class LangProfile:
 
 
 # -------------------------------------------------------------------
-# Registry
+# 注册表
 # -------------------------------------------------------------------
 
-# ISO 639-1 code → module name (English full name)
+# ISO 639-1 语言代码 → 模块名（英文全名）
 _LANG_TO_MODULE: dict[str, str] = {
     "zh": "chinese",
     "en": "english",
@@ -99,12 +95,12 @@ def _ensure_loaded() -> None:
 
 
 def get_profile(lang: str) -> LangProfile:
-    """Return the :class:`LangProfile` for *lang*, or an empty one."""
+    """返回指定语言的 :class:`LangProfile`，未注册则返回空档案。"""
     _ensure_loaded()
     return _registry.get(lang, _EMPTY)
 
 
 def registered_langs() -> list[str]:
-    """Return the list of language codes with registered profiles."""
+    """返回已注册配置档案的语言代码列表。"""
     _ensure_loaded()
     return sorted(_registry)

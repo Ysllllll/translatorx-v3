@@ -103,7 +103,7 @@ class StoreConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    default_checker_profile: Literal["strict", "lenient", "minimal"] = "strict"
+    default_checker_profile: Literal["strict", "lenient"] = "strict"
     max_concurrent_videos: int = 3
     flush_every: int = 100
     flush_interval_s: float = float("inf")

@@ -30,6 +30,7 @@ class App:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self._engines: dict[str, OpenAICompatEngine] = {}
+        self._checkers: dict[tuple[str, str], Checker] = {}
         self._event_bus = None  # type: ignore[var-annotated]
         self._registry = None  # type: ignore[var-annotated]
         self._pipelines: dict[str, dict] | None = None
@@ -113,14 +114,22 @@ class App:
         )
 
     def checker(self, src: str, tgt: str) -> Checker:
-        """Return a :class:`Checker` for the pair."""
+        """Return a (cached) :class:`Checker` for the pair."""
+        key = (src, tgt)
+        cached = self._checkers.get(key)
+        if cached is not None:
+            return cached
         if self._config.checker:
-            return Checker.from_config(
+            chk = Checker.from_config(
                 self._config.checker_config(),
                 source_lang=src,
                 target_lang=tgt,
             )
-        return default_checker(src, tgt)
+        else:
+            profile = self._config.runtime.default_checker_profile
+            chk = default_checker(src, tgt, profile=profile)
+        self._checkers[key] = chk
+        return chk
 
     @property
     def event_bus(self):

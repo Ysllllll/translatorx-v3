@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.checker import CheckContext, Checker, CheckerConfigV2, SceneConfig, SceneResolutionError, Severity, list_preset_scenes, resolve_scene
+from application.checker import CheckContext, Checker, CheckerConfig, SceneConfig, SceneResolutionError, Severity, list_preset_scenes, resolve_scene
 from application.checker.types import RuleSpec
 
 
@@ -201,9 +201,9 @@ def test_checker_run_with_no_scene_raises():
         ckr.run(ctx)
 
 
-def test_checker_from_v2_uses_default_scene():
-    cfg = CheckerConfigV2(default_scene="my_scene", scenes={"my_scene": SceneConfig(name="my_scene", rules=(RuleSpec(name="non_empty"),))})
-    ckr = Checker.from_v2(cfg)
+def test_checker_from_config_uses_default_scene():
+    cfg = CheckerConfig(default_scene="my_scene", scenes={"my_scene": SceneConfig(name="my_scene", rules=(RuleSpec(name="non_empty"),))})
+    ckr = Checker.from_config(cfg)
     _, report = ckr.run(CheckContext(source="hi", target="你好"))
     assert report.passed is True
 

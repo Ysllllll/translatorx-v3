@@ -1,33 +1,32 @@
-"""Function-based rules and sanitizers (P2).
+"""基于函数的规则和清洗器（P2）。
 
-This module re-implements every check / sanitize step as a registered
-factory function on top of :mod:`application.checker.registry`.
+本模块将每个检查/清洗步骤重新实现为 :mod:`application.checker.registry`
+上的注册工厂函数。
 
-Each factory takes configuration keyword arguments (severity,
-thresholds, ...) and returns a callable with the registry's standard
-shape:
+每个工厂接收配置关键字参数（severity、thresholds 等），返回一个
+符合注册表标准签名的可调用对象：
 
 - check:    ``(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]``
 - sanitize: ``(ctx: CheckContext, spec: RuleSpec) -> str``
 
-Importing this module triggers all `@register` decorators — call
-:func:`ensure_loaded` from any code path that needs the registry to be
-populated (the package ``__init__`` does this implicitly).
+导入此模块会触发所有 `@register` 装饰器 — 从任何需要注册表
+已填充的代码路径调用 :func:`ensure_loaded` 即可
+（包的 ``__init__`` 会隐式执行此操作）。
 
-Rule names (kind="check"):
+规则名称 (kind="check")：
 
-  - ``non_empty``           reject empty translations
-  - ``length_bounds``       absolute char cap + short-target inverse-ratio
-  - ``length_ratio``        tgt/src ratio, segmented by source word count
-  - ``format_artifacts``    newline / markdown / hallucination / bracket
-  - ``question_mark``       source ends ``?`` but target lacks it
-  - ``keywords``            forbidden terms + cross-language keyword pairs
-  - ``output_tokens``       Usage-aware token-explosion guard
-  - ``cjk_content``         CJK target must contain CJK characters
-  - ``trailing_annotation`` strip-style trailing ``（注…）`` notes
-  - ``pixel_width``         optional Pillow rendered-width ratio guard
+  - ``non_empty``           拒绝空译文
+  - ``length_bounds``       绝对字符上限 + 短译文反向比例检测
+  - ``length_ratio``        tgt/src 长度比，按源文词数分段
+  - ``format_artifacts``    换行 / Markdown / 幻觉前缀 / 括号
+  - ``question_mark``       源文以 ``?`` 结尾但译文缺少问号
+  - ``keywords``            禁止词 + 跨语言关键词对
+  - ``output_tokens``       基于 Usage 的 token 爆炸检测
+  - ``cjk_content``         CJK 目标语言必须包含 CJK 字符
+  - ``trailing_annotation`` 检测尾部 ``（注…）`` 样式注释
+  - ``pixel_width``         可选的 Pillow 渲染宽度比检测
 
-Sanitize names (kind="sanitize"):
+清洗名称 (kind="sanitize")：
 
   - ``strip_backticks``
   - ``trailing_annotation_strip``
@@ -49,7 +48,7 @@ if TYPE_CHECKING:
 
 
 # -------------------------------------------------------------------
-# Helpers
+# 辅助函数
 # -------------------------------------------------------------------
 
 
@@ -88,13 +87,13 @@ _CJK_LANGS = frozenset({"zh", "ja", "ko"})
 
 
 # -------------------------------------------------------------------
-# Check rules
+# 检查规则
 # -------------------------------------------------------------------
 
 
 @register("non_empty", kind="check")
 def _non_empty_factory():
-    """Reject empty/whitespace-only translations when source is non-empty."""
+    """当源文非空时，拒绝空/仅含空白的译文。"""
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         if ctx.source.strip() and not ctx.target.strip():
@@ -110,7 +109,7 @@ def _length_bounds_factory(
     short_target_max: int = 3,
     short_target_inverse_ratio: float = 4.0,
 ):
-    """Absolute char cap + short-target hallucination guard."""
+    """绝对字符上限 + 短译文幻觉检测。"""
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         src = ctx.source.strip()
@@ -144,7 +143,7 @@ def _length_ratio_factory(
     long: float = 2.0,
     very_long: float = 1.6,
 ):
-    """Char-length ratio guard, segmented by source word count."""
+    """字符长度比检测，按源文词数分段。"""
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         src = ctx.source.strip()
@@ -173,9 +172,9 @@ def _format_artifacts_factory(
     allow_newlines: bool = False,
     hallucination_starts: list[tuple[str, str | None]] | None = None,
 ):
-    """Newlines, markdown bold, hallucination prefixes, bracket asymmetry."""
-    # Pre-compile every pattern once at factory time so the hot path
-    # (one match per call) is just a regex execution, not a recompile.
+    """换行、Markdown 加粗、幻觉前缀、括号不对称。"""
+    # 在工厂创建时一次性预编译所有模式，使热路径
+    # （每次调用一次匹配）仅为正则执行，无需重编译。
     compiled_starts: tuple[re.Pattern[str], ...] = tuple(
         re.compile(f"{pattern}(?!{exclude})" if exclude else pattern) for pattern, exclude in (hallucination_starts or ())
     )
@@ -185,9 +184,9 @@ def _format_artifacts_factory(
         src = ctx.source.strip()
         tgt_lower = tgt.lower()
 
-        # Allow newlines inside LaTeX math blocks (``$$ ... $$``): two or
-        # more ``$$`` markers means the target is a multi-line equation,
-        # not a hallucinated paragraph.
+        # 允许 LaTeX 数学块（``$$ ... $$``）内的换行：
+        # 两个或更多 ``$$`` 标记表示目标是多行公式，
+        # 不是幻觉段落。
         if not allow_newlines and "\n" in tgt and tgt.count("$$") < 2:
             yield Issue("format_newline", spec.severity, "unexpected newline in translation")
 
@@ -223,12 +222,11 @@ def _question_mark_factory(
     whitelist_suffixes: list[str] | None = None,
     whitelist_severity: Severity = Severity.INFO,
 ):
-    """Source ends with a question mark but translation has none.
+    """源文以问号结尾但译文缺少问号。
 
-    Both the source-side detector (``source_marks``) and the target-side
-    expectation (``expected_marks``) are configurable so non-Latin source
-    languages (Arabic ``؟``, Greek ``;`` …) can plug in their own marks
-    via :class:`LangProfile`.
+    源文检测器（``source_marks``）和译文期望（``expected_marks``）
+    均可配置，使非拉丁源语言（阿拉伯语 ``؟``、希腊语 ``;`` 等）
+    可通过 :class:`LangProfile` 接入自己的问号标记。
     """
     src_marks = tuple(source_marks or ["?", "？"])
     tgt_marks = tuple(expected_marks or ["?"])
@@ -260,7 +258,7 @@ def _keywords_factory(
     forbidden_terms: list[str] | None = None,
     keyword_pairs: list[tuple[list[str], list[str]]] | None = None,
 ):
-    """Forbidden terms + cross-language keyword consistency."""
+    """禁止词 + 跨语言关键词一致性。"""
     forbidden = tuple(forbidden_terms or ())
     pairs = tuple((tuple(s), tuple(t)) for s, t in (keyword_pairs or ()))
 
@@ -294,7 +292,7 @@ def _output_tokens_factory(
     short_input_max_output: int = 80,
     output_input_ratio_max: float = 10.0,
 ):
-    """Token-explosion guard. Silently no-op when ``ctx.usage is None``."""
+    """Token 爆炸检测。当 ``ctx.usage is None`` 时静默跳过。"""
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         usage = ctx.usage
@@ -336,7 +334,7 @@ def _cjk_content_factory(
     target_lang: str = "",
     short_passthrough_max: int = 10,
 ):
-    """For zh/ja/ko targets, require at least one CJK character."""
+    """对于 zh/ja/ko 目标语言，要求至少包含一个 CJK 字符。"""
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         lang = target_lang or ctx.target_lang
@@ -361,7 +359,7 @@ def _cjk_content_factory(
 
 @register("trailing_annotation", kind="check")
 def _trailing_annotation_factory(*, min_non_ascii: int = 12):
-    """Detect trailing parenthesised annotation with ≥N non-ASCII chars inside."""
+    """检测尾部括号注释，其中包含 ≥N 个非 ASCII 字符。"""
     pattern = re.compile(r"（([^（）]*?)）[,.?;!，。？；！]*$")
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
@@ -387,12 +385,11 @@ def _pixel_width_factory(
     font_size: int = 16,
     max_ratio: float = 4.0,
 ):
-    """Optional Pillow-based pixel-width hallucination guard.
+    """可选的基于 Pillow 的像素宽度幻觉检测。
 
-    The font is loaded **once** at factory time. No-ops when Pillow or
-    the font path is unavailable. Because the Checker compiles each
-    scene exactly once (see :class:`Checker._compiled`), this factory
-    runs at most once per scene per process.
+    字体在工厂创建时加载**一次**。当 Pillow 或字体路径不可用时静默跳过。
+    由于 Checker 对每个 scene 只编译一次（参见 :class:`Checker._compiled`），
+    此工厂在每个进程的每个 scene 中最多运行一次。
     """
     font = None
     if font_path:
@@ -437,13 +434,13 @@ def _pixel_width_factory(
 
 
 # -------------------------------------------------------------------
-# Sanitize transforms
+# 清洗转换
 # -------------------------------------------------------------------
 
 
 @register("strip_backticks", kind="sanitize")
 def _strip_backticks_factory():
-    """Strip surrounding backticks/newlines and any in-string backticks."""
+    """去除外层反引号/换行符以及字符串中的反引号。"""
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> str:
         t = re.sub(r"^`+|`+$|^\n+|\n+$", "", ctx.target)
@@ -454,7 +451,7 @@ def _strip_backticks_factory():
 
 @register("trailing_annotation_strip", kind="sanitize")
 def _trailing_annotation_strip_factory(*, prefixes: tuple[str, ...] | list[str] | None = None):
-    """Strip trailing ``（注…）`` / ``（说明…）`` LLM annotations."""
+    """去除尾部 ``（注…）`` / ``（说明…）`` 样式的 LLM 注释。"""
     prefs = tuple(prefixes or ("注", "说明", "注释"))
     patterns = [re.compile(rf"（{p}[^（）]*?）\s*[,.?;!，。？；！]*$") for p in prefs]
 
@@ -472,7 +469,7 @@ _COLON_MAP = {".": "。", ",": "，", "!": "！", "?": "？"}
 
 @register("colon_to_punctuation", kind="sanitize")
 def _colon_to_punctuation_factory():
-    """Trailing ``：`` → mirror source's ``. , ! ?`` to CJK punctuation."""
+    """尾部 ``：`` → 根据源文末尾的 ``. , ! ?`` 替换为对应的 CJK 标点。"""
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> str:
         src = ctx.source.rstrip()
@@ -497,7 +494,7 @@ _QUOTE_PATTERNS: tuple[tuple[str, str], ...] = (
 
 @register("quote_strip", kind="sanitize")
 def _quote_strip_factory():
-    """Strip up to two layers of surrounding quote marks."""
+    """去除最多两层外层引号包裹。"""
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> str:
         cur = ctx.target
@@ -517,7 +514,7 @@ def _quote_strip_factory():
 
 @register("leading_punct_strip", kind="sanitize")
 def _leading_punct_strip_factory():
-    """Strip leading ``，`` / ``、`` / ``。`` / whitespace artifacts."""
+    """去除前导的 ``，`` / ``、`` / ``。`` / 空白等瑕疵。"""
     pat = re.compile(r"^[，、。\s]+")
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> str:
@@ -527,10 +524,9 @@ def _leading_punct_strip_factory():
 
 
 def ensure_loaded() -> None:
-    """No-op marker that confirms this module has been imported.
+    """空操作标记，确认此模块已被导入。
 
-    Importing :mod:`application.checker.rules_fn` is sufficient to
-    populate the registry; this helper exists so downstream code can
-    document the dependency explicitly.
+    导入 :mod:`application.checker.rules_fn` 即足以填充注册表；
+    此辅助函数使下游代码可以显式声明依赖。
     """
     return None

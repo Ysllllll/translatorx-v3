@@ -10,8 +10,8 @@
   Part 5 — Per-call 覆盖 :  rules=[...] / overrides={...}
   Part 6 — 非翻译场景    :  subtitle 单行 + LLM 通用响应
   Part 7 — Regression    :  对比新旧译文得分，用 run() 一行实现回退
-  Part 8 — YAML 示例     :  从 YAML 构建 CheckerConfigV2
-  Part 9 — 接入翻译循环  :  translate_with_verify 内部就是 checker.run(ctx)
+  Part 8 — YAML 示例     :  从 YAML 构建 CheckerConfig
+  Part 9 — 接入翻译循环  :  translate_with_verify 内部就是 checker(source, target)
 
 运行::
 
@@ -29,7 +29,7 @@ from _print import banner, info, ok, section, step, table
 from application.checker import (
     Checker,
     CheckContext,
-    CheckerConfigV2,
+    CheckerConfig,
     CheckReport,
     Severity,
     SceneConfig,
@@ -129,15 +129,14 @@ def build_quickstart_rows() -> list[dict[str, str]]:
     ]
     rows: list[dict[str, str]] = []
     for label, src, tgt in cases:
-        ctx = CheckContext(source=src, target=tgt, source_lang="en", target_lang="zh")
-        new_ctx, rep = chk.run(ctx)
-        rows.append(_result_row(label, src, tgt, new_ctx.target, rep))
+        sanitized, rep = chk(src, tgt)
+        rows.append(_result_row(label, src, tgt, sanitized, rep))
     return rows
 
 
-def _checker_config_from_yaml(text: str) -> CheckerConfigV2:
+def _checker_config_from_yaml(text: str) -> CheckerConfig:
     payload = yaml.safe_load(text) or {}
-    return CheckerConfigV2.from_dict(payload.get("checker") or {})
+    return CheckerConfig.from_dict(payload.get("checker") or {})
 
 
 def build_yaml_example_rows() -> list[dict[str, str]]:
@@ -145,9 +144,8 @@ def build_yaml_example_rows() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for name, text, source, target, target_lang in YAML_EXAMPLES:
         cfg = _checker_config_from_yaml(text)
-        chk = Checker.from_v2(cfg, source_lang="en", target_lang=target_lang)
-        ctx = CheckContext(source=source, target=target, source_lang="en", target_lang=target_lang)
-        _, report = chk.run(ctx)
+        chk = Checker.from_config(cfg, source_lang="en", target_lang=target_lang)
+        _, report = chk.check(source, target)
         resolved = resolve_scene(chk.default_scene, chk.scenes)
         errors, warnings, _ = _issue_counts(report)
         rows.append(
@@ -190,8 +188,7 @@ def part_1_overview() -> None:
 def part_2_quickstart() -> None:
     section("Part 2", "快速上手")
     info('    chk = default_checker("en", "zh")')
-    info('    ctx = CheckContext(source="Hello.", target="你好。", source_lang="en", target_lang="zh")')
-    info("    new_ctx, report = chk.run(ctx)")
+    info('    sanitized, report = chk("Hello.", "你好。")  # 等价于 chk.check(...)')
     table("Quickstart results", RESULT_COLUMNS, build_quickstart_rows())
 
 
@@ -203,19 +200,20 @@ def part_2_quickstart() -> None:
 def part_3_builtin_scenes() -> None:
     section("Part 3", "Builtin scenes")
     rows: list[dict[str, str]] = []
+
+    src_long, tgt_long = "Hi.", "你" * 40
+
     chk = Checker(default_scene="builtin.translate.strict")
-    ctx_long = CheckContext(source="Hi.", target="你" * 40, source_lang="en", target_lang="zh")
-    new_ctx, rep_strict = chk.run(ctx_long)
-    rows.append(_result_row("strict length_ratio=ERROR", ctx_long.source, ctx_long.target, new_ctx.target, rep_strict))
+    sanitized, rep_strict = chk(src_long, tgt_long)
+    rows.append(_result_row("strict length_ratio=ERROR", src_long, tgt_long, sanitized, rep_strict))
 
     chk2 = Checker(default_scene="builtin.translate.lenient")
-    new_ctx, rep_lenient = chk2.run(ctx_long)
-    rows.append(_result_row("lenient length_ratio=WARNING", ctx_long.source, ctx_long.target, new_ctx.target, rep_lenient))
+    sanitized2, rep_lenient = chk2(src_long, tgt_long)
+    rows.append(_result_row("lenient length_ratio=WARNING", src_long, tgt_long, sanitized2, rep_lenient))
 
     chk3 = Checker(default_scene="builtin.subtitle.line")
-    ctx_sub = CheckContext(source="hello", target="")
-    new_ctx, rep_sub = chk3.run(ctx_sub)
-    rows.append(_result_row("subtitle.line non_empty", ctx_sub.source, ctx_sub.target, new_ctx.target, rep_sub))
+    sanitized3, rep_sub = chk3("hello", "")
+    rows.append(_result_row("subtitle.line non_empty", "hello", "", sanitized3, rep_sub))
     table("Builtin scene comparison", RESULT_COLUMNS, rows)
 
 
@@ -235,8 +233,8 @@ def part_4_custom_scene() -> None:
         overrides={"length_ratio": {"severity": Severity.WARNING}},
     )
     chk = Checker(scenes={"my.translate": my_scene}, default_scene="my.translate")
-    _, rep = chk.run(CheckContext(source="Hi.", target="你" * 40, source_lang="en", target_lang="zh"))
-    table("Custom scene result", RESULT_COLUMNS, [_result_row("my.translate", "Hi.", "你" * 40, "你" * 40, rep)])
+    sanitized, rep = chk("Hi.", "你" * 40)
+    table("Custom scene result", RESULT_COLUMNS, [_result_row("my.translate", "Hi.", "你" * 40, sanitized, rep)])
 
     info("\n看一下 scene 解析后的最终规则 / sanitize 顺序:")
     resolved = resolve_scene("my.translate", chk.scenes)
@@ -279,17 +277,17 @@ def part_6_non_translate() -> None:
     section("Part 6", "非翻译场景")
     info("subtitle.line: 只关心非空 + 单行清洗")
     chk = Checker(default_scene="builtin.subtitle.line")
-    new_ctx, rep = chk.run(CheckContext(source="hi", target="你好"))
+    sanitized, rep = chk("hi", "你好")
 
     info("\nllm.response: 用于 LLM 通用响应做 token 预算 + 输出清洗")
     chk2 = Checker(default_scene="builtin.llm.response")
-    new_ctx2, rep2 = chk2.run(CheckContext(source="prompt", target="`pong`"))
+    sanitized2, rep2 = chk2("prompt", "`pong`")
     table(
         "Non-translation scenes",
         RESULT_COLUMNS,
         [
-            _result_row("subtitle.line", "hi", "你好", new_ctx.target, rep),
-            _result_row("llm.response strip", "prompt", "`pong`", new_ctx2.target, rep2),
+            _result_row("subtitle.line", "hi", "你好", sanitized, rep),
+            _result_row("llm.response strip", "prompt", "`pong`", sanitized2, rep2),
         ],
     )
 
@@ -311,8 +309,7 @@ def part_7_regression() -> None:
     chk = default_checker("en", "zh")
 
     def score_for(t: str) -> tuple[int, int]:
-        ctx = CheckContext(source="Hello world.", target=t, source_lang="en", target_lang="zh")
-        _, rep = chk.run(ctx)
+        _, rep = chk("Hello world.", t)
         return _score(rep)
 
     prior = "你好世界。"
@@ -362,14 +359,12 @@ def part_9_translate_loop_hint() -> None:
             result   = await engine.complete(messages)
 
             # ☆ 一行搞定 sanitize + check：
-            chk_ctx, report = checker.run(
-                CheckContext(source=source, target=result.text.strip(),
-                             source_lang=ctx.source_lang, target_lang=ctx.target_lang,
-                             usage=result.usage, prior=prior),
-                scene=scene,    # 不传则用 checker.default_scene
+            translation, report = checker.check(
+                source, result.text.strip(),
+                usage=result.usage, prior=prior, scene=scene,
             )
             if report.passed:
-                return TranslateResult(translation=chk_ctx.target, ...)
+                return TranslateResult(translation=translation, ...)
         # exhausted retries
         ...
 """

@@ -1,27 +1,26 @@
-"""Scene config + resolution (P3).
+"""Scene 配置与解析（P3）。
 
-A *scene* is a named bundle of sanitize steps and check rules with
-optional ``extends`` (one or more parent scenes), ``disable`` (rule
-names to drop), and ``overrides`` (severity / params per rule name).
+一个 *scene* 是一组具名的 sanitize 步骤和 check 规则，
+支持可选的 ``extends``（一个或多个父 scene）、``disable``（要移除的规则名称）
+和 ``overrides``（按规则名覆盖 severity / params）。
 
-This module provides:
+本模块提供：
 
-- :class:`SceneConfig`           — declarative scene description (frozen).
-- :class:`CheckerConfigV2`       — top-level container (default + scenes).
-- :func:`resolve_scene`          — flatten extends/disable/overrides into a
-                                    :class:`ResolvedScene`.
-- :func:`register_preset_scene`  — programmatic scene registration used by
-                                    :mod:`application.checker.presets`.
+- :class:`SceneConfig`           — 声明式 scene 描述（frozen）。
+- :class:`CheckerConfig`        — 顶层容器（默认 scene + scene 表）。
+- :func:`resolve_scene`          — 将 extends/disable/overrides 展开为
+                                    :class:`ResolvedScene`。
+- :func:`register_preset_scene`  — 编程式 scene 注册，
+                                    由 :mod:`application.checker.presets` 使用。
 
-The resolver accepts both forms below, mixed freely::
+解析器支持以下两种形式，可自由混用::
 
     rules:
-      - length_ratio                       # bare name → severity=ERROR, params={}
+      - length_ratio                       # 裸名称 → severity=ERROR, params={}
       - {name: question_mark, severity: warning, params: {...}}
 
-Presets registered via :func:`register_preset_scene` are looked up
-**after** user-supplied scenes, so users may override a builtin scene
-just by re-defining a scene with the same name.
+通过 :func:`register_preset_scene` 注册的预设会在用户提供的 scene **之后**
+查找，因此用户只需重新定义同名的 scene 即可覆盖内置预设。
 """
 
 from __future__ import annotations
@@ -33,7 +32,7 @@ from .types import ResolvedScene, RuleSpec, Severity
 
 
 # ---------------------------------------------------------------------------
-# Declarative scene config
+# 声明式 scene 配置
 # ---------------------------------------------------------------------------
 
 
@@ -48,7 +47,7 @@ def _coerce_severity(value: Any, default: Severity = Severity.ERROR) -> Severity
 
 
 def _coerce_rule_entry(entry: Any) -> RuleSpec:
-    """Accept ``"name"`` or ``{name, severity?, params?}`` and return :class:`RuleSpec`."""
+    """接受 ``"name"`` 或 ``{name, severity?, params?}``，返回 :class:`RuleSpec`。"""
     if isinstance(entry, RuleSpec):
         return entry
     if isinstance(entry, str):
@@ -66,7 +65,7 @@ def _coerce_rule_entry(entry: Any) -> RuleSpec:
 
 @dataclass(frozen=True, slots=True)
 class SceneConfig:
-    """Declarative scene description prior to resolution."""
+    """解析前的声明式 scene 描述。"""
 
     name: str
     extends: tuple[str, ...] = ()
@@ -99,7 +98,7 @@ class SceneConfig:
 
 @dataclass(frozen=True, slots=True)
 class CheckerConfig:
-    """Top-level checker config: a default scene + a named scene table."""
+    """顶层检查器配置：默认 scene + 具名 scene 表。"""
 
     default_scene: str = ""
     scenes: Mapping[str, SceneConfig] = field(default_factory=dict)
@@ -111,12 +110,8 @@ class CheckerConfig:
         return CheckerConfig(default_scene=str(payload.get("default_scene", "")), scenes=scenes)
 
 
-# Backwards-compatible alias (the ``V2`` suffix was a migration tag).
-CheckerConfigV2 = CheckerConfig
-
-
 # ---------------------------------------------------------------------------
-# Preset registry — populated by :mod:`application.checker.presets`
+# 预设注册表 — 由 :mod:`application.checker.presets` 填充
 # ---------------------------------------------------------------------------
 
 
@@ -124,7 +119,7 @@ _PRESETS: dict[str, SceneConfig] = {}
 
 
 def register_preset_scene(scene: SceneConfig) -> SceneConfig:
-    """Register a builtin scene preset. Re-registration is allowed (latest wins)."""
+    """注册内置 scene 预设。允许重复注册（后者覆盖前者）。"""
     _PRESETS[scene.name] = scene
     return scene
 
@@ -138,17 +133,17 @@ def get_preset_scene(name: str) -> SceneConfig | None:
 
 
 def _clear_presets() -> None:
-    """Test escape hatch."""
+    """测试用的逃生出口。"""
     _PRESETS.clear()
 
 
 # ---------------------------------------------------------------------------
-# Resolution
+# 解析
 # ---------------------------------------------------------------------------
 
 
 class SceneResolutionError(ValueError):
-    """Raised when extends references an unknown scene or forms a cycle."""
+    """当 extends 引用了未知的 scene 或形成循环时抛出。"""
 
 
 def _lookup(name: str, scenes: Mapping[str, SceneConfig]) -> SceneConfig:
@@ -184,7 +179,7 @@ def _drop_disabled(specs: Sequence[RuleSpec], disabled: Iterable[str]) -> tuple[
 
 
 def _dedup_keep_last(specs: Sequence[RuleSpec]) -> tuple[RuleSpec, ...]:
-    """Last-wins dedup by rule name. Preserves the order of the *last* occurrence."""
+    """按规则名去重，后者覆盖前者。保留最后一次出现的顺序。"""
     seen: set[str] = set()
     out: list[RuleSpec] = []
     for spec in reversed(specs):
@@ -202,18 +197,17 @@ def resolve_scene(
     *,
     _stack: tuple[str, ...] = (),
 ) -> ResolvedScene:
-    """Flatten ``extends`` / ``disable`` / ``overrides`` into a :class:`ResolvedScene`.
+    """将 ``extends`` / ``disable`` / ``overrides`` 展开为 :class:`ResolvedScene`。
 
-    Resolution order:
+    解析顺序：
 
-    1. Recursively resolve every parent in ``extends`` (left-to-right).
-    2. Concatenate parent ``sanitize`` / ``rules`` lists, then append
-       the child's own entries. Last-wins dedup by rule name.
-    3. Drop any spec whose ``name`` appears in the cumulative
-       ``disable`` set (parents + child).
-    4. Apply ``overrides`` (severity / params merge).
+    1. 递归解析 ``extends`` 中的每个父 scene（从左到右）。
+    2. 拼接父 scene 的 ``sanitize`` / ``rules`` 列表，然后追加
+       子 scene 自身的条目。按规则名去重（后者覆盖前者）。
+    3. 移除名称出现在累积 ``disable`` 集合（父 + 子）中的 spec。
+    4. 应用 ``overrides``（severity / params 合并）。
 
-    Cycles raise :class:`SceneResolutionError`.
+    循环引用会抛出 :class:`SceneResolutionError`。
     """
     scenes = scenes or {}
     if name in _stack:
@@ -249,3 +243,81 @@ def resolve_scene(
     rules_t = _apply_overrides(rules_t, overrides)
 
     return ResolvedScene(name=name, sanitize=sanitize_t, rules=rules_t)
+
+
+# ---------------------------------------------------------------------------
+# 内置 scene 预设
+# ---------------------------------------------------------------------------
+#
+# 这些 scene 通过 :func:`register_preset_scene` 注册到预设注册表；
+# 即使用户未传入 ``scenes`` 映射，它们也可通过 :func:`resolve_scene` 解析。
+# 用户仍可以：
+#
+# - ``extends: [builtin.translate.strict]`` 基于预设继承。
+# - 重新定义同名 scene 来覆盖预设。
+#
+# 可用预设：
+#
+# - ``builtin.translate.strict``  — 完整翻译门控（10 条规则，5 个 sanitize 步骤）。
+# - ``builtin.translate.lenient`` — 相同规则集，但 length_ratio / length_bounds / cjk_content 降级为 warning。
+# - ``builtin.subtitle.line``     — 最小化：仅 non_empty，外加两个清洗器。
+# - ``builtin.llm.response``      — 仅输出侧：format_artifacts + output_tokens + markdown 噪音清洗。
+
+
+_TRANSLATE_STRICT = SceneConfig(
+    name="builtin.translate.strict",
+    sanitize=(
+        RuleSpec(name="strip_backticks"),
+        RuleSpec(name="trailing_annotation_strip"),
+        RuleSpec(name="colon_to_punctuation"),
+        RuleSpec(name="quote_strip"),
+        RuleSpec(name="leading_punct_strip"),
+    ),
+    rules=(
+        RuleSpec(name="non_empty", severity=Severity.ERROR),
+        RuleSpec(name="length_bounds", severity=Severity.ERROR),
+        RuleSpec(name="length_ratio", severity=Severity.ERROR),
+        RuleSpec(name="format_artifacts", severity=Severity.ERROR),
+        RuleSpec(name="cjk_content", severity=Severity.ERROR),
+        RuleSpec(name="trailing_annotation", severity=Severity.ERROR),
+        RuleSpec(name="keywords", severity=Severity.ERROR),
+        RuleSpec(name="question_mark", severity=Severity.WARNING),
+        RuleSpec(name="output_tokens", severity=Severity.WARNING),
+        RuleSpec(name="pixel_width", severity=Severity.WARNING),
+    ),
+)
+
+_TRANSLATE_LENIENT = SceneConfig(
+    name="builtin.translate.lenient",
+    extends=("builtin.translate.strict",),
+    overrides={
+        "length_ratio": {"severity": Severity.WARNING},
+        "length_bounds": {"severity": Severity.WARNING},
+        "cjk_content": {"severity": Severity.WARNING},
+    },
+)
+
+_SUBTITLE_LINE = SceneConfig(
+    name="builtin.subtitle.line",
+    sanitize=(
+        RuleSpec(name="strip_backticks"),
+        RuleSpec(name="leading_punct_strip"),
+    ),
+    rules=(RuleSpec(name="non_empty", severity=Severity.ERROR),),
+)
+
+_LLM_RESPONSE = SceneConfig(
+    name="builtin.llm.response",
+    sanitize=(
+        RuleSpec(name="strip_backticks"),
+        RuleSpec(name="quote_strip"),
+    ),
+    rules=(
+        RuleSpec(name="non_empty", severity=Severity.ERROR),
+        RuleSpec(name="format_artifacts", severity=Severity.WARNING),
+        RuleSpec(name="output_tokens", severity=Severity.WARNING),
+    ),
+)
+
+for _scene in (_TRANSLATE_STRICT, _TRANSLATE_LENIENT, _SUBTITLE_LINE, _LLM_RESPONSE):
+    register_preset_scene(_scene)
