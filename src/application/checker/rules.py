@@ -655,6 +655,104 @@ class OutputTokenRule:
 
 
 # -------------------------------------------------------------------
+# Rule: PixelWidthRule
+# -------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PixelWidthLimits:
+    """Pixel-width hallucination thresholds (legacy CNENMatcher behaviour)."""
+
+    font_path: str = ""
+    font_size: int = 16
+    max_ratio: float = 4.0
+
+
+class PixelWidthRule:
+    """Detect translations whose rendered pixel-width is suspiciously long.
+
+    Mirrors the legacy ``CNENMatcher`` pixel-width check that uses the
+    same font as the player to spot lines that *look* much longer than
+    the source — a common hallucination signature.
+
+    Pillow is imported lazily; if the library or font is unavailable
+    the rule silently no-ops.
+    """
+
+    __slots__ = ("_severity", "_limits", "_font", "_load_attempted")
+
+    def __init__(
+        self,
+        severity: Severity = Severity.WARNING,
+        limits: PixelWidthLimits | None = None,
+    ) -> None:
+        self._severity = severity
+        self._limits = limits or PixelWidthLimits()
+        self._font = None
+        self._load_attempted = False
+
+    @property
+    def name(self) -> str:
+        return "pixel_width"
+
+    @property
+    def severity(self) -> Severity:
+        return self._severity
+
+    @property
+    def limits(self) -> PixelWidthLimits:
+        return self._limits
+
+    def _ensure_font(self):
+        if self._load_attempted:
+            return self._font
+        self._load_attempted = True
+        if not self._limits.font_path:
+            return None
+        try:
+            from PIL import ImageFont
+
+            self._font = ImageFont.truetype(self._limits.font_path, self._limits.font_size)
+        except Exception:
+            self._font = None
+        return self._font
+
+    def _pixel_width(self, text: str, font) -> int:
+        try:
+            bbox = font.getbbox(text)
+            return int(bbox[2] - bbox[0])
+        except Exception:
+            try:
+                return int(font.getlength(text))
+            except Exception:
+                return 0
+
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
+        font = self._ensure_font()
+        if font is None:
+            return []
+        src = source.strip()
+        tgt = translation.strip()
+        if not src or not tgt:
+            return []
+        src_w = self._pixel_width(src, font)
+        tgt_w = self._pixel_width(tgt, font)
+        if src_w <= 0:
+            return []
+        ratio = tgt_w / src_w
+        if ratio > self._limits.max_ratio:
+            return [
+                Issue(
+                    "pixel_width",
+                    self._severity,
+                    f"pixel-width ratio {ratio:.2f} exceeds {self._limits.max_ratio}",
+                    details={"src_px": src_w, "tgt_px": tgt_w, "ratio": ratio},
+                )
+            ]
+        return []
+
+
+# -------------------------------------------------------------------
 # Rule: TrailingAnnotationRule
 # -------------------------------------------------------------------
 
@@ -728,6 +826,8 @@ def build_default_rules(
     target_lang: str = "",
     output_token_severity: Severity = Severity.WARNING,
     output_token_limits: OutputTokenLimits | None = None,
+    pixel_width_severity: Severity = Severity.WARNING,
+    pixel_width_limits: PixelWidthLimits | None = None,
 ) -> list[Rule]:
     """Build the default ordered rule list with the given parameters."""
     return [
@@ -752,6 +852,10 @@ def build_default_rules(
         OutputTokenRule(
             severity=output_token_severity,
             limits=output_token_limits,
+        ),
+        PixelWidthRule(
+            severity=pixel_width_severity,
+            limits=pixel_width_limits,
         ),
         TrailingAnnotationRule(
             severity=annotation_severity,
