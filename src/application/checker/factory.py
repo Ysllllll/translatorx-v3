@@ -132,6 +132,7 @@ def default_checker(
         expected_question_marks=list(tgt_profile.question_marks),
         forbidden_terms=list(tgt_profile.forbidden_terms),
         keyword_pairs=_build_keyword_pairs(src_profile, tgt_profile),
+        target_lang=target_lang,
     )
 
     if config_overrides:

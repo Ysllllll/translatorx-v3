@@ -241,17 +241,33 @@ class FormatRule:
 
 
 class QuestionMarkRule:
-    """Source ends with ``?``/``？`` but translation has no question mark."""
+    """Source ends with ``?``/``？`` but translation has no question mark.
 
-    __slots__ = ("_severity", "_expected_marks")
+    The *whitelist_suffixes* parameter mirrors the legacy ``CNENMatcher``
+    behaviour: when the source ends with one of these casual tail tokens
+    (``right?``, ``ok?``, ``why?``…) the rule degrades to ``INFO``
+    severity, since these rarely require a literal "？" in CJK output.
+    """
+
+    __slots__ = ("_severity", "_expected_marks", "_whitelist_suffixes", "_whitelist_severity")
 
     def __init__(
         self,
         severity: Severity = Severity.WARNING,
         expected_marks: list[str] | None = None,
+        whitelist_suffixes: list[str] | None = None,
+        whitelist_severity: Severity = Severity.INFO,
     ) -> None:
         self._severity = severity
         self._expected_marks = expected_marks or ["?"]
+        self._whitelist_suffixes = whitelist_suffixes or [
+            "right?",
+            "ok?",
+            "okay?",
+            "okey?",
+            "why?",
+        ]
+        self._whitelist_severity = whitelist_severity
 
     @property
     def name(self) -> str:
@@ -265,18 +281,29 @@ class QuestionMarkRule:
     def expected_marks(self) -> list[str]:
         return list(self._expected_marks)
 
+    @property
+    def whitelist_suffixes(self) -> list[str]:
+        return list(self._whitelist_suffixes)
+
     def check(self, source: str, translation: str) -> list[Issue]:
         src = source.rstrip()
-        if src.endswith("?") or src.endswith("？"):
-            if not any(m in translation for m in self._expected_marks):
-                return [
-                    Issue(
-                        "question_mark",
-                        self._severity,
-                        "source ends with '?' but translation has no question mark",
-                    )
-                ]
-        return []
+        if not (src.endswith("?") or src.endswith("？")):
+            return []
+        if any(m in translation for m in self._expected_marks):
+            return []
+
+        src_lower = src.lower()
+        whitelisted = any(src_lower.endswith(suf.lower()) for suf in self._whitelist_suffixes)
+        sev = self._whitelist_severity if whitelisted else self._severity
+
+        return [
+            Issue(
+                "question_mark",
+                sev,
+                "source ends with '?' but translation has no question mark" + (" (whitelisted casual suffix)" if whitelisted else ""),
+                details={"whitelisted": whitelisted},
+            )
+        ]
 
 
 # -------------------------------------------------------------------
@@ -349,6 +376,179 @@ class KeywordRule:
 
 
 # -------------------------------------------------------------------
+# Rule: EmptyTranslationRule
+# -------------------------------------------------------------------
+
+
+class EmptyTranslationRule:
+    """Reject empty / whitespace-only translations when source is non-empty."""
+
+    __slots__ = ("_severity",)
+
+    def __init__(self, severity: Severity = Severity.ERROR) -> None:
+        self._severity = severity
+
+    @property
+    def name(self) -> str:
+        return "empty_translation"
+
+    @property
+    def severity(self) -> Severity:
+        return self._severity
+
+    def check(self, source: str, translation: str) -> list[Issue]:
+        if source.strip() and not translation.strip():
+            return [Issue("empty_translation", self._severity, "translation is empty")]
+        return []
+
+
+# -------------------------------------------------------------------
+# Rule: LengthBoundsRule
+# -------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LengthBounds:
+    """Absolute character bounds + inverse-ratio short-target rule."""
+
+    abs_max: int = 200
+    short_target_max: int = 3
+    short_target_inverse_ratio: float = 4.0
+
+
+class LengthBoundsRule:
+    """Catch absurd absolute lengths and short-target hallucinations.
+
+    Complements :class:`LengthRatioRule` (which guards tgt/src upper
+    bound).  Three guards:
+
+    1. ``abs_max`` — translations longer than this are almost always
+       hallucinations.
+    2. Short-target rule — when the target is very short
+       (``<= short_target_max`` chars) but the source is more than
+       ``short_target_inverse_ratio × tgt_len`` long, the translation
+       likely dropped content.
+    """
+
+    __slots__ = ("_severity", "_bounds")
+
+    def __init__(
+        self,
+        severity: Severity = Severity.ERROR,
+        bounds: LengthBounds | None = None,
+    ) -> None:
+        self._severity = severity
+        self._bounds = bounds or LengthBounds()
+
+    @property
+    def name(self) -> str:
+        return "length_bounds"
+
+    @property
+    def severity(self) -> Severity:
+        return self._severity
+
+    @property
+    def bounds(self) -> LengthBounds:
+        return self._bounds
+
+    def check(self, source: str, translation: str) -> list[Issue]:
+        src = source.strip()
+        tgt = translation.strip()
+        if not src or not tgt:
+            return []
+
+        b = self._bounds
+        issues: list[Issue] = []
+
+        if len(tgt) > b.abs_max:
+            issues.append(
+                Issue(
+                    "length_abs_max",
+                    self._severity,
+                    f"translation length {len(tgt)} exceeds absolute cap {b.abs_max}",
+                    details={"tgt_len": len(tgt), "cap": b.abs_max},
+                )
+            )
+            return issues
+
+        if len(tgt) <= b.short_target_max and len(src) > b.short_target_inverse_ratio * len(tgt):
+            issues.append(
+                Issue(
+                    "length_short_target",
+                    self._severity,
+                    f"translation too short ({len(tgt)} chars) for source ({len(src)} chars)",
+                    details={"tgt_len": len(tgt), "src_len": len(src)},
+                )
+            )
+        return issues
+
+
+# -------------------------------------------------------------------
+# Rule: CJKContentRule
+# -------------------------------------------------------------------
+
+
+_CJK_LANGS = frozenset({"zh", "ja", "ko"})
+
+
+class CJKContentRule:
+    """For CJK target languages, require at least one CJK character.
+
+    A common LLM failure is returning the source untranslated.  When
+    the target language is zh/ja/ko but the output has zero CJK
+    characters, that's almost certainly a regression.
+
+    The rule is a no-op for non-CJK targets, and degrades to no-op
+    when source ≈ target and is short (<10 chars) — proper nouns,
+    code identifiers, etc.
+    """
+
+    __slots__ = ("_severity", "_target_lang", "_short_passthrough_max")
+
+    def __init__(
+        self,
+        severity: Severity = Severity.ERROR,
+        target_lang: str = "",
+        short_passthrough_max: int = 10,
+    ) -> None:
+        self._severity = severity
+        self._target_lang = target_lang
+        self._short_passthrough_max = short_passthrough_max
+
+    @property
+    def name(self) -> str:
+        return "cjk_content"
+
+    @property
+    def severity(self) -> Severity:
+        return self._severity
+
+    @property
+    def target_lang(self) -> str:
+        return self._target_lang
+
+    def check(self, source: str, translation: str) -> list[Issue]:
+        if self._target_lang not in _CJK_LANGS:
+            return []
+        tgt = translation.strip()
+        if not tgt:
+            return []
+        if _cjk_char_count(tgt) + _hangul_char_count(tgt) + _kana_char_count(tgt) > 0:
+            return []
+        if source.strip() == tgt and len(tgt) <= self._short_passthrough_max:
+            return []
+        return [
+            Issue(
+                "cjk_content",
+                self._severity,
+                f"target language is '{self._target_lang}' but translation has no CJK characters",
+                details={"target_lang": self._target_lang},
+            )
+        ]
+
+
+# -------------------------------------------------------------------
 # Rule: TrailingAnnotationRule
 # -------------------------------------------------------------------
 
@@ -409,14 +609,22 @@ def build_default_rules(
     hallucination_starts: list[tuple[str, str | None]] | None = None,
     question_mark_severity: Severity = Severity.WARNING,
     expected_question_marks: list[str] | None = None,
+    question_mark_whitelist: list[str] | None = None,
     keyword_severity: Severity = Severity.ERROR,
     forbidden_terms: list[str] | None = None,
     keyword_pairs: list[tuple[list[str], list[str]]] | None = None,
     annotation_severity: Severity = Severity.ERROR,
     annotation_min_non_ascii: int = 12,
+    empty_severity: Severity = Severity.ERROR,
+    bounds_severity: Severity = Severity.ERROR,
+    length_bounds: LengthBounds | None = None,
+    cjk_content_severity: Severity = Severity.ERROR,
+    target_lang: str = "",
 ) -> list[Rule]:
     """Build the default ordered rule list with the given parameters."""
     return [
+        EmptyTranslationRule(severity=empty_severity),
+        LengthBoundsRule(severity=bounds_severity, bounds=length_bounds),
         LengthRatioRule(severity=ratio_severity, thresholds=ratio_thresholds),
         FormatRule(
             severity=format_severity,
@@ -426,6 +634,7 @@ def build_default_rules(
         QuestionMarkRule(
             severity=question_mark_severity,
             expected_marks=expected_question_marks,
+            whitelist_suffixes=question_mark_whitelist,
         ),
         KeywordRule(
             severity=keyword_severity,
@@ -435,5 +644,9 @@ def build_default_rules(
         TrailingAnnotationRule(
             severity=annotation_severity,
             min_non_ascii=annotation_min_non_ascii,
+        ),
+        CJKContentRule(
+            severity=cjk_content_severity,
+            target_lang=target_lang,
         ),
     ]

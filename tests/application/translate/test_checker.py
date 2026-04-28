@@ -381,21 +381,24 @@ class TestTrailingAnnotationRule:
 class TestBuildDefaultRules:
     def test_returns_five_rules(self):
         rules = build_default_rules()
-        assert len(rules) == 5
+        assert len(rules) == 8
 
     def test_rule_order(self):
         rules = build_default_rules()
-        assert rules[0].name == "length_ratio"
-        assert rules[1].name == "format"
-        assert rules[2].name == "question_mark"
-        assert rules[3].name == "keywords"
-        assert rules[4].name == "trailing_annotation"
+        assert rules[0].name == "empty_translation"
+        assert rules[1].name == "length_bounds"
+        assert rules[2].name == "length_ratio"
+        assert rules[3].name == "format"
+        assert rules[4].name == "question_mark"
+        assert rules[5].name == "keywords"
+        assert rules[6].name == "trailing_annotation"
+        assert rules[7].name == "cjk_content"
 
     def test_custom_params(self):
         rules = build_default_rules(ratio_severity=Severity.WARNING, forbidden_terms=["test"])
-        assert rules[0].severity is Severity.WARNING
-        assert isinstance(rules[3], KeywordRule)
-        assert rules[3].forbidden_terms == ["test"]
+        assert rules[2].severity is Severity.WARNING
+        assert isinstance(rules[5], KeywordRule)
+        assert rules[5].forbidden_terms == ["test"]
 
     def test_all_conform_to_protocol(self):
         for rule in build_default_rules():
@@ -603,7 +606,7 @@ class TestDefaultChecker:
     def test_returns_checker_with_rules(self, src, tgt):
         checker = default_checker(src, tgt)
         assert isinstance(checker, Checker)
-        assert len(checker.rules) == 5
+        assert len(checker.rules) == 8
 
     def test_lang_bound(self):
         checker = default_checker("en", "zh")
