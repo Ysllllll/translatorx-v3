@@ -44,6 +44,8 @@ if TYPE_CHECKING:
 
 from ports.backpressure import ChannelConfig, OverflowPolicy
 
+from .checker.config import CheckerConfig
+
 
 # ---------------------------------------------------------------------------
 # Config models
@@ -426,6 +428,7 @@ class AppConfig(BaseModel):
     transcriber: TranscriberConfig = Field(default_factory=TranscriberConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
+    checker: CheckerConfig = Field(default_factory=CheckerConfig)
 
     pipelines_dir: str | None = None
     """Optional directory of named pipeline YAML files (one pipeline per

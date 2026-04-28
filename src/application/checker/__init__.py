@@ -22,7 +22,17 @@ Quick start::
 """
 
 from .types import Severity, Issue, CheckReport
-from .config import ProfileOverrides, PROFILES
+from .config import (
+    CheckerConfig,
+    LengthBoundsConfig,
+    OutputTokensConfig,
+    PixelWidthConfig,
+    PROFILES,
+    ProfileOverrides,
+    QuestionMarksConfig,
+    RatioThresholdsConfig,
+    SanitizeConfig,
+)
 from .rules import (
     Rule,
     RatioThresholds,
@@ -42,7 +52,7 @@ from .rules import (
     build_default_rules,
 )
 from .checkers import Checker
-from .factory import default_checker
+from .factory import default_checker, from_config, sanitizer_from_config
 from .lang import LangProfile, get_profile, registered_langs
 from .sanitize import (
     BackticksStrip,
@@ -63,6 +73,13 @@ __all__ = [
     # Config
     "ProfileOverrides",
     "PROFILES",
+    "CheckerConfig",
+    "RatioThresholdsConfig",
+    "LengthBoundsConfig",
+    "QuestionMarksConfig",
+    "OutputTokensConfig",
+    "PixelWidthConfig",
+    "SanitizeConfig",
     # Rules
     "Rule",
     "RatioThresholds",
@@ -84,6 +101,8 @@ __all__ = [
     "Checker",
     # Factory
     "default_checker",
+    "from_config",
+    "sanitizer_from_config",
     # Language profiles
     "LangProfile",
     "get_profile",

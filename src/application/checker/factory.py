@@ -8,12 +8,28 @@ profile-specific rule sets (lenient, minimal) for runtime switching.
 from __future__ import annotations
 
 from .checkers import Checker
-from .config import PROFILES, ProfileOverrides
+from .config import (
+    CheckerConfig,
+    PROFILES,
+    ProfileOverrides,
+)
 from .lang import LangProfile, get_profile
 from .rules import (
+    LengthBounds,
+    OutputTokenLimits,
+    PixelWidthLimits,
     Rule,
     RatioThresholds,
     build_default_rules,
+)
+from .sanitize import (
+    SanitizerChain,
+    default_sanitizer_chain,
+    BackticksStrip,
+    TrailingAnnotationStrip,
+    ColonToPunctuation,
+    QuoteStrip,
+    LeadingPunctStrip,
 )
 from .types import Severity
 
@@ -153,3 +169,107 @@ def default_checker(
         target_lang=target_lang,
         profile_rules=profile_rules,
     )
+
+
+# -------------------------------------------------------------------
+# Factory: from CheckerConfig (YAML)
+# -------------------------------------------------------------------
+
+
+def from_config(
+    source_lang: str,
+    target_lang: str,
+    config: CheckerConfig,
+) -> Checker:
+    """Build a :class:`Checker` from a :class:`CheckerConfig` (YAML).
+
+    Maps every section of :class:`CheckerConfig` to ``build_default_rules``
+    keyword arguments, layering on top of the language-pair defaults
+    produced by :func:`default_checker`.
+    """
+    src_profile = get_profile(source_lang)
+    tgt_profile = get_profile(target_lang)
+
+    # Resolve ratio thresholds — config overrides script-family defaults.
+    base_ratio = _ratio_thresholds(source_lang, target_lang)
+    rt = config.ratio_thresholds
+    ratio_thresholds = RatioThresholds(
+        short=rt.short if rt.short is not None else base_ratio.short,
+        medium=rt.medium if rt.medium is not None else base_ratio.medium,
+        long=rt.long if rt.long is not None else base_ratio.long,
+        very_long=rt.very_long if rt.very_long is not None else base_ratio.very_long,
+    )
+
+    length_bounds = LengthBounds(
+        abs_max=config.length_bounds.abs_max,
+        short_target_max=config.length_bounds.short_target_max,
+        short_target_inverse_ratio=config.length_bounds.short_target_inverse_ratio,
+    )
+
+    output_token_limits = OutputTokenLimits(
+        max_output=config.output_tokens.max_output,
+        short_input_threshold=config.output_tokens.short_input_threshold,
+        short_input_max_output=config.output_tokens.short_input_max_output,
+        output_input_ratio_max=config.output_tokens.output_input_ratio_max,
+    )
+
+    pixel_width_limits = PixelWidthLimits(
+        font_path=config.pixel_width.font_path if config.pixel_width.enabled else "",
+        font_size=config.pixel_width.font_size,
+        max_ratio=config.pixel_width.max_ratio,
+    )
+
+    qm_severity_map = {
+        "error": Severity.ERROR,
+        "warning": Severity.WARNING,
+        "info": Severity.INFO,
+    }
+
+    base_kwargs: dict = dict(
+        ratio_thresholds=ratio_thresholds,
+        length_bounds=length_bounds,
+        hallucination_starts=list(tgt_profile.hallucination_starts),
+        expected_question_marks=list(tgt_profile.question_marks),
+        question_mark_whitelist=list(config.question_marks.whitelist_suffixes),
+        forbidden_terms=list(tgt_profile.forbidden_terms),
+        keyword_pairs=_build_keyword_pairs(src_profile, tgt_profile),
+        target_lang=target_lang,
+        output_token_limits=output_token_limits,
+        pixel_width_limits=pixel_width_limits,
+    )
+
+    base_rules = build_default_rules(**base_kwargs)
+
+    profile_rules: dict[str, list[Rule]] = {}
+    for profile_name, profile_overrides in PROFILES.items():
+        merged = _apply_profile_overrides(base_kwargs, profile_overrides)
+        profile_rules[profile_name] = build_default_rules(**merged)
+
+    return Checker(
+        rules=base_rules,
+        source_lang=source_lang,
+        target_lang=target_lang,
+        profile_rules=profile_rules,
+    )
+
+
+# -------------------------------------------------------------------
+# Sanitizer chain from CheckerConfig
+# -------------------------------------------------------------------
+
+
+def sanitizer_from_config(config: CheckerConfig) -> SanitizerChain:
+    """Build a :class:`SanitizerChain` from the toggles in *config*."""
+    s = config.sanitize
+    chain: list = []
+    if s.backticks:
+        chain.append(BackticksStrip())
+    if s.trailing_annotation:
+        chain.append(TrailingAnnotationStrip())
+    if s.trailing_colon_to_punct:
+        chain.append(ColonToPunctuation())
+    if s.quote_strip:
+        chain.append(QuoteStrip())
+    if s.leading_punct_strip:
+        chain.append(LeadingPunctStrip())
+    return SanitizerChain(chain)
