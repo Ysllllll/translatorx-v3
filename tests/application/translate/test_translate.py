@@ -53,7 +53,7 @@ class _AlwaysPassChecker:
     def target_lang(self) -> str:
         return self._target_lang
 
-    def check(self, source: str, translation: str, profile: str | None = None) -> CheckReport:
+    def check(self, source: str, translation: str, profile: str | None = None, **_) -> CheckReport:
         self.call_count += 1
         return CheckReport.ok()
 
@@ -73,7 +73,7 @@ class _FailNTimesChecker:
     def target_lang(self) -> str:
         return "zh"
 
-    def check(self, source: str, translation: str, profile: str | None = None) -> CheckReport:
+    def check(self, source: str, translation: str, profile: str | None = None, **_) -> CheckReport:
         self.call_count += 1
         if self.call_count <= self._fail_count:
             return CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="bad"),))
@@ -94,7 +94,7 @@ class _AlwaysFailChecker:
     def target_lang(self) -> str:
         return "zh"
 
-    def check(self, source: str, translation: str, profile: str | None = None) -> CheckReport:
+    def check(self, source: str, translation: str, profile: str | None = None, **_) -> CheckReport:
         self.call_count += 1
         return CheckReport(issues=(Issue(rule="test_rule", severity=Severity.ERROR, message="always bad"),))
 

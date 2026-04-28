@@ -381,7 +381,7 @@ class TestTrailingAnnotationRule:
 class TestBuildDefaultRules:
     def test_returns_five_rules(self):
         rules = build_default_rules()
-        assert len(rules) == 8
+        assert len(rules) == 9
 
     def test_rule_order(self):
         rules = build_default_rules()
@@ -391,8 +391,9 @@ class TestBuildDefaultRules:
         assert rules[3].name == "format"
         assert rules[4].name == "question_mark"
         assert rules[5].name == "keywords"
-        assert rules[6].name == "trailing_annotation"
-        assert rules[7].name == "cjk_content"
+        assert rules[6].name == "output_tokens"
+        assert rules[7].name == "trailing_annotation"
+        assert rules[8].name == "cjk_content"
 
     def test_custom_params(self):
         rules = build_default_rules(ratio_severity=Severity.WARNING, forbidden_terms=["test"])
@@ -428,7 +429,7 @@ class TestChecker:
             name = "a"
             severity = Severity.ERROR
 
-            def check(self, s, t):
+            def check(self, s, t, **_):
                 call_log.append("a")
                 return [Issue("a", Severity.ERROR, "fail")]
 
@@ -436,7 +437,7 @@ class TestChecker:
             name = "b"
             severity = Severity.INFO
 
-            def check(self, s, t):
+            def check(self, s, t, **_):
                 call_log.append("b")
                 return []
 
@@ -452,7 +453,7 @@ class TestChecker:
             name = "a"
             severity = Severity.WARNING
 
-            def check(self, s, t):
+            def check(self, s, t, **_):
                 call_log.append("a")
                 return [Issue("a", Severity.WARNING, "warn")]
 
@@ -460,7 +461,7 @@ class TestChecker:
             name = "b"
             severity = Severity.INFO
 
-            def check(self, s, t):
+            def check(self, s, t, **_):
                 call_log.append("b")
                 return []
 
@@ -505,14 +506,14 @@ class TestChecker:
             name = "a"
             severity = Severity.WARNING
 
-            def check(self, s, t):
+            def check(self, s, t, **_):
                 return [Issue("a", Severity.WARNING, "w1")]
 
         class RuleB:
             name = "b"
             severity = Severity.WARNING
 
-            def check(self, s, t):
+            def check(self, s, t, **_):
                 return [Issue("b", Severity.WARNING, "w2")]
 
         checker = Checker(rules=[RuleA(), RuleB()])
@@ -606,7 +607,7 @@ class TestDefaultChecker:
     def test_returns_checker_with_rules(self, src, tgt):
         checker = default_checker(src, tgt)
         assert isinstance(checker, Checker)
-        assert len(checker.rules) == 8
+        assert len(checker.rules) == 9
 
     def test_lang_bound(self):
         checker = default_checker("en", "zh")

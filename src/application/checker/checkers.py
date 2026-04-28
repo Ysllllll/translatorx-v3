@@ -9,6 +9,8 @@ immediately.
 
 from __future__ import annotations
 
+from domain.model.usage import Usage
+
 from .config import PROFILES, ProfileOverrides
 from .rules import Rule, build_default_rules, RatioThresholds
 from .types import CheckReport, Issue, Severity
@@ -52,11 +54,16 @@ class Checker:
         translation: str,
         *,
         profile: str | None = None,
+        usage: Usage | None = None,
     ) -> CheckReport:
         """Run all rules and return a :class:`CheckReport`.
 
         If *profile* is given (e.g. ``"lenient"``), uses the
         profile-specific rule set if available.
+
+        ``usage`` (optional) is forwarded to rules that support
+        token-aware checks (e.g. :class:`OutputTokenRule`); rules that
+        don't care swallow it via ``**_``.
 
         Short-circuit: on the first ``ERROR``-level issue, stop
         and return immediately (collecting everything up to that point).
@@ -65,7 +72,7 @@ class Checker:
 
         issues: list[Issue] = []
         for rule in rules:
-            new_issues = rule.check(source, translation)
+            new_issues = rule.check(source, translation, usage=usage)
             issues.extend(new_issues)
             if any(i.severity is Severity.ERROR for i in new_issues):
                 return CheckReport(issues=tuple(issues))

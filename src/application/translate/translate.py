@@ -197,7 +197,7 @@ async def translate_with_verify(
         messages = _messages_for_attempt(attempt)
         result = await engine.complete(messages)
         translation = sanitize_chain.sanitize(source, result.text.strip())
-        report = checker.check(source, translation)
+        report = checker.check(source, translation, usage=result.usage)
         last_seen["translation"] = translation
         last_seen["report"] = report
         return translation, report

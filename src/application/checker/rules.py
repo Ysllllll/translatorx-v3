@@ -6,11 +6,15 @@ Each rule is a class conforming to the :class:`Rule` Protocol::
         name: str
         severity: Severity
 
-        def check(self, source: str, translation: str) -> list[Issue]:
+        def check(self, source: str, translation: str, **_) -> list[Issue]:
             ...
 
 Rules own their configuration (thresholds, patterns, etc.) and are
 instantiated by the factory with language-appropriate parameters.
+
+Rules may optionally read ``usage: Usage | None`` from kwargs to make
+token-aware decisions; rules that don't care just keep accepting
+``**_`` and ignore it.
 """
 
 from __future__ import annotations
@@ -18,6 +22,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
+
+from domain.model.usage import Usage
 
 from .types import Issue, Severity
 
@@ -29,7 +35,13 @@ from .types import Issue, Severity
 
 @runtime_checkable
 class Rule(Protocol):
-    """Interface that every checker rule must satisfy."""
+    """Interface that every checker rule must satisfy.
+
+    The ``check`` method accepts arbitrary keyword args; in addition to
+    ``source`` and ``translation``, the orchestrator may pass
+    ``usage: Usage | None``. Rules that don't need it should simply
+    swallow ``**_``.
+    """
 
     @property
     def name(self) -> str: ...
@@ -37,7 +49,7 @@ class Rule(Protocol):
     @property
     def severity(self) -> Severity: ...
 
-    def check(self, source: str, translation: str) -> list[Issue]: ...
+    def check(self, source: str, translation: str, **kwargs) -> list[Issue]: ...
 
 
 # -------------------------------------------------------------------
@@ -117,7 +129,7 @@ class LengthRatioRule:
     def thresholds(self) -> RatioThresholds:
         return self._thresholds
 
-    def check(self, source: str, translation: str) -> list[Issue]:
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
         if not source.strip() or not translation.strip():
             return []
 
@@ -180,7 +192,7 @@ class FormatRule:
     def hallucination_starts(self) -> list[tuple[str, str | None]]:
         return list(self._hallucination_starts)
 
-    def check(self, source: str, translation: str) -> list[Issue]:
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
         issues: list[Issue] = []
         tgt = translation.strip()
         src = source.strip()
@@ -285,7 +297,7 @@ class QuestionMarkRule:
     def whitelist_suffixes(self) -> list[str]:
         return list(self._whitelist_suffixes)
 
-    def check(self, source: str, translation: str) -> list[Issue]:
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
         src = source.rstrip()
         if not (src.endswith("?") or src.endswith("？")):
             return []
@@ -342,7 +354,7 @@ class KeywordRule:
     def keyword_pairs(self) -> list[tuple[list[str], list[str]]]:
         return list(self._keyword_pairs)
 
-    def check(self, source: str, translation: str) -> list[Issue]:
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
         issues: list[Issue] = []
         tgt_lower = translation.lower()
         src_lower = source.lower()
@@ -396,7 +408,7 @@ class EmptyTranslationRule:
     def severity(self) -> Severity:
         return self._severity
 
-    def check(self, source: str, translation: str) -> list[Issue]:
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
         if source.strip() and not translation.strip():
             return [Issue("empty_translation", self._severity, "translation is empty")]
         return []
@@ -452,7 +464,7 @@ class LengthBoundsRule:
     def bounds(self) -> LengthBounds:
         return self._bounds
 
-    def check(self, source: str, translation: str) -> list[Issue]:
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
         src = source.strip()
         tgt = translation.strip()
         if not src or not tgt:
@@ -528,7 +540,7 @@ class CJKContentRule:
     def target_lang(self) -> str:
         return self._target_lang
 
-    def check(self, source: str, translation: str) -> list[Issue]:
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
         if self._target_lang not in _CJK_LANGS:
             return []
         tgt = translation.strip()
@@ -546,6 +558,100 @@ class CJKContentRule:
                 details={"target_lang": self._target_lang},
             )
         ]
+
+
+# -------------------------------------------------------------------
+# Rule: OutputTokenRule
+# -------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OutputTokenLimits:
+    """Token-level guards — backfill of legacy ``check_response`` token checks."""
+
+    max_output: int = 800
+    short_input_threshold: int = 50
+    short_input_max_output: int = 80
+    output_input_ratio_max: float = 10.0
+
+
+class OutputTokenRule:
+    """Catch token-explosion failures using ``Usage`` from the LLM call.
+
+    Three guards (mirror old ``Agent.check_response``):
+
+    1. ``output_tokens > max_output``  → hard cap.
+    2. ``input < short_input_threshold`` *and*
+       ``output > short_input_max_output`` → small input → big output.
+    3. ``output / input > output_input_ratio_max`` → ratio explosion.
+
+    Silently no-op if ``usage`` is not provided.
+    """
+
+    __slots__ = ("_severity", "_limits")
+
+    def __init__(
+        self,
+        severity: Severity = Severity.WARNING,
+        limits: OutputTokenLimits | None = None,
+    ) -> None:
+        self._severity = severity
+        self._limits = limits or OutputTokenLimits()
+
+    @property
+    def name(self) -> str:
+        return "output_tokens"
+
+    @property
+    def severity(self) -> Severity:
+        return self._severity
+
+    @property
+    def limits(self) -> OutputTokenLimits:
+        return self._limits
+
+    def check(self, source: str, translation: str, **kwargs) -> list[Issue]:
+        usage: Usage | None = kwargs.get("usage")
+        if usage is None:
+            return []
+
+        lim = self._limits
+        out_tok = usage.completion_tokens
+        in_tok = usage.prompt_tokens
+        issues: list[Issue] = []
+
+        if out_tok > lim.max_output:
+            issues.append(
+                Issue(
+                    "output_tokens_max",
+                    self._severity,
+                    f"completion_tokens={out_tok} exceeds max={lim.max_output}",
+                    details={"completion_tokens": out_tok, "max": lim.max_output},
+                )
+            )
+            return issues
+
+        if in_tok and in_tok < lim.short_input_threshold and out_tok > lim.short_input_max_output:
+            issues.append(
+                Issue(
+                    "output_tokens_short_input",
+                    self._severity,
+                    f"short input ({in_tok} tok) produced large output ({out_tok} tok)",
+                    details={"prompt_tokens": in_tok, "completion_tokens": out_tok},
+                )
+            )
+
+        if in_tok and out_tok / in_tok > lim.output_input_ratio_max:
+            issues.append(
+                Issue(
+                    "output_tokens_ratio",
+                    self._severity,
+                    f"output/input ratio {out_tok / in_tok:.2f} exceeds {lim.output_input_ratio_max}",
+                    details={"ratio": out_tok / in_tok, "max": lim.output_input_ratio_max},
+                )
+            )
+
+        return issues
 
 
 # -------------------------------------------------------------------
@@ -579,7 +685,7 @@ class TrailingAnnotationRule:
     def severity(self) -> Severity:
         return self._severity
 
-    def check(self, source: str, translation: str) -> list[Issue]:
+    def check(self, source: str, translation: str, **_) -> list[Issue]:
         pattern = r"（([^（）]*?)）[,.?;!，。？；！]*$"
         results = re.findall(pattern, translation)
         if results and len(results) > 0:
@@ -620,6 +726,8 @@ def build_default_rules(
     length_bounds: LengthBounds | None = None,
     cjk_content_severity: Severity = Severity.ERROR,
     target_lang: str = "",
+    output_token_severity: Severity = Severity.WARNING,
+    output_token_limits: OutputTokenLimits | None = None,
 ) -> list[Rule]:
     """Build the default ordered rule list with the given parameters."""
     return [
@@ -640,6 +748,10 @@ def build_default_rules(
             severity=keyword_severity,
             forbidden_terms=forbidden_terms,
             keyword_pairs=keyword_pairs,
+        ),
+        OutputTokenRule(
+            severity=output_token_severity,
+            limits=output_token_limits,
         ),
         TrailingAnnotationRule(
             severity=annotation_severity,

@@ -45,7 +45,7 @@ class _PassChecker(Checker):
     def __init__(self) -> None:
         super().__init__(rules=[])
 
-    def check(self, _src, _tgt, _profile=None):
+    def check(self, _src, _tgt, _profile=None, **_):
         return CheckReport(issues=[])
 
 
