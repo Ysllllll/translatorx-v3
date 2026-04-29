@@ -50,7 +50,7 @@ from .noops import (
 if TYPE_CHECKING:
     from adapters.storage.store import Store
     from application.events.bus import EventBus
-    from application.orchestrator.session import VideoSession
+    from application.session import VideoSession
     from application.translate.context import TranslationContext
     from ports.errors import ErrorReporter
 

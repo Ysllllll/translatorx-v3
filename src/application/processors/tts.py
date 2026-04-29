@@ -1,5 +1,14 @@
 """TTSProcessor — synthesize target-language audio per record.
 
+Unlike :class:`TranslateProcessor`, :class:`AlignProcessor`, and
+:class:`SummaryProcessor`, this processor does **not** wrap a
+corresponding domain agent (no ``application/tts/agent.py`` exists).
+Reason: TTS is pure I/O against a backend (:class:`ports.tts.TTS`)
+with no LLM decisioning or stateful context, so there is nothing to
+factor out as a "use-case agent". The processor talks to the TTS
+adapter directly. See :class:`application.config.TTSConfig` for
+configuration knobs.
+
 For each :class:`SentenceRecord`:
 
 1. Pick the alignment pieces (``rec.alignment[target]``) — one piece per
@@ -35,7 +44,7 @@ from ports.tts import TTS, SynthesizeOptions, Voice, VoicePicker
 if TYPE_CHECKING:
     from ports.source import VideoKey
     from adapters.storage.store import Store
-    from application.orchestrator.session import VideoSession
+    from application.session import VideoSession
 
 
 logger = logging.getLogger(__name__)
@@ -111,7 +120,7 @@ class TTSProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         tts_subdir = workspace.get_subdir("tts")
 
         if session is None:
-            from application.orchestrator.session import VideoSession  # noqa: PLC0415
+            from application.session import VideoSession  # noqa: PLC0415
 
             session = await VideoSession.load(store, video_key)
             owned_session = True

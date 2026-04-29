@@ -28,7 +28,7 @@ for _p in (_REPO / "src", _REPO / "demos"):
 
 from adapters.streaming import InMemoryMessageBus  # noqa: E402
 from application.events.bus import EventBus  # noqa: E402
-from application.orchestrator.session import VideoSession  # noqa: E402
+from application.session import VideoSession  # noqa: E402
 from application.pipeline import (  # noqa: E402
     PipelineContext,
     PipelineRuntime,

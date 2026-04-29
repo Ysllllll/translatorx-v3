@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline import NoOpAuditSink, NoOpCache, NoOpEventBus, NoOpLimiter, NoOpMetrics, NoOpTracer, NullLogger, PipelineContext, SystemClock
 from ports.cancel import CancelToken
 from ports.deadline import Deadline

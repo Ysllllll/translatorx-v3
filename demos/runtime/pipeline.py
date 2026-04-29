@@ -24,7 +24,7 @@ from pathlib import Path
 from api.app import App
 from application.checker import CheckReport, Checker
 from application.events import EventBus
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline import (
     TracingMiddleware,
     parse_pipeline_yaml,

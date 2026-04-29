@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline import PipelineContext, PipelineRuntime, RetryMiddleware, StageRegistry, TimingMiddleware, TracingMiddleware, compose
 from domain.model import SentenceRecord
 from ports.errors import PermanentEngineError, TransientEngineError

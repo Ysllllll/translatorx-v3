@@ -42,7 +42,7 @@ from ports.processor import ProcessorBase
 
 if TYPE_CHECKING:
     from adapters.storage.store import Store
-    from application.orchestrator.session import VideoSession
+    from application.session import VideoSession
     from ports.source import VideoKey
 
 
@@ -139,7 +139,7 @@ class AlignProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
         fp = self.fingerprint()
 
         if session is None:
-            from application.orchestrator.session import VideoSession  # noqa: PLC0415
+            from application.session import VideoSession  # noqa: PLC0415
 
             session = await VideoSession.load(store, video_key)
             owned_session = True

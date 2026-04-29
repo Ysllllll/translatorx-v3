@@ -46,8 +46,12 @@ from .registry import (
     unregister,
 )
 
-# 触发基于函数的规则和清洗器的 @register 装饰器。
-from . import rules_fn as _rules_fn  # noqa: F401
+# 显式触发基于函数的规则和清洗器注册。
+# rules_fn 模块通过 @register 装饰器在导入时填充注册表；
+# 调用 ensure_loaded() 让该副作用对静态分析与读者可见。
+from . import rules_fn as _rules_fn
+
+_rules_fn.ensure_loaded()
 from .scene import (
     CheckerConfig,
     SceneConfig,

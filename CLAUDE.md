@@ -76,7 +76,7 @@ src/
 │   └── reporters/reporters.py       # LoggerReporter, JsonlErrorReporter, ChainReporter
 │
 ├── application/                     【L3 · use cases / orchestration】
-│   ├── orchestrator/                # VideoSession (per-video state + flush) + VideoResult dataclass
+│   ├── session/                     # VideoSession (per-video state + flush) + VideoResult dataclass
 │   ├── pipeline/                    # PipelineRuntime + StageRegistry + middleware (Tracing/Progress)
 │   ├── stages/                      # Build/Structure/Enrich stages (FromSrt/Whisperx/Push, Punc/Chunk/Merge, Translate/Summary/Align/Tts)
 │   ├── translate/                   # TranslationContext, translate_with_verify, providers, agents, prompts
@@ -245,7 +245,7 @@ course_result = await (
 | `TranslateProcessor`, `SummaryProcessor` | `application.processors` |
 | `AlignAgent`, `BisectResult` | `application.align` |
 | `IncrementalSummaryAgent` | `application.summary` |
-| `VideoSession`, `VideoResult` | `application.orchestrator` |
+| `VideoSession`, `VideoResult` | `application.session` |
 | `PipelineRuntime`, `StageRegistry`, `PipelineDef` | `application.pipeline` / `ports.pipeline` |
 | `JsonFileStore`, `Workspace` | `adapters.storage` |
 | `AppConfig` | `application.config` |

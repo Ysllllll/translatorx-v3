@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from adapters.sources.push import PushQueueSource
 from application.events import stage_finished, stage_started
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline.context import PipelineContext
 from application.pipeline.middleware import TracingMiddleware
 from application.pipeline.runtime import PipelineRuntime

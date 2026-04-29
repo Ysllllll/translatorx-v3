@@ -22,7 +22,7 @@ Per-record processing mirrors legacy behaviour:
 6. **prefix readd** — prepend target-language prefix.
 
 Persistence is delegated to the orchestrator-owned
-:class:`~application.orchestrator.session.VideoSession` so this
+:class:`~application.session.VideoSession` so this
 processor no longer touches ``store.load_video`` / ``store.patch_video``
 directly.
 """
@@ -34,7 +34,7 @@ import logging
 from typing import TYPE_CHECKING, AsyncIterator
 
 from application.checker import Checker
-from application.processors.prefix import PrefixHandler, TranslateNodeConfig
+from application.translate.prefix import PrefixHandler, TranslateNodeConfig
 from application.translate import (
     ContextWindow,
     TranslationContext,
@@ -46,7 +46,7 @@ from ports.processor import ProcessorBase
 
 if TYPE_CHECKING:
     from adapters.storage.store import Store
-    from application.orchestrator.session import VideoSession
+    from application.session import VideoSession
     from ports.source import VideoKey
 
 
@@ -94,7 +94,7 @@ class TranslateProcessor(ProcessorBase[SentenceRecord, SentenceRecord]):
 
         # Lazy fallback so unit tests / out-of-orchestrator calls still work.
         if session is None:
-            from application.orchestrator.session import VideoSession  # noqa: PLC0415
+            from application.session import VideoSession  # noqa: PLC0415
 
             session = await VideoSession.load(store, video_key)
             owned_session = True

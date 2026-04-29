@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline import PipelineContext
 from application.stages.build import FromPushParams, FromPushStage, FromSrtParams, FromSrtStage
 from domain.model import Segment

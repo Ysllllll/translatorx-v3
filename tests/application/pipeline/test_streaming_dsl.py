@@ -21,7 +21,7 @@ from typing import Any, AsyncIterator
 import pytest
 
 from application.config import AppConfig, StreamingConfig
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline import PipelineContext, PipelineRuntime, StageRegistry
 from application.pipeline.channels import MemoryChannel
 from application.pipeline.loader import load_pipeline_dict

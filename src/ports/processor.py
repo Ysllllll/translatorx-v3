@@ -44,7 +44,7 @@ from .errors import ErrorCategory, ErrorInfo
 
 if TYPE_CHECKING:
     from adapters.storage.store import Store
-    from application.orchestrator.session import VideoSession
+    from application.session import VideoSession
     from application.translate import TranslationContext
 
     from .source import VideoKey

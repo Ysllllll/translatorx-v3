@@ -24,7 +24,7 @@ from application.checker import CheckReport, Checker
 from application.pipeline import TracingMiddleware, parse_pipeline_yaml
 from application.pipeline.context import PipelineContext
 from application.pipeline.runtime import PipelineRuntime
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.stages import make_default_registry
 from domain.model.usage import CompletionResult
 from ports.source import VideoKey
@@ -92,7 +92,7 @@ class _PassChecker(Checker):
 def _patch_engine_and_checker(monkeypatch, app: App):
     """Wire the fake engine + permissive checker into the App."""
     monkeypatch.setattr(app, "engine", lambda name="default": _FakeEngine())
-    from application.checker import factory as checker_factory
+    from application.checker import checkers as checker_factory
 
     monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
 

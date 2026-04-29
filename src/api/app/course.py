@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Sequence
 
-from application.orchestrator.video import VideoResult
+from application.session import VideoResult
 from domain.model import SentenceRecord
 from ports.errors import ErrorInfo
 from ports.source import VideoKey  # noqa: F401  (kept for potential future use)

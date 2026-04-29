@@ -6,7 +6,7 @@ from typing import Any, AsyncIterator
 
 import pytest
 
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline import PipelineContext, PipelineRuntime, StageRegistry
 from domain.model import SentenceRecord
 from ports.pipeline import ErrorPolicy, PipelineDef, PipelineState, StageDef

@@ -1,17 +1,18 @@
-"""Prefix handling + translate-node config (moved from legacy pipeline/).
+"""Prefix handling + translate-node config used by :class:`TranslateProcessor`.
 
-Defines the small stateless helpers used by :class:`TranslateProcessor`:
+Stateless helpers for the translate use case:
 
 * :class:`PrefixRule` — source→target conversational prefix mapping.
 * :data:`EN_ZH_PREFIX_RULES` — curated English→Chinese defaults.
 * :class:`PrefixHandler` — strip on input, re-add on output.
 * :class:`TranslateNodeConfig` — immutable per-run configuration.
-* :data:`ProgressCallback` — legacy sync progress callback signature.
 
-These live under ``runtime.processors`` because only the translate
-processor consumes them. They were previously split across
-``pipeline/config.py`` and ``pipeline/prefix.py``; the legacy package is
-being deleted in Stage 5.
+This module lives under ``application.translate`` because it is only
+consumed by the translate path (``TranslateProcessor`` /
+``translate_with_verify``). It was previously located at
+``application.processors.prefix``; that path was retired because
+``processors/`` should host actual :class:`ProcessorBase` subclasses,
+not translate-only utilities.
 """
 
 from __future__ import annotations

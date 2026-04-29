@@ -273,7 +273,7 @@ class PipelineBuilder:
         from application.pipeline.context import PipelineContext
         from application.pipeline.runtime import PipelineRuntime
         from application.pipeline.middleware import ProgressMiddleware
-        from application.orchestrator.session import VideoSession
+        from application.session import VideoSession
         from application.stages import make_default_registry
 
         defn = self.build()

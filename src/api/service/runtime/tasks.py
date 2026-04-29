@@ -34,7 +34,7 @@ from application.events.progress import ProgressEvent
 if TYPE_CHECKING:
     from api.app.app import App
     from api.service.auth import Principal
-    from application.orchestrator.video import VideoResult
+    from application.session import VideoResult
     from application.resources import ResourceManager
 
 
@@ -310,7 +310,7 @@ class TaskManager:
         engine_name: str,
         principal: "Principal",
     ) -> None:
-        from application.orchestrator.video import VideoResult  # local import
+        from application.session import VideoResult  # local import
 
         app = self._app
         task.status = "running"

@@ -51,7 +51,7 @@ from ports.engine import LLMEngine
 if TYPE_CHECKING:  # pragma: no cover
     from ports.source import VideoKey
     from adapters.storage.store import Store
-    from application.orchestrator.session import VideoSession
+    from application.session import VideoSession
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ class SummaryProcessor:
         config_sig = self.fingerprint()
 
         if session is None:
-            from application.orchestrator.session import VideoSession  # noqa: PLC0415
+            from application.session import VideoSession  # noqa: PLC0415
 
             session = await VideoSession.load(store, video_key)
             owned_session = True

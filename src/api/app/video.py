@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from domain.model import SentenceRecord, Segment
 
-from application.orchestrator.video import VideoResult
+from application.session import VideoResult
 from ports.source import Source, VideoKey
 from adapters.sources.srt import SrtSource
 from adapters.sources.whisperx import WhisperXSource
@@ -357,7 +357,7 @@ class VideoBuilder:
 
         from pydantic import BaseModel
 
-        from application.orchestrator.session import VideoSession
+        from application.session import VideoSession
         from application.pipeline.context import PipelineContext
         from application.pipeline.middleware import ProgressMiddleware, TracingMiddleware
         from application.pipeline.runtime import PipelineRuntime

@@ -147,7 +147,7 @@ class TestVideoSessionEmitsEvents:
         from adapters.storage.store import JsonFileStore
         from adapters.storage.workspace import Workspace
         from application.events import EventBus
-        from application.orchestrator.session import VideoSession
+        from application.session import VideoSession
         from domain.model import SentenceRecord
         from ports.source import VideoKey
 
@@ -182,7 +182,7 @@ class TestVideoSessionEmitsEvents:
     async def test_flush_without_bus_is_safe(self, tmp_path):
         from adapters.storage.store import JsonFileStore
         from adapters.storage.workspace import Workspace
-        from application.orchestrator.session import VideoSession
+        from application.session import VideoSession
         from domain.model import SentenceRecord
         from ports.source import VideoKey
 

@@ -118,7 +118,7 @@ class TestPipelineBuilderRun:
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
         # default_checker is imported inside the registry factory; patch at source
-        from application.checker import factory as checker_factory
+        from application.checker import checkers as checker_factory
 
         monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
 
@@ -210,7 +210,7 @@ class TestPipelineBuilderMultiTgt:
     async def test_run_multi_tgt_returns_tuple(self, app: App, tmp_path: Path, monkeypatch) -> None:
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
-        from application.checker import factory as checker_factory
+        from application.checker import checkers as checker_factory
 
         monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
         srt = tmp_path / "x.srt"
@@ -225,7 +225,7 @@ class TestPipelineBuilderObservability:
     async def test_with_progress_emits_events(self, app: App, tmp_path: Path, monkeypatch) -> None:
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
-        from application.checker import factory as checker_factory
+        from application.checker import checkers as checker_factory
 
         monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
         srt = tmp_path / "x.srt"
@@ -257,7 +257,7 @@ class TestPipelineBuilderObservability:
                 yield "[hi]"
 
         monkeypatch.setattr(app, "engine", lambda name="default": _SinkEngine())
-        from application.checker import factory as checker_factory
+        from application.checker import checkers as checker_factory
 
         monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
 
@@ -286,7 +286,7 @@ class TestPipelineBuilderObservability:
         monkeypatch.setattr(_PC, "__init__", spy_init)
         fake = _FakeEngine()
         monkeypatch.setattr(app, "engine", lambda name="default": fake)
-        from application.checker import factory as checker_factory
+        from application.checker import checkers as checker_factory
 
         monkeypatch.setattr(checker_factory, "default_checker", lambda s, t: _PassChecker())
 

@@ -1,4 +1,30 @@
-"""application.pipeline — Pipeline DSL runtime (Phase 1, Step 2)."""
+"""Pipeline DSL runtime — declarative stage graphs over streaming data.
+
+This package contains the *runtime* tier of the application layer:
+:class:`PipelineRuntime` parses a YAML/dict pipeline definition, looks
+each stage up in :class:`StageRegistry`, instantiates the underlying
+:class:`Processor`, wires inter-stage channels, and emits lifecycle
+:class:`DomainEvent`-s through middleware.
+
+Channels vs events — two orthogonal axes
+----------------------------------------
+
+* **Data plane** (records flowing between stages):
+    - :class:`MemoryChannel` — single-process buffer (default).
+    - :class:`BusChannel` — distributed buffer over a message bus
+      (e.g. Redis Streams).
+  Both implement :class:`ports.backpressure.BoundedChannel[T]` and are
+  picked per-stage based on the ``channel`` / ``bus_topic`` config.
+
+* **Event plane** (lifecycle / observability):
+    - :class:`DomainEvent` published via :class:`EventBus` (in
+      :mod:`application.events`). Examples: ``stage.started``,
+      ``stage.finished``, ``channel.watermark``,
+      ``video.records_patched``. **Never** carries record payloads.
+
+The two planes coexist independently; a single pipeline run uses
+both.
+"""
 
 from .bus_channel import BusChannel, Codec, PickleCodec
 from .loader import load_pipeline_dict, load_pipeline_yaml, parse_pipeline_yaml

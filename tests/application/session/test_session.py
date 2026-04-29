@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from domain.model import SentenceRecord
 from ports.source import VideoKey
 

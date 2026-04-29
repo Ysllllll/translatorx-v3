@@ -19,7 +19,7 @@ from adapters.storage.store import JsonFileStore
 from adapters.storage.workspace import Workspace
 from application.checker import CheckReport, Checker
 from application.processors import TranslateProcessor
-from application.processors.prefix import EN_ZH_PREFIX_RULES, TranslateNodeConfig
+from application.translate.prefix import EN_ZH_PREFIX_RULES, TranslateNodeConfig
 from application.terminology import StaticTerms
 from application.translate import TranslationContext, VariantSpec
 from domain.model import SentenceRecord

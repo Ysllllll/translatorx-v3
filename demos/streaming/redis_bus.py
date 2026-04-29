@@ -40,7 +40,7 @@ from typing import Any, AsyncIterator
 
 from adapters.streaming import InMemoryMessageBus
 from application.events.bus import EventBus
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline import PipelineContext, PipelineRuntime, StageRegistry
 from domain.model import SentenceRecord
 from ports.backpressure import ChannelConfig

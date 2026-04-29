@@ -28,7 +28,7 @@ import asyncio
 from typing import Any, AsyncIterator
 
 from application.events import EventBus
-from application.orchestrator.session import VideoSession
+from application.session import VideoSession
 from application.pipeline import PipelineContext, PipelineRuntime, StageRegistry
 from domain.model import SentenceRecord
 from ports.backpressure import ChannelConfig, OverflowPolicy
