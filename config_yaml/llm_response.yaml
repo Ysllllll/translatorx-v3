@@ -1,0 +1,16 @@
+checker:
+  default_scene: builtin.llm.response
+  scenes:
+    builtin.llm.response:
+      sanitize:
+      - name: strip_backticks
+        severity: error
+      - name: quote_strip
+        severity: error
+      rules:
+      - name: non_empty
+        severity: error
+      - name: format_artifacts
+        severity: warning
+      - name: output_tokens
+        severity: warning

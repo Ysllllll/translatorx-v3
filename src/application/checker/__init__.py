@@ -62,6 +62,13 @@ from .scene import (
     resolve_scene,
 )
 from .checkers import Checker, default_checker
+from .serialize import (
+    dump_checker_to_yaml,
+    load_checker_config,
+    load_checker_from_yaml,
+    resolved_scene_to_payload,
+    write_checker_yaml,
+)
 from .lang import LangProfile, ScriptFamily, get_profile, registered_langs
 
 __all__ = [
@@ -90,6 +97,12 @@ __all__ = [
     # Checker + factory
     "Checker",
     "default_checker",
+    # YAML 导入/导出/热重载
+    "dump_checker_to_yaml",
+    "write_checker_yaml",
+    "resolved_scene_to_payload",
+    "load_checker_config",
+    "load_checker_from_yaml",
     # Language profiles
     "LangProfile",
     "ScriptFamily",

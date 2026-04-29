@@ -84,6 +84,50 @@ STRIP_PUNCT: str = "".join(sorted(ALL_PUNCT))
 
 
 # =====================================================================
+# 引号 / 半全角映射 — Quote pairs and ASCII↔CJK punctuation maps
+# =====================================================================
+
+# 配对引号：(opener, closer) — 用于剥离译文外层引号或检测引号配对
+# Paired quotes (opener, closer) — used to strip wrapping quotes or
+# verify quote balance. Order matters: more-specific (curly) pairs
+# should come before generic (ASCII) ones.
+QUOTE_PAIRS: tuple[tuple[str, str], ...] = (
+    ("\u201c", "\u201d"),  # 左/右双引号 “ ” LEFT / RIGHT DOUBLE QUOTATION MARK
+    ("\u2018", "\u2019"),  # 左/右单引号 ‘ ’ LEFT / RIGHT SINGLE QUOTATION MARK
+    ('"', '"'),
+    ("'", "'"),
+)
+
+# 智能引号 / 角分秒 → ASCII 替换映射
+# Smart-quote / prime characters → ASCII replacement (replace-in-place,
+# distinct from QUOTE_PAIRS which is for outer-stripping).
+SMART_QUOTE_MAP: dict[str, str] = {
+    "\u2018": "'",  # 左单引号 ‘ LEFT SINGLE QUOTATION MARK
+    "\u2019": "'",  # 右单引号 ’ RIGHT SINGLE QUOTATION MARK
+    "\u201a": "'",  # 下9形单引号 ‚ SINGLE LOW-9
+    "\u201b": "'",  # 上反9形单引号 ‛ SINGLE HIGH-REVERSED-9
+    "\u201c": '"',  # 左双引号 “ LEFT DOUBLE QUOTATION MARK
+    "\u201d": '"',  # 右双引号 ” RIGHT DOUBLE QUOTATION MARK
+    "\u201e": '"',  # 下9形双引号 „ DOUBLE LOW-9
+    "\u201f": '"',  # 上反9形双引号 ‟ DOUBLE HIGH-REVERSED-9
+    "\u2032": "'",  # 角分符 ′ PRIME
+    "\u2033": '"',  # 角秒符 ″ DOUBLE PRIME
+}
+
+# ASCII 半角标点 → CJK 全角标点
+# Half-width ASCII → full-width CJK punctuation, used when normalizing
+# the trailing punctuation of a CJK target based on the source's tail.
+HALF_TO_FULL_PUNCT: dict[str, str] = {
+    ".": "。",
+    ",": "，",
+    "!": "！",
+    "?": "？",
+    ";": "；",
+    ":": "：",
+}
+
+
+# =====================================================================
 # 工具函数 — Utility functions
 # =====================================================================
 

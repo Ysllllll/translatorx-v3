@@ -15,7 +15,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Callable
 
-from domain.lang import DEFAULT_FENCES, Fence, mask_fences, unmask_fences
+from domain.lang import DEFAULT_FENCES, Fence, SMART_QUOTE_MAP, mask_fences, unmask_fences
 
 from ..engine import Rule, Tracker
 from ..engine.rule import RuleHit
@@ -67,20 +67,7 @@ _WHITESPACE_MAP = str.maketrans(
     }
 )
 
-_SMART_QUOTE_MAP = str.maketrans(
-    {
-        "\u2018": "'",  # 左单引号 ‘ LEFT SINGLE QUOTATION MARK
-        "\u2019": "'",  # 右单引号 ’ RIGHT SINGLE QUOTATION MARK
-        "\u201a": "'",  # 下9形单引号 ‚ SINGLE LOW-9
-        "\u201b": "'",  # 上反9形单引号 ‛ SINGLE HIGH-REVERSED-9
-        "\u201c": '"',  # 左双引号 “ LEFT DOUBLE QUOTATION MARK
-        "\u201d": '"',  # 右双引号 ” RIGHT DOUBLE QUOTATION MARK
-        "\u201e": '"',  # 下9形双引号 „ DOUBLE LOW-9
-        "\u201f": '"',  # 上反9形双引号 ‟ DOUBLE HIGH-REVERSED-9
-        "\u2032": "'",  # 角分符 ′ PRIME
-        "\u2033": '"',  # 角秒符 ″ DOUBLE PRIME
-    }
-)
+_SMART_QUOTE_MAP = str.maketrans(SMART_QUOTE_MAP)
 
 _HTML_TAG_RE = re.compile(
     r"</?(?:i|b|u|s|br|em|strong|font|p|span|div)(?:\s[^>]*)?/?>",

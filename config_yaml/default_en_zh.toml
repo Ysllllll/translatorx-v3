@@ -1,0 +1,111 @@
+# Generated from config_yaml/default_en_zh.yaml.
+# TOML has no native null; YAML null values in hallucination_starts are represented as "".
+
+[checker]
+default_scene = "translate.en.zh"
+
+[[checker.scenes."translate.en.zh".sanitize]]
+name = "strip_backticks"
+severity = "error"
+
+[[checker.scenes."translate.en.zh".sanitize]]
+name = "trailing_annotation_strip"
+severity = "error"
+
+[[checker.scenes."translate.en.zh".sanitize]]
+name = "colon_to_punctuation"
+severity = "error"
+
+[[checker.scenes."translate.en.zh".sanitize]]
+name = "quote_strip"
+severity = "error"
+
+[[checker.scenes."translate.en.zh".sanitize]]
+name = "leading_punct_strip"
+severity = "error"
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "non_empty"
+severity = "error"
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "length_bounds"
+severity = "error"
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "length_ratio"
+severity = "error"
+
+[checker.scenes."translate.en.zh".rules.params]
+short = 4.0
+medium = 2.5
+long = 1.8
+very_long = 1.4
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "format_artifacts"
+severity = "error"
+
+[checker.scenes."translate.en.zh".rules.params]
+hallucination_starts = [
+  ["^明白了", "吗"],
+  ["^知道了", "吗"],
+  ["^没关系", ""],
+  ["^好的[，,]", ""],
+  ["^当然[，,]", "(了|可以|是|啦)"],
+]
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "cjk_content"
+severity = "error"
+
+[checker.scenes."translate.en.zh".rules.params]
+target_lang = "zh"
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "trailing_annotation"
+severity = "error"
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "keywords"
+severity = "error"
+
+[checker.scenes."translate.en.zh".rules.params]
+forbidden_terms = [
+  "请翻译",
+  "原句",
+  "意译",
+  "精译",
+  "精翻",
+  "保留原文",
+  "可意译为",
+  "可翻译为",
+  "可精译为",
+  "不客气",
+  "效劳",
+  "能帮到您",
+  "能帮到你",
+  "```",
+]
+keyword_pairs = [
+  [["translate", "translation", "translating"], ["翻译"]],
+  [["subtitle", "subtitles"], ["字幕"]],
+  [["polish", "polishing"], ["润色"]],
+  [["context"], ["语境", "上下文"]],
+]
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "question_mark"
+severity = "warning"
+
+[checker.scenes."translate.en.zh".rules.params]
+source_marks = ["?"]
+expected_marks = ["？", "?"]
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "output_tokens"
+severity = "warning"
+
+[[checker.scenes."translate.en.zh".rules]]
+name = "pixel_width"
+severity = "warning"

@@ -1,17 +1,19 @@
 """checker — 翻译质量检查 · scene-first 指南。
 
-跑一遍这个 demo，你将依次看到：
+所有主结果统一在一张 10 列表里展现：
 
-  Part 1 — 全景图        :  CheckContext / Scene / Registry / run() 的关系
-  Part 2 — 快速上手      :  default_checker(src, tgt) 走一次完整 run
-  Part 3 — Builtin scenes:  builtin.translate.{strict,lenient} +
-                            builtin.subtitle.line + builtin.llm.response
-  Part 4 — 自定义 scene  :  extends + disable + overrides
-  Part 5 — Per-call 覆盖 :  rules=[...] / overrides={...}
-  Part 6 — 非翻译场景    :  subtitle 单行 + LLM 通用响应
-  Part 7 — Regression    :  对比新旧译文得分，用 run() 一行实现回退
-  Part 8 — YAML 示例     :  从 YAML 构建 CheckerConfig
-  Part 9 — 接入翻译循环  :  translate_with_verify 内部就是 checker(source, target)
+    case | scene | source | target | sanitized | result | E | W | I | issues
+
+* result    : PASS / WARN / FAIL（FAIL=有 ERROR；WARN=只有 WARNING；PASS=干净）
+* E / W / I : ERROR / WARNING / INFO 级 issue 计数
+* sanitized : 经过 sanitize 阶段后的译文（与 target 相同时显示 "(same)"）
+
+补充小表只在三处出现：
+* Registry        ：kind/name 两列，列出所有已注册规则
+* Resolved scene  ：scene 解析后的规则链 (kind/name/severity/params)
+* Per-call (在 Part 5 里) ：复用主表 schema
+
+YAML 示例（Part 8）也复用主表 schema 渲染结果。
 
 运行::
 
@@ -19,6 +21,9 @@
 """
 
 from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
 
 import _bootstrap  # noqa: F401
 
@@ -33,132 +38,109 @@ from application.checker import (
     CheckReport,
     Severity,
     SceneConfig,
+    RuleSpec,
     default_checker,
+    dump_checker_to_yaml,
     list_names,
     list_preset_scenes,
+    load_checker_from_yaml,
     register_preset_scene,  # noqa: F401  (just to expose the symbol)
     resolve_scene,
+    write_checker_yaml,
 )
+from domain.model.usage import Usage
 
 
-RESULT_COLUMNS = ["case", "passed", "errors", "warnings", "infos", "issues", "target"]
-STEP_COLUMNS = ["kind", "name"]
+MAIN_COLUMNS = ["case", "scene", "source", "target", "sanitized", "result", "E", "W", "I", "issues"]
+REGISTRY_COLUMNS = ["kind", "name"]
 SCENE_COLUMNS = ["kind", "name", "severity", "params"]
-YAML_COLUMNS = ["name", "default_scene", "passed", "errors", "warnings", "rules"]
 
-YAML_EXAMPLES: tuple[tuple[str, str, str, str, str], ...] = (
-    (
-        "translate_lenient_yaml",
-        """
-checker:
-  default_scene: demo.translate.lenient
-  scenes:
-    demo.translate.lenient:
-      extends: builtin.translate.strict
-      disable: [pixel_width]
-      overrides:
-        length_ratio:
-          severity: warning
-        question_mark:
-          severity: info
-""",
-        "Hi.",
-        "你好" * 60 + "。",
-        "zh",
-    ),
-    (
-        "llm_response_yaml",
-        """
-checker:
-  default_scene: demo.llm.response
-  scenes:
-    demo.llm.response:
-      extends: builtin.llm.response
-      overrides:
-        format_artifacts:
-          severity: warning
-""",
-        "Return a short answer.",
-        "`pong`",
-        "",
-    ),
+
+# YAML 配置仓库根：仓库根目录下的 ``config_yaml/``。
+CONFIG_YAML_DIR = Path(__file__).resolve().parents[2] / "config_yaml"
+
+
+# (label, on-disk YAML 文件名, source_lang, target_lang, source, target)
+YAML_EXAMPLES: tuple[tuple[str, str, str, str, str, str], ...] = (
+    ("default_en_zh.yaml", "default_en_zh.yaml", "en", "zh", "Hi.", "你好" * 60 + "。"),
+    ("subtitle_line.yaml", "subtitle_line.yaml", "", "", "hi", ""),
+    ("llm_response.yaml", "llm_response.yaml", "", "", "Return a short answer.", "`pong`"),
 )
 
 
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
-
-
-def _short(text: str, limit: int = 34) -> str:
-    text = text.replace("\n", " ⏎ ")
+def _short(text: str, limit: int = 30) -> str:
+    text = (text or "").replace("\n", " ⏎ ")
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _issue_counts(report: CheckReport) -> tuple[int, int, int]:
-    return (len(report.errors), len(report.warnings), len(report.infos))
+def _result_label(report: CheckReport) -> str:
+    if any(i.severity is Severity.ERROR for i in report.issues):
+        return "FAIL"
+    if any(i.severity is Severity.WARNING for i in report.issues):
+        return "WARN"
+    return "PASS"
 
 
 def _issues_text(report: CheckReport) -> str:
     if not report.issues:
         return "-"
-    return ", ".join(f"{i.severity.value}:{i.rule}" for i in report.issues)
+    return ", ".join(f"{i.severity.value[0].upper()}:{i.rule}" for i in report.issues)
 
 
-def _result_row(case: str, source: str, target: str, sanitized: str, report: CheckReport) -> dict[str, str]:
-    errors, warnings, infos = _issue_counts(report)
+def _row(
+    case: str,
+    scene: str,
+    source: str,
+    target: str,
+    sanitized: str,
+    report: CheckReport,
+) -> dict[str, str]:
     return {
         "case": case,
-        "passed": "PASS" if report.passed else "FAIL",
-        "errors": str(errors),
-        "warnings": str(warnings),
-        "infos": str(infos),
+        "scene": scene,
+        "source": _short(source) if source else "-",
+        "target": _short(target) if target else "(empty)",
+        "sanitized": "(same)" if sanitized == target else _short(sanitized) if sanitized else "(empty)",
+        "result": _result_label(report),
+        "E": str(len(report.errors)),
+        "W": str(len(report.warnings)),
+        "I": str(len(report.infos)),
         "issues": _issues_text(report),
-        "source": _short(source),
-        "target": _short(sanitized or target),
     }
 
 
-def build_quickstart_rows() -> list[dict[str, str]]:
-    """Return table-ready rows for the quickstart examples."""
-    chk = default_checker("en", "zh")
-    cases = [
-        ("pass", "Hello world.", "你好世界。"),
-        ("empty", "Hello.", ""),
-        ("hallucination", "Hello.", "翻译: 你好。"),
-    ]
-    rows: list[dict[str, str]] = []
-    for label, src, tgt in cases:
-        sanitized, rep = chk(src, tgt)
-        rows.append(_result_row(label, src, tgt, sanitized, rep))
-    return rows
+def _check(
+    checker: Checker,
+    case: str,
+    source: str,
+    target: str,
+    *,
+    scene: str | None = None,
+    **kwargs,
+) -> dict[str, str]:
+    """Run checker.check() and return a main-table row."""
+    sanitized, report = checker.check(source, target, scene=scene, **kwargs)
+    return _row(case, scene or checker.default_scene, source, target, sanitized, report)
 
 
-def _checker_config_from_yaml(text: str) -> CheckerConfig:
-    payload = yaml.safe_load(text) or {}
-    return CheckerConfig.from_dict(payload.get("checker") or {})
-
-
-def build_yaml_example_rows() -> list[dict[str, str]]:
-    """Parse the embedded YAML examples and return result summary rows."""
-    rows: list[dict[str, str]] = []
-    for name, text, source, target, target_lang in YAML_EXAMPLES:
-        cfg = _checker_config_from_yaml(text)
-        chk = Checker.from_config(cfg, source_lang="en", target_lang=target_lang)
-        _, report = chk.check(source, target)
-        resolved = resolve_scene(chk.default_scene, chk.scenes)
-        errors, warnings, _ = _issue_counts(report)
-        rows.append(
-            {
-                "name": name,
-                "default_scene": cfg.default_scene,
-                "passed": "PASS" if report.passed else "FAIL",
-                "errors": str(errors),
-                "warnings": str(warnings),
-                "rules": ", ".join(r.name for r in resolved.rules),
-            }
-        )
-    return rows
+def _run(
+    checker: Checker,
+    case: str,
+    source: str,
+    target: str,
+    *,
+    scene: str | None = None,
+    **kwargs,
+) -> dict[str, str]:
+    """Run checker.run() with full CheckContext (used when overrides/rules needed)."""
+    ctx = CheckContext(
+        source=source,
+        target=target,
+        source_lang=checker.source_lang,
+        target_lang=checker.target_lang,
+    )
+    new_ctx, report = checker.run(ctx, scene=scene, **kwargs)
+    return _row(case, scene or checker.default_scene, source, target, new_ctx.target, report)
 
 
 # ---------------------------------------------------------------------------
@@ -171,25 +153,39 @@ def part_1_overview() -> None:
     info("CheckContext = 一次校验的输入：source / target / langs / usage / prior / metadata")
     info("Scene        = 命名规则集合（sanitize 列表 + check 列表 + extends/disable/overrides）")
     info('Registry     = @register(name, kind="check"|"sanitize") 注册的工厂函数')
-    info("Checker.run  = 解析 scene → 跑 sanitize → 跑 check（ERROR 短路）→ 返回 (ctx', report)")
+    info("Checker.run  = 解析 scene → sanitize → check（ERROR 短路）→ 返回 (ctx', report)")
+    info("Checker.check = 字符串高层 API，内部构造 CheckContext，返回 (sanitized, report)")
 
     rows = [{"kind": "check", "name": name} for name in list_names(kind="check")]
     rows += [{"kind": "sanitize", "name": name} for name in list_names(kind="sanitize")]
-    table("Registry", STEP_COLUMNS, rows)
+    table("Registry", REGISTRY_COLUMNS, rows)
 
     table("Builtin scenes", ["scene"], [{"scene": name} for name in list_preset_scenes()])
 
 
 # ---------------------------------------------------------------------------
-# Part 2 — 快速上手
+# Part 2 — 快速上手 + 规则矩阵
 # ---------------------------------------------------------------------------
 
 
 def part_2_quickstart() -> None:
-    section("Part 2", "快速上手")
+    section("Part 2", "快速上手 + 规则命中矩阵")
     info('    chk = default_checker("en", "zh")')
-    info('    sanitized, report = chk("Hello.", "你好。")  # 等价于 chk.check(...)')
-    table("Quickstart results", RESULT_COLUMNS, build_quickstart_rows())
+    info('    sanitized, report = chk.check("Hello.", "你好。")')
+
+    chk = default_checker("en", "zh")
+    rows = [
+        _check(chk, "clean pass", "Hello, world.", "你好，世界。"),
+        _check(chk, "empty target", "Hello.", ""),
+        _check(chk, "length_ratio", "Hi.", "你好" * 60 + "。"),
+        _check(chk, "hallucination prefix", "Compute the gradient.", "好的，这是翻译：计算梯度。"),
+        _check(chk, "markdown artifact", "The loss is minimized.", "**损失** 被最小化。"),
+        _check(chk, "trailing annotation", "Activation is ReLU.", "激活函数是 ReLU（注：整流线性单元）。"),
+        _check(chk, "missing question", "Is this correct?", "这是对的。"),
+        _check(chk, "code fence sanitize", "Hi.", "`你好。`"),
+        _check(chk, "leading punct sanitize", "Hi.", "，你好。"),
+    ]
+    table("Quickstart + rule matrix", MAIN_COLUMNS, rows)
 
 
 # ---------------------------------------------------------------------------
@@ -198,23 +194,16 @@ def part_2_quickstart() -> None:
 
 
 def part_3_builtin_scenes() -> None:
-    section("Part 3", "Builtin scenes")
-    rows: list[dict[str, str]] = []
-
+    section("Part 3", "Builtin scenes 对比")
     src_long, tgt_long = "Hi.", "你" * 40
 
-    chk = Checker(default_scene="builtin.translate.strict")
-    sanitized, rep_strict = chk(src_long, tgt_long)
-    rows.append(_result_row("strict length_ratio=ERROR", src_long, tgt_long, sanitized, rep_strict))
-
-    chk2 = Checker(default_scene="builtin.translate.lenient")
-    sanitized2, rep_lenient = chk2(src_long, tgt_long)
-    rows.append(_result_row("lenient length_ratio=WARNING", src_long, tgt_long, sanitized2, rep_lenient))
-
-    chk3 = Checker(default_scene="builtin.subtitle.line")
-    sanitized3, rep_sub = chk3("hello", "")
-    rows.append(_result_row("subtitle.line non_empty", "hello", "", sanitized3, rep_sub))
-    table("Builtin scene comparison", RESULT_COLUMNS, rows)
+    rows = [
+        _check(Checker(default_scene="builtin.translate.strict"), "strict (ERROR)", src_long, tgt_long),
+        _check(Checker(default_scene="builtin.translate.lenient"), "lenient (WARNING)", src_long, tgt_long),
+        _check(Checker(default_scene="builtin.subtitle.line"), "subtitle.line empty", "hello", ""),
+        _check(Checker(default_scene="builtin.llm.response"), "llm.response strip", "prompt", "`pong`"),
+    ]
+    table("Builtin scene comparison", MAIN_COLUMNS, rows)
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +213,7 @@ def part_3_builtin_scenes() -> None:
 
 def part_4_custom_scene() -> None:
     section("Part 4", "自定义 scene")
-    info("extends=builtin.translate.strict, disable keywords, 把 length_ratio 降为 WARNING:")
+    info("extends=builtin.translate.strict, disable keywords, length_ratio 降为 WARNING:")
 
     my_scene = SceneConfig(
         name="my.translate",
@@ -233,13 +222,14 @@ def part_4_custom_scene() -> None:
         overrides={"length_ratio": {"severity": Severity.WARNING}},
     )
     chk = Checker(scenes={"my.translate": my_scene}, default_scene="my.translate")
-    sanitized, rep = chk("Hi.", "你" * 40)
-    table("Custom scene result", RESULT_COLUMNS, [_result_row("my.translate", "Hi.", "你" * 40, sanitized, rep)])
+    table("Custom scene result", MAIN_COLUMNS, [_check(chk, "my.translate", "Hi.", "你" * 40)])
 
     info("\n看一下 scene 解析后的最终规则 / sanitize 顺序:")
     resolved = resolve_scene("my.translate", chk.scenes)
-    rows = [{"kind": "sanitize", "name": s.name, "severity": s.severity.value, "params": dict(s.params)} for s in resolved.sanitize]
-    rows += [{"kind": "check", "name": r.name, "severity": r.severity.value, "params": dict(r.params)} for r in resolved.rules]
+    rows = [
+        {"kind": "sanitize", "name": s.name, "severity": s.severity.value, "params": str(dict(s.params)) or "-"} for s in resolved.sanitize
+    ]
+    rows += [{"kind": "check", "name": r.name, "severity": r.severity.value, "params": str(dict(r.params)) or "-"} for r in resolved.rules]
     table("Resolved scene", SCENE_COLUMNS, rows)
 
 
@@ -251,45 +241,35 @@ def part_4_custom_scene() -> None:
 def part_5_per_call_override() -> None:
     section("Part 5", "Per-call 覆盖")
     chk = default_checker("en", "zh")
-    ctx = CheckContext(source="Hi.", target="", source_lang="en", target_lang="zh")
-    rows: list[dict[str, str]] = []
-
-    info("默认: non_empty 是 ERROR → run() 命中后短路")
-    new_ctx, rep = chk.run(ctx)
-    rows.append(_result_row("default", ctx.source, ctx.target, new_ctx.target, rep))
-
-    info('降级: overrides={"non_empty": {"severity": WARNING}}')
-    new_ctx, rep2 = chk.run(ctx, overrides={"non_empty": {"severity": Severity.WARNING}})
-    rows.append(_result_row("override to WARNING", ctx.source, ctx.target, new_ctx.target, rep2))
-
-    info("替换: rules=[non_empty] 只跑这一条 (sanitize 仍跑)")
-    new_ctx, rep3 = chk.run(ctx, rules=["non_empty"])
-    rows.append(_result_row("rules replace", ctx.source, ctx.target, new_ctx.target, rep3))
-    table("Per-call override comparison", RESULT_COLUMNS, rows)
+    rows = [
+        _run(chk, "default (non_empty=ERROR)", "Hi.", ""),
+        _run(
+            chk,
+            "overrides → WARNING",
+            "Hi.",
+            "",
+            overrides={"non_empty": {"severity": Severity.WARNING}},
+        ),
+        _run(chk, "rules=non_empty only", "Hi.", "", rules=["non_empty"]),
+    ]
+    table("Per-call override comparison", MAIN_COLUMNS, rows)
 
 
 # ---------------------------------------------------------------------------
-# Part 6 — 非翻译场景
+# Part 6 — Usage-aware（output_tokens 规则）
 # ---------------------------------------------------------------------------
 
 
-def part_6_non_translate() -> None:
-    section("Part 6", "非翻译场景")
-    info("subtitle.line: 只关心非空 + 单行清洗")
-    chk = Checker(default_scene="builtin.subtitle.line")
-    sanitized, rep = chk("hi", "你好")
-
-    info("\nllm.response: 用于 LLM 通用响应做 token 预算 + 输出清洗")
-    chk2 = Checker(default_scene="builtin.llm.response")
-    sanitized2, rep2 = chk2("prompt", "`pong`")
-    table(
-        "Non-translation scenes",
-        RESULT_COLUMNS,
-        [
-            _result_row("subtitle.line", "hi", "你好", sanitized, rep),
-            _result_row("llm.response strip", "prompt", "`pong`", sanitized2, rep2),
-        ],
-    )
+def part_6_usage_aware() -> None:
+    section("Part 6", "Usage-aware checks")
+    info("output_tokens 只在调用方传入 Usage 时触发；用于检测 token 异常爆发。")
+    chk = default_checker("en", "zh")
+    rows = [
+        _check(chk, "no usage", "Hello.", "你好。"),
+        _check(chk, "normal usage", "Hello.", "你好。", usage=Usage(prompt_tokens=40, completion_tokens=20)),
+        _check(chk, "token burst", "Hello.", "你好。", usage=Usage(prompt_tokens=12, completion_tokens=220)),
+    ]
+    table("Usage-aware comparison", MAIN_COLUMNS, rows)
 
 
 # ---------------------------------------------------------------------------
@@ -298,58 +278,131 @@ def part_6_non_translate() -> None:
 
 
 def _score(report: CheckReport) -> tuple[int, int]:
-    e = sum(1 for i in report.issues if i.severity is Severity.ERROR)
-    w = sum(1 for i in report.issues if i.severity is Severity.WARNING)
-    return (e, w)
+    return (len(report.errors), len(report.warnings))
 
 
 def part_7_regression() -> None:
     section("Part 7", "Regression")
     info("translate_with_verify 用 score(prior) vs score(candidate) 决定是否回退到旧译文。")
     chk = default_checker("en", "zh")
+    src = "Hello world."
+    cases = [
+        ("prior", "你好世界。"),
+        ("candidate_better", "你好，世界。"),
+        ("candidate_worse", "你" * 100),
+    ]
+    rows = [_check(chk, name, src, target) for name, target in cases]
+    table("Regression scoring", MAIN_COLUMNS, rows)
 
-    def score_for(t: str) -> tuple[int, int]:
-        _, rep = chk("Hello world.", t)
-        return _score(rep)
-
-    prior = "你好世界。"
-    candidate_better = "你好，世界。"
-    candidate_worse = "你" * 100  # length_ratio explodes
-
-    table(
-        "Regression scoring",
-        ["case", "target", "score"],
-        [
-            {"case": "prior", "target": prior, "score": score_for(prior)},
-            {"case": "candidate_better", "target": candidate_better, "score": score_for(candidate_better)},
-            {"case": "candidate_worse", "target": _short(candidate_worse), "score": score_for(candidate_worse)},
-        ],
-    )
-
-    if score_for(candidate_worse) > score_for(prior):
+    _, prior_rep = chk.check(src, cases[0][1])
+    _, worse_rep = chk.check(src, cases[2][1])
+    if _score(worse_rep) > _score(prior_rep):
         ok("→ candidate_worse 退化，translate_with_verify 会保留 prior")
 
 
 # ---------------------------------------------------------------------------
-# Part 8 — YAML 配置示例
+# Part 8 — 多语言 default_checker
 # ---------------------------------------------------------------------------
 
 
 def part_8_yaml_examples() -> None:
-    section("Part 8", "YAML 配置示例")
-    for name, text, *_ in YAML_EXAMPLES:
-        info(f"\n{name}:")
-        print(text.strip())
-    table("YAML example results", YAML_COLUMNS, build_yaml_example_rows())
+    section("Part 8", f"YAML 配置：从 {CONFIG_YAML_DIR.relative_to(CONFIG_YAML_DIR.parents[0])}/ 目录加载")
+    info("YAML 文件已展开成扁平形式（无 extends/disable/overrides），所有")
+    info("sanitize 步骤、rules、severity、params 全部明文。直接编辑文件即可调参。")
+    info("可用工具：")
+    info("  • dump_checker_to_yaml(checker)  → str  （把 Checker 展开成 YAML）")
+    info("  • write_checker_yaml(checker, path)     （写入磁盘，自动建目录）")
+    info("  • load_checker_from_yaml(path, source_lang=, target_lang=)")
+    info("  • Checker.reload_from_yaml(path)        （就地热重载，清空 _compiled）")
+
+    if not CONFIG_YAML_DIR.exists():
+        info(f"\n⚠ 目录 {CONFIG_YAML_DIR} 不存在；使用 write_checker_yaml() 生成示例……")
+        write_checker_yaml(default_checker("en", "zh"), CONFIG_YAML_DIR / "default_en_zh.yaml")
+        write_checker_yaml(Checker(default_scene="builtin.subtitle.line"), CONFIG_YAML_DIR / "subtitle_line.yaml")
+        write_checker_yaml(Checker(default_scene="builtin.llm.response"), CONFIG_YAML_DIR / "llm_response.yaml")
+        ok(f"已生成 3 个 YAML 文件 → {CONFIG_YAML_DIR}/")
+
+    rows = []
+    for label, filename, src_lang, tgt_lang, source, target in YAML_EXAMPLES:
+        path = CONFIG_YAML_DIR / filename
+        chk = load_checker_from_yaml(path, source_lang=src_lang, target_lang=tgt_lang)
+        sanitized, report = chk.check(source, target)
+        rows.append(_row(label, chk.default_scene, source, target, sanitized, report))
+
+    table("Loaded from disk → run check()", MAIN_COLUMNS, rows)
+
+    info("\n小贴士：可以重新生成 YAML，比如新增一对语言：")
+    info('    write_checker_yaml(default_checker("en", "ja"), "config_yaml/default_en_ja.yaml")')
+
+
+def part_8b_hot_reload() -> None:
+    section("Part 8b", "热重载演示（Checker.reload_from_yaml）")
+    info("场景：长生命周期进程持有同一个 Checker 引用；运营修改 YAML 后无需重启。")
+
+    src_path = CONFIG_YAML_DIR / "subtitle_line.yaml"
+    chk = load_checker_from_yaml(src_path)
+
+    # 1) 原始：subtitle_line 仅有 non_empty(ERROR) 一条规则
+    rows = [_check(chk, "before reload", "hi", "")]
+
+    # 2) 在临时目录写一份不同的 YAML（把 non_empty 降级为 WARNING），
+    #    然后调用 reload_from_yaml — 同一个 Checker 实例的行为立刻改变。
+    tmp_dir = CONFIG_YAML_DIR / "_demo_tmp"
+    tmp_path = tmp_dir / "subtitle_line_lenient.yaml"
+    custom = SceneConfig(
+        name="builtin.subtitle.line",
+        sanitize=(),
+        rules=(RuleSpec(name="non_empty", severity=Severity.WARNING),),
+    )
+    write_checker_yaml(Checker(scenes={"builtin.subtitle.line": custom}, default_scene="builtin.subtitle.line"), tmp_path)
+    chk.reload_from_yaml(tmp_path)
+    rows.append(_check(chk, "after reload (WARNING)", "hi", ""))
+
+    # 还原（避免残留）
+    chk.reload_from_yaml(src_path)
+    rows.append(_check(chk, "reload back to original", "hi", ""))
+
+    table("Hot reload result", MAIN_COLUMNS, rows)
+    info("注意：reload_from_yaml 会原地替换 scenes / default_scene 并清空 _compiled，")
+    info("但保持 source_lang / target_lang 不变（除非显式传入）。")
+
+    # 清理
+    try:
+        tmp_path.unlink()
+        tmp_dir.rmdir()
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------
-# Part 9 — translate_with_verify 注入示意
+# Part 9 — 多语言 default_checker
 # ---------------------------------------------------------------------------
 
 
-def part_9_translate_loop_hint() -> None:
-    section("Part 9", "translate_with_verify 注入位置示意")
+def part_9_multilingual_pairs() -> None:
+    section("Part 9", "多语言 default_checker")
+    info('default_checker(src, tgt) 会生成按语言对命名的 scene，例如 "translate.en.zh"。')
+    info("语言 profile 注入文字系统、问号、禁止词、幻觉前缀等参数。")
+    cases = [
+        ("en", "zh", "Where is the cache?", "缓存在哪里？"),
+        ("zh", "en", "缓存在哪里？", "Where is the cache?"),
+        ("en", "ja", "Training starts now.", "トレーニングが始まります。"),
+        ("en", "ko", "The model converged.", "모델이 수렴했습니다."),
+    ]
+    rows = []
+    for src_lang, tgt_lang, source, target in cases:
+        chk = default_checker(src_lang, tgt_lang)
+        rows.append(_check(chk, f"{src_lang}->{tgt_lang}", source, target))
+    table("Language-pair scenes", MAIN_COLUMNS, rows)
+
+
+# ---------------------------------------------------------------------------
+# Part 10 — translate_with_verify 注入示意
+# ---------------------------------------------------------------------------
+
+
+def part_10_translate_loop_hint() -> None:
+    section("Part 10", "translate_with_verify 注入位置示意")
     info("伪代码（实际见 src/application/translate/translate.py）:")
     print(
         """
@@ -362,6 +415,7 @@ def part_9_translate_loop_hint() -> None:
             translation, report = checker.check(
                 source, result.text.strip(),
                 usage=result.usage, prior=prior, scene=scene,
+                source_lang=ctx.source_lang, target_lang=ctx.target_lang,
             )
             if report.passed:
                 return TranslateResult(translation=translation, ...)
@@ -383,10 +437,12 @@ def main() -> None:
     part_3_builtin_scenes()
     part_4_custom_scene()
     part_5_per_call_override()
-    part_6_non_translate()
+    part_6_usage_aware()
     part_7_regression()
     part_8_yaml_examples()
-    part_9_translate_loop_hint()
+    part_8b_hot_reload()
+    part_9_multilingual_pairs()
+    part_10_translate_loop_hint()
     step("done", "")
 
 

@@ -1,0 +1,84 @@
+checker:
+  default_scene: translate.en.ja
+  scenes:
+    translate.en.ja:
+      sanitize:
+      - name: strip_backticks
+        severity: error
+      - name: trailing_annotation_strip
+        severity: error
+      - name: colon_to_punctuation
+        severity: error
+      - name: quote_strip
+        severity: error
+      - name: leading_punct_strip
+        severity: error
+      rules:
+      - name: non_empty
+        severity: error
+      - name: length_bounds
+        severity: error
+      - name: length_ratio
+        severity: error
+        params:
+          short: 4.0
+          medium: 2.5
+          long: 1.8
+          very_long: 1.4
+      - name: format_artifacts
+        severity: error
+        params:
+          hallucination_starts:
+          - - ^わかりました
+            - null
+          - - ^了解しました
+            - null
+          - - ^承知しました
+            - null
+          - - ^もちろん[、,]
+            - null
+      - name: cjk_content
+        severity: error
+        params:
+          target_lang: ja
+      - name: trailing_annotation
+        severity: error
+      - name: keywords
+        severity: error
+        params:
+          forbidden_terms:
+          - 翻訳してください
+          - 翻訳します
+          - 翻訳結果
+          - 以下は翻訳です
+          - 原文
+          - お役に立てて
+          - お手伝い
+          - '```'
+          keyword_pairs:
+          - - - translate
+              - translation
+              - translating
+            - - 翻訳
+          - - - subtitle
+              - subtitles
+            - - 字幕
+          - - - polish
+              - polishing
+            - - 推敲
+              - 添削
+          - - - context
+            - - 文脈
+              - コンテキスト
+      - name: question_mark
+        severity: warning
+        params:
+          source_marks:
+          - '?'
+          expected_marks:
+          - ？
+          - '?'
+      - name: output_tokens
+        severity: warning
+      - name: pixel_width
+        severity: warning

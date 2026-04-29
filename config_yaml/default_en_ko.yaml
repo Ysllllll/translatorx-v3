@@ -1,0 +1,82 @@
+checker:
+  default_scene: translate.en.ko
+  scenes:
+    translate.en.ko:
+      sanitize:
+      - name: strip_backticks
+        severity: error
+      - name: trailing_annotation_strip
+        severity: error
+      - name: colon_to_punctuation
+        severity: error
+      - name: quote_strip
+        severity: error
+      - name: leading_punct_strip
+        severity: error
+      rules:
+      - name: non_empty
+        severity: error
+      - name: length_bounds
+        severity: error
+      - name: length_ratio
+        severity: error
+        params:
+          short: 4.0
+          medium: 2.5
+          long: 1.8
+          very_long: 1.4
+      - name: format_artifacts
+        severity: error
+        params:
+          hallucination_starts:
+          - - ^알겠습니다
+            - null
+          - - ^네[,.]?\s
+            - null
+          - - ^물론이죠
+            - null
+      - name: cjk_content
+        severity: error
+        params:
+          target_lang: ko
+      - name: trailing_annotation
+        severity: error
+      - name: keywords
+        severity: error
+        params:
+          forbidden_terms:
+          - 번역해 주세요
+          - 번역해주세요
+          - 번역 결과
+          - 원문
+          - 다음은 번역입니다
+          - 도움이 되셨
+          - 도와드릴
+          - '```'
+          keyword_pairs:
+          - - - translate
+              - translation
+              - translating
+            - - 번역
+          - - - subtitle
+              - subtitles
+            - - 자막
+          - - - polish
+              - polishing
+            - - 다듬기
+              - 윤색
+          - - - context
+            - - 문맥
+              - 맥락
+      - name: question_mark
+        severity: warning
+        params:
+          source_marks:
+          - '?'
+          expected_marks:
+          - '?'
+          - ？
+      - name: output_tokens
+        severity: warning
+      - name: pixel_width
+        severity: warning

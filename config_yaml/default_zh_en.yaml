@@ -1,0 +1,84 @@
+checker:
+  default_scene: translate.zh.en
+  scenes:
+    translate.zh.en:
+      sanitize:
+      - name: strip_backticks
+        severity: error
+      - name: trailing_annotation_strip
+        severity: error
+      - name: colon_to_punctuation
+        severity: error
+      - name: quote_strip
+        severity: error
+      - name: leading_punct_strip
+        severity: error
+      rules:
+      - name: non_empty
+        severity: error
+      - name: length_bounds
+        severity: error
+      - name: length_ratio
+        severity: error
+        params:
+          short: 8.0
+          medium: 5.0
+          long: 3.5
+          very_long: 2.5
+      - name: format_artifacts
+        severity: error
+        params:
+          hallucination_starts:
+          - - ^sure[,.]?\s
+            - null
+          - - ^of course[,.]?\s
+            - null
+          - - ^i understand
+            - null
+          - - ^certainly[,.]?\s
+            - null
+          - - ^no problem
+            - null
+      - name: cjk_content
+        severity: error
+        params:
+          target_lang: en
+      - name: trailing_annotation
+        severity: error
+      - name: keywords
+        severity: error
+        params:
+          forbidden_terms:
+          - here's the translation
+          - here is the translation
+          - i'll translate
+          - i will translate
+          - the translation is
+          - translated version
+          - '```'
+          keyword_pairs:
+          - - - 翻译
+            - - translate
+              - translation
+              - translating
+          - - - 字幕
+            - - subtitle
+              - subtitles
+          - - - 润色
+            - - polish
+              - polishing
+          - - - 语境
+              - 上下文
+            - - context
+      - name: question_mark
+        severity: warning
+        params:
+          source_marks:
+          - ？
+          - '?'
+          expected_marks:
+          - '?'
+      - name: output_tokens
+        severity: warning
+      - name: pixel_width
+        severity: warning

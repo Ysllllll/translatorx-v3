@@ -1,0 +1,357 @@
+1
+00:00:00,000 --> 00:00:03,100
+Welcome to Prompt Compression and Query
+Optimization.
+
+2
+00:00:03,400 --> 00:00:07,200
+Built in partnership with MongoDB
+and taught by Richmond Alake.
+
+3
+00:00:08,200 --> 00:00:12,200
+Richmond is a developer advocate at MongoDB
+and has worked
+
+4
+00:00:12,200 --> 00:00:16,133
+as a machine learning architect and taught
+AI and ML for many years.
+
+5
+00:00:16,400 --> 00:00:17,900
+Thanks, Andrew.
+
+6
+00:00:17,900 --> 00:00:22,500
+This course shows you how to combine
+features of a mature, established database
+
+7
+00:00:22,600 --> 00:00:27,200
+with vector search to reduce the cost
+of serving a large RAG application.
+
+8
+00:00:28,000 --> 00:00:30,600
+Say you're building
+a conversational RAG application
+
+9
+00:00:30,600 --> 00:00:33,600
+that helps users select a rental property.
+
+10
+00:00:33,933 --> 00:00:38,100
+A user might enter a text query
+for one level ranch on a quiet street.
+
+11
+00:00:38,500 --> 00:00:42,233
+You can use semantic search to find a
+close match to the user description.
+
+12
+00:00:42,300 --> 00:00:44,100
+Using an embedding of the user requests
+
+13
+00:00:44,100 --> 00:00:47,800
+and searching a vector database for homes
+with descriptions that match.
+
+14
+00:00:48,333 --> 00:00:51,700
+But the user may also have hard
+requirements like
+
+15
+00:00:51,900 --> 00:00:55,033
+three bedrooms, two bathrooms,
+and maybe no swimming pool.
+
+16
+00:00:55,500 --> 00:00:59,400
+These are better handled
+with a more traditional retrieval
+
+17
+00:00:59,700 --> 00:01:02,600
+by selecting data
+based on fields in the database
+
+18
+00:01:02,600 --> 00:01:06,100
+and explicitly store the number of bedrooms,
+bathrooms, and so on.
+
+19
+00:01:06,700 --> 00:01:09,633
+In this course,
+you learn to use the best of both worlds,
+
+20
+00:01:09,633 --> 00:01:13,000
+a traditional database
+with an added vector index.
+
+21
+00:01:13,300 --> 00:01:18,300
+In RAG applications to retrieve results
+that provide an LLM for final processing.
+
+22
+00:01:18,900 --> 00:01:23,033
+If the retrieve context is very long,
+this results in a very long prompt
+
+23
+00:01:23,033 --> 00:01:27,900
+and can thus be costly where retrieval
+to return, say 10,000 tokens.
+
+24
+00:01:28,500 --> 00:01:32,700
+If you were to run a rental comparison
+website to search, say, a million
+
+25
+00:01:32,700 --> 00:01:37,633
+queries per day, and if LLM input tokens cost
+$10 per million tokens,
+
+26
+00:01:37,900 --> 00:01:41,300
+you could be spending over
+$36 million a year.
+
+27
+00:01:41,700 --> 00:01:45,400
+So, to help you reduce costs,
+this course, will also cover ways
+
+28
+00:01:45,700 --> 00:01:49,733
+to keep the retrieved results
+as small and relevant as possible.
+
+29
+00:01:50,200 --> 00:01:51,800
+Thanks, Andrew.
+
+30
+00:01:51,800 --> 00:01:54,700
+Let me describe some of the techniques
+you will learn.
+
+31
+00:01:54,700 --> 00:01:58,200
+Let's consider your rental app
+filtering on the number of bedrooms
+
+32
+00:01:58,600 --> 00:02:02,400
+or bathrooms can be done with a pre-filter
+or post-filter.
+
+33
+00:02:03,200 --> 00:02:07,200
+Efficient pre-filter is done
+in the database index creation stage.
+
+34
+00:02:07,700 --> 00:02:10,800
+You build a new index of entries
+that match common queries.
+
+35
+00:02:11,100 --> 00:02:14,133
+So for example,
+if you know you frequently get queries
+
+36
+00:02:14,133 --> 00:02:18,133
+for bedroom units, you can build an index
+that includes the bedroom field.
+
+37
+00:02:19,200 --> 00:02:21,000
+So that's pre-filtering.
+
+38
+00:02:21,000 --> 00:02:23,233
+In contrast, post filtering is done
+
+39
+00:02:23,233 --> 00:02:27,100
+often a vector search query is performed
+where you then apply a filter
+
+40
+00:02:27,100 --> 00:02:31,300
+to this result to select the sub set matching
+the required condition.
+
+41
+00:02:31,500 --> 00:02:35,533
+Large scale applications may use
+both of these techniques simultaneously.
+
+42
+00:02:36,500 --> 00:02:39,900
+Another technique to minimize
+the size of the output is something called
+
+43
+00:02:39,900 --> 00:02:44,633
+projection, which selects a subset
+of the fields returned from a query.
+
+44
+00:02:45,100 --> 00:02:48,800
+For example,
+out of 15 fields of a potential rental,
+
+45
+00:02:49,033 --> 00:02:51,800
+you may want to return only three of them.
+
+46
+00:02:51,800 --> 00:02:54,833
+Name, number of bedrooms, and price.
+
+47
+00:02:55,800 --> 00:02:59,600
+Now, you could implement all of this
+operation directly in your application,
+
+48
+00:03:00,000 --> 00:03:03,000
+but the database can optimize
+all this operation
+
+49
+00:03:03,133 --> 00:03:06,633
+for performance and enforce
+role-based access control.
+
+50
+00:03:07,100 --> 00:03:09,333
+So they are best accomplished there.
+
+51
+00:03:09,333 --> 00:03:14,100
+And another powerful technique
+is reranking the results of a search.
+
+52
+00:03:14,700 --> 00:03:18,900
+For example, after using the text
+embeddings of the renter description
+
+53
+00:03:18,900 --> 00:03:22,933
+to perform a semantic search,
+you can rerank the results based on
+
+54
+00:03:22,933 --> 00:03:27,200
+other data fields such as average star
+rating or number of ratings,
+
+55
+00:03:27,200 --> 00:03:30,433
+to move the more desired results
+higher up the list of results.
+
+56
+00:03:30,733 --> 00:03:33,833
+In order to then generate
+better context for the LLM.
+
+57
+00:03:34,733 --> 00:03:37,733
+One final technique is prompt compression.
+
+58
+00:03:38,100 --> 00:03:40,933
+If the retrieve information
+is very lengthy,
+
+59
+00:03:40,933 --> 00:03:43,433
+seeking all this context
+into an LLM prompt
+
+60
+00:03:43,433 --> 00:03:46,933
+results in a very long, prompt length,
+which is expensive to process.
+
+61
+00:03:47,200 --> 00:03:51,100
+To reduce this costs,
+you can use a small, low cost LLM fine
+
+62
+00:03:51,100 --> 00:03:54,600
+tuned to compress prompts
+before sending them to the final LLM.
+
+63
+00:03:54,900 --> 00:03:58,600
+There are many opportunities
+to improve relevance and save costs.
+
+64
+00:03:59,600 --> 00:04:01,200
+Thank you Andrew.
+
+65
+00:04:01,200 --> 00:04:04,300
+You will learn all these techniques
+in the next few lesson.
+
+66
+00:04:04,900 --> 00:04:07,400
+You will start this course
+by implementing a vanilla
+
+67
+00:04:07,400 --> 00:04:10,600
+vector search
+and end by implementing prompts
+
+68
+00:04:10,600 --> 00:04:11,600
+compression.
+
+69
+00:04:11,600 --> 00:04:15,200
+Many people have worked
+to create this course from MongoDB.
+
+70
+00:04:15,333 --> 00:04:20,333
+I'd like to thank Apoorva Joshi,
+Pavel Duchovny, Prakul Agarwal,
+
+71
+00:04:21,000 --> 00:04:26,000
+Jesse Hall, Rita Rodrigues,
+Henry Weller and Shubham Ranjan,
+
+72
+00:04:26,000 --> 00:04:30,700
+and also Esmaeil Gargari from DeepLearning.AI
+had also contributed to this course.
+
+73
+00:04:31,233 --> 00:04:33,000
+I hope you enjoy this course.
+
+74
+00:04:33,000 --> 00:04:35,700
+Please
+go to the next video and let's dive in.
+

@@ -97,6 +97,60 @@ class Checker:
             default_scene=config.default_scene,
         )
 
+    @classmethod
+    def from_yaml(
+        cls,
+        path: Any,
+        *,
+        source_lang: str = "",
+        target_lang: str = "",
+    ) -> Checker:
+        """从 YAML 文件构建 Checker。便捷封装，等价于::
+
+        cfg = CheckerConfig.from_dict(yaml.safe_load(open(path))["checker"])
+        Checker.from_config(cfg, source_lang=..., target_lang=...)
+        """
+        from .serialize import load_checker_from_yaml
+
+        return load_checker_from_yaml(path, source_lang=source_lang, target_lang=target_lang)
+
+    # ---------------------------------------------------------------- 热重载
+
+    def reload_from_yaml(
+        self,
+        path: Any,
+        *,
+        source_lang: str | None = None,
+        target_lang: str | None = None,
+    ) -> Checker:
+        """从 *path* 重新载入 YAML 配置，**就地** 替换 scenes / default_scene
+        并清空已编译缓存。返回 ``self``，便于链式调用。
+
+        长生命周期进程（FastAPI / worker）可在后台监听文件变化，
+        变更后调用本方法即可，无需重建 Checker 引用。
+
+        若传入 ``source_lang`` / ``target_lang``，则一并更新；否则保持
+        当前绑定不变。
+        """
+        from .serialize import load_checker_config
+
+        cfg = load_checker_config(path)
+        self._scenes.clear()
+        self._scenes.update(cfg.scenes)
+        self._default_scene = cfg.default_scene
+        self._compiled.clear()
+        if source_lang is not None:
+            self._source_lang = source_lang
+        if target_lang is not None:
+            self._target_lang = target_lang
+        return self
+
+    def to_yaml(self, *, scene: str | None = None) -> str:
+        """把当前 Checker 的 scene 完全展开导出为 YAML 字符串。"""
+        from .serialize import dump_checker_to_yaml
+
+        return dump_checker_to_yaml(self, scene=scene)
+
     # ---------------------------------------------------------------- 运行
 
     def __call__(

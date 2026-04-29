@@ -40,6 +40,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Iterable
 
+from domain.lang import CJK_LANG_CODES, HALF_TO_FULL_PUNCT, QUOTE_PAIRS
+
 from .registry import register
 from .types import CheckContext, Issue, RuleSpec, Severity
 
@@ -83,7 +85,7 @@ def _estimate_words(text: str) -> int:
     return len(stripped.split())
 
 
-_CJK_LANGS = frozenset({"zh", "ja", "ko"})
+_DEFAULT_CJK_LANGS: tuple[str, ...] = CJK_LANG_CODES
 
 
 # -------------------------------------------------------------------
@@ -171,10 +173,28 @@ def _format_artifacts_factory(
     *,
     allow_newlines: bool = False,
     hallucination_starts: list[tuple[str, str | None]] | None = None,
+    markdown_artifacts: list[str] | None = None,
+    math_block_marker: str | None = "$$",
+    math_block_min_count: int = 2,
+    bracket_openers_target: list[str] | None = None,
+    bracket_openers_source: list[str] | None = None,
 ):
-    """换行、Markdown 加粗、幻觉前缀、括号不对称。"""
-    # 在工厂创建时一次性预编译所有模式，使热路径
-    # （每次调用一次匹配）仅为正则执行，无需重编译。
+    """换行、Markdown 加粗、幻觉前缀、括号不对称。
+
+    参数化点：
+
+    - ``markdown_artifacts``：禁止出现在译文中的 markdown 片段
+      （默认 ``["**"]``）。
+    - ``math_block_marker`` / ``math_block_min_count``：当译文包含换行
+      时，若该 marker 出现次数 ≥ ``min_count``，则视为合法的 LaTeX
+      块（默认 ``$$`` × 2）。设为 ``None`` 则禁用例外。
+    - ``bracket_openers_target`` / ``bracket_openers_source``：用于不
+      对称括号检测；默认目标 ``["（","【","[","("]``、源 ``["[","("]``。
+    """
+    md_artifacts = tuple(markdown_artifacts if markdown_artifacts is not None else ["**"])
+    tgt_openers = tuple(bracket_openers_target if bracket_openers_target is not None else ["（", "【", "[", "("])
+    src_openers = tuple(bracket_openers_source if bracket_openers_source is not None else ["[", "("])
+
     compiled_starts: tuple[re.Pattern[str], ...] = tuple(
         re.compile(f"{pattern}(?!{exclude})" if exclude else pattern) for pattern, exclude in (hallucination_starts or ())
     )
@@ -184,14 +204,19 @@ def _format_artifacts_factory(
         src = ctx.source.strip()
         tgt_lower = tgt.lower()
 
-        # 允许 LaTeX 数学块（``$$ ... $$``）内的换行：
-        # 两个或更多 ``$$`` 标记表示目标是多行公式，
-        # 不是幻觉段落。
-        if not allow_newlines and "\n" in tgt and tgt.count("$$") < 2:
-            yield Issue("format_newline", spec.severity, "unexpected newline in translation")
+        if not allow_newlines and "\n" in tgt:
+            allowed = bool(math_block_marker) and tgt.count(math_block_marker) >= math_block_min_count
+            if not allowed:
+                yield Issue("format_newline", spec.severity, "unexpected newline in translation")
 
-        if "**" in tgt:
-            yield Issue("format_markdown", spec.severity, "markdown bold artifact '**' in translation")
+        for token in md_artifacts:
+            if token and token in tgt:
+                yield Issue(
+                    "format_markdown",
+                    spec.severity,
+                    f"markdown artifact '{token}' in translation",
+                )
+                break
 
         for pat in compiled_starts:
             if pat.match(tgt_lower):
@@ -202,9 +227,7 @@ def _format_artifacts_factory(
                 )
                 break
 
-        zh_openers = ("（", "【", "[", "(")
-        en_openers = ("[", "(")
-        if tgt.startswith(zh_openers) and not src.startswith(en_openers):
+        if tgt_openers and tgt.startswith(tgt_openers) and not (src_openers and src.startswith(src_openers)):
             yield Issue(
                 "format_bracket",
                 spec.severity,
@@ -333,12 +356,18 @@ def _cjk_content_factory(
     *,
     target_lang: str = "",
     short_passthrough_max: int = 10,
+    cjk_lang_codes: list[str] | None = None,
 ):
-    """对于 zh/ja/ko 目标语言，要求至少包含一个 CJK 字符。"""
+    """对于 CJK 目标语言，要求至少包含一个 CJK 字符。
+
+    ``cjk_lang_codes`` 默认 ``["zh", "ja", "ko"]``，可通过 yaml 配置
+    覆盖（例如增加方言变体）。
+    """
+    cjk_set = frozenset(cjk_lang_codes if cjk_lang_codes is not None else _DEFAULT_CJK_LANGS)
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         lang = target_lang or ctx.target_lang
-        if lang not in _CJK_LANGS:
+        if lang not in cjk_set:
             return
         tgt = ctx.target.strip()
         if not tgt:
@@ -358,9 +387,18 @@ def _cjk_content_factory(
 
 
 @register("trailing_annotation", kind="check")
-def _trailing_annotation_factory(*, min_non_ascii: int = 12):
-    """检测尾部括号注释，其中包含 ≥N 个非 ASCII 字符。"""
-    pattern = re.compile(r"（([^（）]*?)）[,.?;!，。？；！]*$")
+def _trailing_annotation_factory(
+    *,
+    min_non_ascii: int = 12,
+    bracket_pair: tuple[str, str] | list[str] | None = None,
+):
+    """检测尾部括号注释，其中包含 ≥N 个非 ASCII 字符。
+
+    ``bracket_pair`` 默认 ``("（", "）")``；EN/拉丁场景可改为
+    ``("(", ")")``。
+    """
+    opener, closer = tuple(bracket_pair) if bracket_pair else ("（", "）")
+    pattern = re.compile(rf"{re.escape(opener)}([^{re.escape(opener)}{re.escape(closer)}]*?){re.escape(closer)}[,.?;!，。？；！]*$")
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> Iterable[Issue]:
         results = pattern.findall(ctx.target)
@@ -372,7 +410,7 @@ def _trailing_annotation_factory(*, min_non_ascii: int = 12):
             yield Issue(
                 "trailing_annotation",
                 spec.severity,
-                f"trailing parenthesized annotation ({non_ascii} non-ASCII chars): ...（{last[:20]}...）",
+                f"trailing parenthesized annotation ({non_ascii} non-ASCII chars): ...{opener}{last[:20]}...{closer}",
             )
 
     return _fn
@@ -464,44 +502,53 @@ def _trailing_annotation_strip_factory(*, prefixes: tuple[str, ...] | list[str] 
     return _fn
 
 
-_COLON_MAP = {".": "。", ",": "，", "!": "！", "?": "？"}
-
-
 @register("colon_to_punctuation", kind="sanitize")
-def _colon_to_punctuation_factory():
-    """尾部 ``：`` → 根据源文末尾的 ``. , ! ?`` 替换为对应的 CJK 标点。"""
+def _colon_to_punctuation_factory(
+    *,
+    marker: str = "：",
+    punct_map: dict[str, str] | None = None,
+):
+    """尾部 ``marker`` → 根据源文末尾标点替换为 ``punct_map`` 中的对应字符。
+
+    默认目标标点为全角冒号 ``：``、映射为 :data:`domain.lang.HALF_TO_FULL_PUNCT`
+    （即 ASCII 半角 ↔ CJK 全角的标准映射）。其他场景（例如阿拉伯语、变种引号）
+    可通过 yaml 自定义。
+    """
+    pmap = dict(punct_map) if punct_map is not None else dict(HALF_TO_FULL_PUNCT)
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> str:
         src = ctx.source.rstrip()
         tgt = ctx.target.rstrip()
-        if not tgt.endswith("：") or not src:
+        if not marker or not tgt.endswith(marker) or not src:
             return ctx.target
         last = src[-1]
-        if last in _COLON_MAP and last != ":":
-            return tgt[:-1] + _COLON_MAP[last]
+        replacement = pmap.get(last)
+        if replacement is not None and replacement != marker:
+            return tgt[: -len(marker)] + replacement
         return ctx.target
 
     return _fn
 
 
-_QUOTE_PATTERNS: tuple[tuple[str, str], ...] = (
-    ("\u201c", "\u201d"),
-    ("\u2018", "\u2019"),
-    ('"', '"'),
-    ("'", "'"),
-)
-
-
 @register("quote_strip", kind="sanitize")
-def _quote_strip_factory():
-    """去除最多两层外层引号包裹。"""
+def _quote_strip_factory(
+    *,
+    quote_pairs: list[list[str]] | list[tuple[str, str]] | None = None,
+    max_layers: int = 2,
+):
+    """去除最多 ``max_layers`` 层外层引号包裹。
+
+    ``quote_pairs`` 默认 :data:`domain.lang.QUOTE_PAIRS`（覆盖中英直/弯引号
+    四对）；可加入 ``« »``、``„ "`` 等本地化变体。
+    """
+    pairs: tuple[tuple[str, str], ...] = tuple((p[0], p[1]) for p in (quote_pairs if quote_pairs is not None else QUOTE_PAIRS))
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> str:
         cur = ctx.target
-        for _ in range(2):
+        for _ in range(max_layers):
             stripped = cur
-            for opener, closer in _QUOTE_PATTERNS:
-                if len(stripped) >= 2 and stripped.startswith(opener) and stripped.endswith(closer):
+            for opener, closer in pairs:
+                if len(stripped) >= len(opener) + len(closer) and stripped.startswith(opener) and stripped.endswith(closer):
                     stripped = stripped[len(opener) : -len(closer)]
                     break
             if stripped == cur:
@@ -513,11 +560,21 @@ def _quote_strip_factory():
 
 
 @register("leading_punct_strip", kind="sanitize")
-def _leading_punct_strip_factory():
-    """去除前导的 ``，`` / ``、`` / ``。`` / 空白等瑕疵。"""
-    pat = re.compile(r"^[，、。\s]+")
+def _leading_punct_strip_factory(
+    *,
+    leading_chars: str | None = None,
+    strip_whitespace: bool = True,
+):
+    """去除前导的标点（默认 ``，、。``）+ 可选空白。"""
+    chars = leading_chars if leading_chars is not None else "，、。"
+    cls = re.escape(chars)
+    if strip_whitespace:
+        cls += r"\s"
+    pat = re.compile(rf"^[{cls}]+") if chars or strip_whitespace else None
 
     def _fn(ctx: CheckContext, spec: RuleSpec) -> str:
+        if pat is None:
+            return ctx.target
         return pat.sub("", ctx.target)
 
     return _fn

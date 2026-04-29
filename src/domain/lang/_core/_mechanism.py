@@ -13,7 +13,11 @@ from ..japanese import JapaneseOps
 from ..korean import KoreanOps
 
 
-_EN_TYPE_LANGUAGES = {"en", "ru", "es", "fr", "de", "pt", "vi"}
+# Public language code constants
+CJK_LANG_CODES: tuple[str, ...] = ("zh", "ja", "ko")
+EN_TYPE_LANG_CODES: tuple[str, ...] = ("en", "ru", "es", "fr", "de", "pt", "vi")
+
+_EN_TYPE_LANGUAGES = frozenset(EN_TYPE_LANG_CODES)
 _CJK_LANGUAGES = {"zh": ChineseOps, "ja": JapaneseOps, "ko": KoreanOps}
 
 

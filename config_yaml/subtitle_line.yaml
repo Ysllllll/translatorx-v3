@@ -1,0 +1,12 @@
+checker:
+  default_scene: builtin.subtitle.line
+  scenes:
+    builtin.subtitle.line:
+      sanitize:
+      - name: strip_backticks
+        severity: error
+      - name: leading_punct_strip
+        severity: error
+      rules:
+      - name: non_empty
+        severity: error
